@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<style>
+body { margin:0; font-family: Arial, sans-serif; background:#f2f2f2;}
+.header {
+ position:fixed; top:0; left:0;
+ width:100%;
+ background:#4a67a1; color:white;
+ padding:10px 18px;
+ display:flex; justify-content:space-between;
+ font-size:14px; z-index:1000;
+ box-sizing:border-box;
+}
+.nav {
+ margin-top:65px;
+ display:flex;
+ gap:12px;
+ padding:10px;
+ overflow-x:auto;
+ white-space:nowrap;
+}
+.btn {
+ flex:0 0 auto;
+ background:#4a67a1;
+ color:white;
+ padding:14px 22px;
+ border-radius:30px;
+ text-decoration:none;
+ box-shadow:0 4px 8px rgba(0,0,0,0.2);
+ font-size:15px;
+ text-align:center;
+}
+</style>
+<script>
+function updateTime(){
+ const now = new Date();
+ document.getElementById("time").innerText = now.toLocaleString();
+}
+setInterval(updateTime,1000);
+</script>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Estofaria Digital — Agenda</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="header">
+    <div>Estofaria Digital</div>
+    <div id="time"></div>
+</div>
+
+<div class="nav">
+    <a class="btn" href="../painel/">📊 Painel</a>
+    <a class="btn" href="../material/">🧵 Materiais</a>
+    <a class="btn" href="../precificacao/">💰 Precificação</a>
+    <a class="btn" href="../catalogo/">🛋️ Catálogo</a>
+    <a class="btn" href="../itens-personalizacao/">🎨 Itens para personalização</a>
+    <a class="btn" href="../vendedor/">🤝 Vendedor</a>
+    <a class="btn" href="../agenda/">📅 Agenda</a>
+</div>
+
+
+<main class="container">
+
+<section class="card scroll">
+<h2>Pedidos da semana</h2>
+<table>
+<thead>
+<tr><th>Produção</th><th>Cliente</th><th>Descrição</th><th>Qtd</th></tr>
+</thead>
+<tbody id="pedidosSemana"></tbody>
+</table>
+</section>
+
+<section class="card">
+<h2>Próxima vaga disponível</h2>
+<div class="vagaBox">
+<div>
+<strong>Produção</strong>
+<p id="nextProd">--/--</p>
+</div>
+<div>
+<strong>Entrega</strong>
+<p id="nextEnt">--/--</p>
+</div>
+<div class="grafico">
+<div class="barra-container">
+<div id="barra" class="barra"></div>
+</div>
+<p id="barraTexto"></p>
+</div>
+</div>
+</section>
+
+<section class="card">
+<h2>Configurações</h2>
+<label>Prazo padrão (dias)</label>
+<input id="prazo" type="number" value="5">
+
+<label>Tipo de dias</label>
+<select id="tipoDias">
+<option value="corrido">Corrido</option>
+<option value="uteis">Úteis</option>
+</select>
+
+<label>Vagas por semana</label>
+<input id="vagas" type="number" value="10">
+
+<button onclick="salvarConfig()">Salvar configuração</button>
+</section>
+
+<section class="card">
+<h2>Novo pedido</h2>
+<input id="cliente" placeholder="Cliente">
+<input id="descricao" placeholder="Descrição">
+<input id="tecido" placeholder="Tecido">
+<input id="qtd" type="number" value="1">
+<button onclick="novoPedido()">Registrar pedido</button>
+</section>
+
+<section class="card" onclick="abrirFull('telaAgenda')">
+<h2>Agenda</h2>
+</section>
+
+<section class="card" onclick="abrirFull('telaHistorico')">
+<h2>Histórico</h2>
+</section>
+
+</main>
+
+<!-- FULLSCREEN AGENDA -->
+<div id="telaAgenda" class="fullscreen">
+<div class="container">
+<button onclick="fecharFull('telaAgenda')">Voltar</button>
+<section class="card scroll">
+<h2>Agenda</h2>
+<table>
+<thead>
+<tr>
+<th>Produção</th>
+<th>Entrega</th>
+<th>Cliente</th>
+<th>Descrição</th>
+<th>Tecido</th>
+<th>Status</th>
+<th>⋮</th>
+</tr>
+</thead>
+<tbody id="agendaTabela"></tbody>
+</table>
+</section>
+</div>
+</div>
+
+<!-- FULLSCREEN HISTÓRICO -->
+<div id="telaHistorico" class="fullscreen">
+<div class="container">
+<button onclick="fecharFull('telaHistorico')">Voltar</button>
+<section class="card scroll">
+<h2>Histórico</h2>
+<table>
+<thead>
+<tr>
+<th>Produção</th>
+<th>Entrega</th>
+<th>Cliente</th>
+<th>Descrição</th>
+<th>Tecido</th>
+<th>Status</th>
+<th>⋮</th>
+</tr>
+</thead>
+<tbody id="historicoTabela"></tbody>
+</table>
+</section>
+</div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
