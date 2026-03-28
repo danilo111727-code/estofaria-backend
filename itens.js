@@ -217,6 +217,12 @@ function loadLocalCache(modelId){
   }
 }
 
+function parseCurrencyToCents(v){
+  if(!v) return 0
+  const digits = String(v).replace(/\D/g, '')
+  return Number(digits || 0)
+}
+
 function normalizeModel(model, index = 0){
   const baseMeters = Math.max(0, parseNumber(pick(
     model?.base_meters,
@@ -340,7 +346,10 @@ function getModeloAtivoCompartilhado(){
 
   const preferido = String(prefs.modelo || '').trim()
   if(preferido){
-    const encontrado = localLists.find(model => String(model.id) === preferido || String(model.name).trim().toLowerCase() === preferido.toLowerCase())
+    const encontrado = localLists.find(model => (
+      String(model.id) === preferido ||
+      String(model.name).trim().toLowerCase() === preferido.toLowerCase()
+    ))
     if(encontrado) return encontrado
   }
 
@@ -385,7 +394,9 @@ function normalizeItems(arr){
     .map((item, index) => {
       const name = String(pick(item?.name, item?.nome, `Item ${index + 1}`)).trim()
       const unit = String(pick(item?.unit, item?.unidade, 'unidade')).trim() || 'unidade'
-      const fallbackCents = Math.max(0, Math.round(parseNumber(pick(item?.default_cents, item?.value_cents, item?.valor_cents), 0)))
+      const fallbackCents = Math.max(0, Math.round(parseNumber(
+        pick(item?.default_cents, item?.value_cents, item?.valor_cents), 0
+      )))
       return {
         name,
         unit,
@@ -401,12 +412,6 @@ function gerarMetragens(){
     lista.push((i / 100).toFixed(2))
   }
   return lista
-}
-
-function parseCurrencyToCents(v){
-  if(!v) return 0
-  const digits = String(v).replace(/\D/g, '')
-  return Number(digits || 0)
 }
 
 function formatBRLFromCents(cents){
@@ -523,17 +528,22 @@ function exibirTabela(){
       const cents = resolveItemValueCents(item, m)
       cell.contentEditable = !tabelaTravada
       cell.innerText = formatBRLFromCents(cents)
+
       if(tabelaTravada) cell.classList.add('locked')
+
       cell.addEventListener('focus', () => {
         if(cell.innerText === 'R$ 0,00' || cell.innerText === 'R$ 0,00'){
           cell.innerText = ''
         }
       })
+
       cell.addEventListener('input', () => formatCellCurrency(cell))
+
       cell.addEventListener('blur', () => {
         if(!String(cell.innerText || '').trim()) cell.innerText = formatBRLFromCents(0)
         formatCellCurrency(cell)
       })
+
       tr.appendChild(cell)
     })
 
@@ -662,35 +672,94 @@ function preencherModelos(){
 }
 
 async function carregarModelos(){
-  let apiLista = []
-  setModeloStatus('Carregando modelos...')
-  activeApiBase = normalizeBaseUrl(activeApiBase || window.API_BASE || localStorage.getItem('estofaria_api_base') || DEFAULT_API_BASE)
+  try{
+    setModeloStatus('Carregando modelos...')
+    activeApiBase = normalizeBaseUrl(
+      activeApiBase ||
+      window.API_BASE ||
+      localStorage.getItem('estofaria_api_base') ||
+      DEFAULT_API_BASE
+    )
 
-  for(let tentativa = 1; tentativa <= 3 && !apiLista.length; tentativa += 1){
-    try{
-      const data = await apiGet('/models?ts=' + Date.now())
-      const arr = Array.isArray(data) ? data : (Array.isArray(data?.models) ? data.models : [])
-      apiLista = arr.map((modelo, index) => normalizeModel(modelo, index)).filter(modelo => modelo.name)
-      if(apiLista.length){
-        saveModelosCache(apiLista)
+    let apiLista = []
+    const fallbackLista = loadModelosFallback()
+    const bases = resolveApiCandidates()
+
+    for(const base of bases){
+      try{
+        const controller = new AbortController()
+        const timer = setTimeout(() => controller.abort(), 8000)
+
+        const url = buildApiUrl(base, '/models?ts=' + Date.now())
+        const r = await fetch(url, {
+          headers: { 'Accept': 'application/json' },
+          cache: 'no-store',
+          signal: controller.signal
+        })
+
+        clearTimeout(timer)
+
+        if(!r.ok) throw new Error('Falha ao carregar /models')
+
+        const data = await r.json()
+        const arr = Array.isArray(data) ? data : (Array.isArray(data?.models) ? data.models : [])
+
+        apiLista = arr
+          .map((modelo, index) => normalizeModel(modelo, index))
+          .filter(modelo => modelo.name)
+
+        if(apiLista.length){
+          persistWorkingApi(base)
+          saveModelosCache(apiLista)
+          break
+        }
+      }catch(e){
+        console.error('Falha ao carregar modelos da API:', e)
       }
-    }catch(e){
-      console.error(e)
-      apiLista = []
+    }
+
+    modelos = mergeUniqueModels(apiLista, fallbackLista)
+
+    if(!modelos.length){
+      const shared = getModeloAtivoCompartilhado()
+      if(shared && shared.name){
+        modelos = [shared]
+      }
+    }
+
+    preencherModelos()
+
+    if(modeloAtualId){
+      await carregarItensModelo()
+    }else{
+      itens = []
+      renderTudo()
+    }
+  }catch(e){
+    console.error('Erro fatal ao carregar modelos:', e)
+
+    modelos = loadModelosFallback()
+
+    if(!modelos.length){
+      const shared = getModeloAtivoCompartilhado()
+      if(shared && shared.name){
+        modelos = [shared]
+      }
+    }
+
+    preencherModelos()
+
+    if(modeloAtualId){
+      try{
+        await carregarItensModelo()
+      }catch(err){
+        console.error(err)
+      }
+    }else{
+      itens = []
+      renderTudo()
     }
   }
-
-  const fallbackLista = loadModelosFallback()
-  modelos = mergeUniqueModels(apiLista, fallbackLista)
-  preencherModelos()
-
-  if(modeloAtualId){
-    await carregarItensModelo()
-    return
-  }
-
-  itens = []
-  renderTudo()
 }
 
 async function carregarItensModelo(){
@@ -791,6 +860,7 @@ window.onModeloChange = onModeloChange
 
 waitItensReady()
 window.addEventListener('load', waitItensReady)
+
 document.addEventListener('visibilitychange', () => {
   if(document.visibilityState === 'visible'){
     carregarModelos()
