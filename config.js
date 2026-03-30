@@ -105,3 +105,4 @@
     environment: window.ESTOFARIA_ALLOW_API_OVERRIDE ? 'development' : 'production'
   };
 })();
+
