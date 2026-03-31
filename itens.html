@@ -1,56 +1,74 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Estofaria Digital — Itens para personalização</title>
 
-<h1 class="title">Itens para personalização</h1>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="itens.css">
+  <link rel="stylesheet" href="header-tabs.css">
+</head>
+<body>
+  <main class="container">
+    <h1 class="title">Itens para personalização</h1>
 
-<div class="card">
-<label>Selecionar modelo</label>
-<div class="row">
-<select>
-<option>Modelo A</option>
-<option>Modelo B</option>
-</select>
-<button onclick="exibirTabela()">Exibir tabela</button>
-</div>
-</div>
+    <div class="card">
+      <label>Selecionar modelo</label>
+      <div class="row">
+        <select>
+          <option>Modelo A</option>
+          <option>Modelo B</option>
+        </select>
+        <button onclick="exibirTabela()">Exibir tabela</button>
+      </div>
+    </div>
 
-<div class="card">
-<h3>Cadastrar item</h3>
+    <div class="card">
+      <h3>Cadastrar item</h3>
 
-<div class="row">
-<input id="nomeItem" placeholder="Nome do item">
-<input id="valorItem" placeholder="R$ 0,00" oninput="formatCurrency(this)">
-</div>
+      <div class="row">
+        <input id="nomeItem" placeholder="Nome do item">
+        <input id="valorItem" placeholder="R$ 0,00" oninput="formatCurrency(this)">
+      </div>
 
-<div class="row">
-<select id="unidade">
-<option>metro</option>
-<option>unidade</option>
-<option>litro</option>
-</select>
+      <div class="row">
+        <select id="unidade">
+          <option>metro</option>
+          <option>unidade</option>
+          <option>litro</option>
+        </select>
 
-<button onclick="adicionarItem()">Adicionar item</button>
-</div>
-</div>
+        <button onclick="adicionarItem()">Adicionar item</button>
+      </div>
+    </div>
 
-<div class="card">
-<div class="row between">
-<h3>Tabela</h3>
-<button onclick="salvarTabela()">Salvar tabela</button>
-</div>
+    <div class="card">
+      <div class="row between">
+        <h3>Tabela</h3>
+        <button onclick="salvarTabela()">Salvar tabela</button>
+      </div>
 
-<div class="table-wrap">
-<table id="tabela">
-<thead>
-<tr id="headerRow">
-<th>Metragem</th>
-</tr>
-</thead>
-<tbody id="bodyRows"></tbody>
-</table>
-</div>
-</div>
+      <div class="table-wrap">
+        <table id="tabela">
+          <thead>
+            <tr id="headerRow">
+              <th>Metragem</th>
+            </tr>
+          </thead>
+          <tbody id="bodyRows"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
 
-<div id="menu" class="menu hidden">
-<div class="menu-item" onclick="editarColuna()">Editar</div>
-<div class="divider"></div>
-<div class="menu-item danger" onclick="deletarColuna()">Deletar</div>
-</div>
+  <div id="menu" class="menu hidden">
+    <div class="menu-item" onclick="editarColuna()">Editar</div>
+    <div class="divider"></div>
+    <div class="menu-item danger" onclick="deletarColuna()">Deletar</div>
+  </div>
+
+  <script src="itens.js"></script>
+  <script src="header-tabs.js"></script>
+</body>
+</html>
