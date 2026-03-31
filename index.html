@@ -4,145 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
   <title>Estofaria Digital — Agenda</title>
+
   <link rel="stylesheet" href="style.css">
-
-  <style>
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: #f2f2f2;
-      opacity: 0;
-      transform: translateY(8px);
-      transition: opacity .22s ease, transform .22s ease;
-    }
-
-    body.page-ready {
-      opacity: 1;
-      transform: translateY(0);
-    }
-
-    body.page-leaving {
-      opacity: 0;
-      transform: translateY(10px);
-    }
-
-    .header {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      background: #4a67a1;
-      color: white;
-      padding: 10px 18px;
-      display: flex;
-      justify-content: space-between;
-      font-size: 14px;
-      z-index: 1000;
-      box-sizing: border-box;
-    }
-
-    .nav {
-      margin-top: 65px;
-      display: flex;
-      gap: 12px;
-      padding: 10px;
-      overflow-x: auto;
-      white-space: nowrap;
-      -webkit-overflow-scrolling: touch;
-    }
-
-    .btn {
-      flex: 0 0 auto;
-      background: #4a67a1;
-      color: white;
-      padding: 14px 22px;
-      border-radius: 30px;
-      text-decoration: none;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-      font-size: 15px;
-      text-align: center;
-      transition: transform .15s ease, opacity .15s ease, background .15s ease;
-    }
-
-    .btn:hover,
-    .btn:active {
-      transform: scale(0.98);
-      opacity: 0.92;
-    }
-
-    .btn.is-active {
-      background: #2f4d87;
-    }
-
-    .container {
-      transition: opacity .18s ease, transform .18s ease;
-    }
-
-    body.page-leaving .container {
-      opacity: .25;
-      transform: translateY(6px);
-    }
-  </style>
-
-  <script>
-    function updateTime() {
-      const now = new Date();
-      const el = document.getElementById("time");
-      if (el) el.innerText = now.toLocaleString();
-    }
-
-    setInterval(updateTime, 1000);
-
-    document.addEventListener('DOMContentLoaded', function () {
-      updateTime();
-      document.body.classList.add('page-ready');
-
-      const links = document.querySelectorAll('.nav a[href]');
-      const currentPath = window.location.pathname.replace(/\/+$/, '');
-
-      links.forEach(link => {
-        const target = new URL(link.href, window.location.href);
-        const targetPath = target.pathname.replace(/\/+$/, '');
-
-        if (targetPath === currentPath) {
-          link.classList.add('is-active');
-        }
-
-        link.addEventListener('click', function (e) {
-          const href = link.getAttribute('href');
-          if (!href) return;
-          if (href.startsWith('#')) return;
-          if (link.target === '_blank') return;
-          if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-
-          e.preventDefault();
-          document.body.classList.remove('page-ready');
-          document.body.classList.add('page-leaving');
-
-          setTimeout(() => {
-            window.location.href = link.href;
-          }, 180);
-        });
-      });
-    });
-  </script>
+  <link rel="stylesheet" href="header-tabs.css">
 </head>
 <body>
-  <div class="header">
-    <div>Estofaria Digital</div>
-    <div id="time"></div>
-  </div>
-
-  <div class="nav">
-    <a class="btn" href="../painel/">📊 Painel</a>
-    <a class="btn" href="../material/">🧵 Materiais</a>
-    <a class="btn" href="../precificacao/">💰 Precificação</a>
-    <a class="btn" href="../catalogo/">🛋️ Catálogo</a>
-    <a class="btn" href="../itens-personalizacao/">🎨 Itens para personalização</a>
-    <a class="btn" href="../vendedor/">🤝 Vendedor</a>
-    <a class="btn" href="../agenda/">📅 Agenda</a>
-  </div>
-
   <main class="container">
     <section class="card scroll">
       <h2>Pedidos da semana</h2>
@@ -256,5 +122,6 @@
   </div>
 
   <script src="script.js"></script>
+  <script src="header-tabs.js"></script>
 </body>
 </html>
