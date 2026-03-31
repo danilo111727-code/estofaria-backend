@@ -1,96 +1,114 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Estofaria Digital — Precificação</title>
 
-<h1 class="title">Precificação</h1>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="precificacao.css">
+  <link rel="stylesheet" href="header-tabs.css">
+</head>
+<body>
+  <main class="container">
+    <h1 class="title">Precificação</h1>
 
-<div class="card">
-<h3>Área de precificação</h3>
+    <div class="card">
+      <h3>Área de precificação</h3>
 
-<div class="row">
-<input id="modeloNome" placeholder="Nome do modelo">
-<input id="baseMedida" placeholder="Medida base (ex: 2.00)">
-</div>
+      <div class="row">
+        <input id="modeloNome" placeholder="Nome do modelo">
+        <input id="baseMedida" placeholder="Medida base (ex: 2.00)">
+      </div>
 
-<div class="row">
-<input id="lucroDesejado" placeholder="Lucro desejado (R$)" oninput="formatCurrency(this)">
-<input type="file" id="fotoModelo">
-</div>
-</div>
+      <div class="row">
+        <input id="lucroDesejado" placeholder="Lucro desejado (R$)" oninput="formatCurrency(this)">
+        <input type="file" id="fotoModelo">
+      </div>
+    </div>
 
-<div class="card">
-<h3>Materiais do modelo</h3>
+    <div class="card">
+      <h3>Materiais do modelo</h3>
 
-<div class="row">
-<select id="materialSelect">
-<option>Espuma</option>
-<option>Cola</option>
-<option>Percinta</option>
-<option>Madeira</option>
-</select>
+      <div class="row">
+        <select id="materialSelect">
+          <option>Espuma</option>
+          <option>Cola</option>
+          <option>Percinta</option>
+          <option>Madeira</option>
+        </select>
 
-<input id="materialQtd" placeholder="Quantidade">
-<button onclick="addMaterial()">Confirmar</button>
-</div>
+        <input id="materialQtd" placeholder="Quantidade">
+        <button onclick="addMaterial()">Confirmar</button>
+      </div>
 
-<table>
-<thead>
-<tr>
-<th>Material</th>
-<th>Unidade</th>
-<th>Qtd</th>
-<th>Valor</th>
-<th>Total</th>
-<th></th>
-</tr>
-</thead>
-<tbody id="materiaisTabela"></tbody>
-</table>
-</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Material</th>
+            <th>Unidade</th>
+            <th>Qtd</th>
+            <th>Valor</th>
+            <th>Total</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="materiaisTabela"></tbody>
+      </table>
+    </div>
 
-<div class="card">
-<h3>Resumo</h3>
+    <div class="card">
+      <h3>Resumo</h3>
 
-<p>Custo total: <strong id="custoTotal">R$ 0,00</strong></p>
-<p>Lucro líquido: <strong id="lucroTotal">R$ 0,00</strong></p>
-<p>Valor total: <strong id="valorVenda">R$ 0,00</strong></p>
-<p>Margem contribuição: <strong id="margem">0%</strong></p>
-</div>
+      <p>Custo total: <strong id="custoTotal">R$ 0,00</strong></p>
+      <p>Lucro líquido: <strong id="lucroTotal">R$ 0,00</strong></p>
+      <p>Valor total: <strong id="valorVenda">R$ 0,00</strong></p>
+      <p>Margem contribuição: <strong id="margem">0%</strong></p>
+    </div>
 
-<div class="card">
-<h3>Espaçamento</h3>
+    <div class="card">
+      <h3>Espaçamento</h3>
 
-<select id="espacamento">
-<option>10 cm</option>
-<option>20 cm</option>
-<option>30 cm</option>
-<option>40 cm</option>
-<option>50 cm</option>
-<option>60 cm</option>
-<option>70 cm</option>
-<option>80 cm</option>
-<option>90 cm</option>
-<option>1 m</option>
-</select>
-</div>
+      <select id="espacamento">
+        <option>10 cm</option>
+        <option>20 cm</option>
+        <option>30 cm</option>
+        <option>40 cm</option>
+        <option>50 cm</option>
+        <option>60 cm</option>
+        <option>70 cm</option>
+        <option>80 cm</option>
+        <option>90 cm</option>
+        <option>1 m</option>
+      </select>
+    </div>
 
-<div class="card">
-<button onclick="salvarModelo()">Salvar modelo</button>
-<button onclick="gerarPDF()">Gerar PDF</button>
-</div>
+    <div class="card">
+      <button onclick="salvarModelo()">Salvar modelo</button>
+      <button onclick="gerarPDF()">Gerar PDF</button>
+    </div>
 
-<div class="card">
-<h3>Pesquisar modelo</h3>
+    <div class="card">
+      <h3>Pesquisar modelo</h3>
 
-<input id="searchModelo" placeholder="🔎 Pesquisar modelo" oninput="filtrarModelos()">
+      <input id="searchModelo" placeholder="🔎 Pesquisar modelo" oninput="filtrarModelos()">
 
-<table>
-<thead>
-<tr>
-<th>Modelo</th>
-<th>Base</th>
-<th>Valor</th>
-<th>Data</th>
-<th></th>
-</tr>
-</thead>
-<tbody id="listaModelos"></tbody>
-</table>
-</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Modelo</th>
+            <th>Base</th>
+            <th>Valor</th>
+            <th>Data</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="listaModelos"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <script src="precificacao.js"></script>
+  <script src="header-tabs.js"></script>
+</body>
+</html>
