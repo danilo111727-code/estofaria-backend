@@ -218,6 +218,53 @@ function modelToFrontend(model){
   }
 }
 
+function easterSunday(year){
+  const a = year % 19
+  const b = Math.floor(year / 100)
+  const c = year % 100
+  const d = Math.floor(b / 4)
+  const e = b % 4
+  const f = Math.floor((b + 8) / 25)
+  const g = Math.floor((b - f + 1) / 3)
+  const h = (19 * a + b - d - g + 15) % 30
+  const i = Math.floor(c / 4)
+  const k = c % 4
+  const l = (32 + 2 * e + 2 * i - h - k) % 7
+  const m = Math.floor((a + 11 * h + 22 * l) / 451)
+  const month = Math.floor((h + l - 7 * m + 114) / 31)
+  const day = ((h + l - 7 * m + 114) % 31) + 1
+  return new Date(Date.UTC(year, month - 1, day))
+}
+
+function addDaysUtc(date, days){
+  const d = new Date(date)
+  d.setUTCDate(d.getUTCDate() + days)
+  return d
+}
+
+function toIsoUtc(date){
+  return new Date(date).toISOString().slice(0, 10)
+}
+
+function getBrazilNationalHolidays(year){
+  const easter = easterSunday(year)
+  const fixed = [
+    { date: `${year}-01-01`, name: 'Confraternização Universal' },
+    { date: `${year}-04-21`, name: 'Tiradentes' },
+    { date: `${year}-05-01`, name: 'Dia do Trabalho' },
+    { date: `${year}-09-07`, name: 'Independência do Brasil' },
+    { date: `${year}-10-12`, name: 'Nossa Senhora Aparecida' },
+    { date: `${year}-11-02`, name: 'Finados' },
+    { date: `${year}-11-15`, name: 'Proclamação da República' },
+    { date: `${year}-11-20`, name: 'Dia Nacional de Zumbi e da Consciência Negra' },
+    { date: `${year}-12-25`, name: 'Natal' }
+  ]
+  const movable = [
+    { date: toIsoUtc(addDaysUtc(easter, -2)), name: 'Paixão de Cristo' }
+  ]
+  return fixed.concat(movable).map(item => ({ ...item, scope: 'national' })).sort((a, b) => a.date.localeCompare(b.date))
+}
+
 function personalizationItemToFrontend(item){
   const values = item && typeof item.values === 'object' && item.values ? { ...item.values } : {}
   const valueCents = Number(
@@ -652,8 +699,15 @@ router.get('/dashboard/summary', (req, res) => {
   return res.json({ pedidos, faturamento_cents, ticket_medio_cents })
 })
 
-router.get('/calendar/holidays', (_req, res) => {
-  return res.json({ holidays: [] })
+router.get('/calendar/holidays', (req, res) => {
+  const requested = String(req.query.years || req.query.year || '').trim()
+  const currentYear = new Date().getFullYear()
+  const years = (requested ? requested.split(',') : [String(currentYear), String(currentYear + 1)])
+    .map(item => Number(String(item || '').trim()))
+    .filter(year => Number.isInteger(year) && year >= 2000 && year <= 2100)
+  const uniqueYears = Array.from(new Set(years.length ? years : [currentYear, currentYear + 1]))
+  const holidays = uniqueYears.flatMap(getBrazilNationalHolidays)
+  return res.json({ years: uniqueYears, holidays })
 })
 
 module.exports = router
