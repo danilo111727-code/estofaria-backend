@@ -72,7 +72,7 @@ function applyCompanyAction(company, action, payload){
   router.get('/audit', requireAuth, requireMaster, requirePermission('saas.audit.read'), (req, res) => {
     const store = readStore()
     const limit = Math.min(Number(req.query.limit) || 100, 500)
-    const all = store.auditLog || []
+    const all = store.auditLogs || []
     const items = all.slice(-limit).reverse()
     res.json({ items, total: all.length })
   })
