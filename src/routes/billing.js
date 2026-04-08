@@ -165,7 +165,12 @@ router.get('/public', (req, res) => {
   res.json(store.billingConfig)
 })
 
-router.put('/config', requireAuth, requireMaster, requirePermission('billing.write'), (req, res) => {
+router.get('/config', requireAuth, requireMaster, requirePermission('billing.read'), (req, res) => {
+    const store = readStore()
+    res.json(store.billingConfig || {})
+  })
+
+  router.put('/config', requireAuth, requireMaster, requirePermission('billing.write'), (req, res) => {
   const store = readStore()
   store.billingConfig = {
     ...store.billingConfig,
