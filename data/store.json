@@ -38,7 +38,7 @@
       "id": "027f7cee-f32f-486f-bd42-1f08f79b389d",
       "name": "Dono da Empresa Demo",
       "email": "owner@demo.local",
-      "password_hash": "$2a$10$pguEPBj2lqQtJ.oL4/kb5.GX07e6ekSMoYdk/j6EBwzYjkb/7eP5W",
+      "password_hash": "$2b$10$FqhoQ573DwQgAt4G/OjOb.U4Q/UIqtcOz5XMGrs1dsQP1if6oDTaS",
       "role": "owner",
       "company_id": "c76f6ec0-e339-4484-93c0-7085f2aa5c4a",
       "is_owner": true,
@@ -64,7 +64,8 @@
       ],
       "is_active": true,
       "created_at": "2026-03-31T16:44:38.418Z",
-      "updated_at": "2026-03-31T17:59:27.010Z"
+      "updated_at": "2026-03-31T17:59:27.010Z",
+      "password": "$2b$10$FqhoQ573DwQgAt4G/OjOb.U4Q/UIqtcOz5XMGrs1dsQP1if6oDTaS"
     }
   ],
   "companies": [
