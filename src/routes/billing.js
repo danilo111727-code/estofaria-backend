@@ -187,6 +187,12 @@ router.get('/checkout-requests', requireAuth, (req, res) => {
   res.json(getVisibleLeads(store, req))
 })
 
+router.get('/', requireAuth, (req, res) => {
+  const store = readStore()
+  const company = getCompanyFromSession(store, req)
+  res.json(buildSubscriptionPayload(company, store, req))
+})
+
 router.get('/subscription', requireAuth, (req, res) => {
   const store = readStore()
   const company = getCompanyFromSession(store, req)
