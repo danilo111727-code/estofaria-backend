@@ -2,6 +2,8 @@ const { readStore } = require('../lib/store')
 const { decodeToken, sanitizeUser } = require('../lib/auth')
 const { hasMasterAccess, hasPermission } = require('../lib/policies')
 
+const SUBSCRIPTION_EXEMPT_PATHS = ['/billing', '/subscription', '/assinatura', '/me', '/logout', '/team']
+
 function enrichUserWithCompany(store, user){
   const company = store.companies.find(item => String(item.id) === String(user.company_id || '')) || null
   if(!company) return user
@@ -22,6 +24,11 @@ function getBearerToken(req){
   return match ? match[1] : ''
 }
 
+function isSubscriptionExempt(req){
+  const path = req.path || ''
+  return SUBSCRIPTION_EXEMPT_PATHS.some(p => path.startsWith(p))
+}
+
 function requireAuth(req, res, next){
   try {
     const token = getBearerToken(req)
@@ -32,6 +39,20 @@ function requireAuth(req, res, next){
     if(!user) return res.status(401).json({ error:'unauthorized', message:'Sessão inválida.' })
     req.user = sanitizeUser(enrichUserWithCompany(store, user))
     req.store = store
+
+    if(!hasMasterAccess(req.user) && !isSubscriptionExempt(req)){
+      const company = store.companies.find(item => String(item.id) === String(user.company_id || ''))
+      if(company && company.access_status && company.access_status !== 'active'){
+        return res.status(402).json({
+          error:'subscription_required',
+          message:'Sua assinatura está inativa. Acesse a tela de Assinatura para regularizar.',
+          access_status: company.access_status,
+          financial_status: company.financial_status,
+          redirect: '/assinatura/'
+        })
+      }
+    }
+
     next()
   } catch (_) {
     return res.status(401).json({ error:'unauthorized', message:'Token inválido ou expirado.' })
@@ -62,9 +83,4 @@ function requirePermission(permission){
   }
 }
 
-module.exports = {
-  requireAuth,
-  optionalAuth,
-  requireMaster,
-  requirePermission
-}
+module.exports = { requireAuth, optionalAuth, requireMaster, requirePermission }
