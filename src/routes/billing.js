@@ -269,10 +269,19 @@ router.post('/webhooks/stripe', express.raw({ type: 'application/json' }), (req,
   }
   store.webhookEvents.push(record)
 
-  const companyId = event.data?.object?.metadata?.company_id || event.company_id || ''
+  const obj = event.data?.object || {}
+  const companyId = obj.metadata?.company_id || event.company_id || ''
   const company = companyId ? findCompanyById(store, companyId) : null
   if(company){
     const type = record.type
+    if(type === 'checkout.session.completed'){
+      const stripeCustomerId = obj.customer || ''
+      const stripeSubId = obj.subscription || ''
+      if(stripeCustomerId) company.stripe_customer_id = stripeCustomerId
+      if(stripeSubId) company.stripe_subscription_id = stripeSubId
+      company.financial_status = 'trialing'
+      company.access_status = 'active'
+    }
     if(type === 'invoice.paid'){
       company.financial_status = 'active'
       company.access_status = 'active'
