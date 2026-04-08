@@ -6,6 +6,7 @@ const { readStore, writeStore, planPreset, findUserByEmail, nowIso, activeMember
 const { issueToken, sanitizeUser, normalizeArray } = require('../lib/auth')
 const { requireAuth } = require('../middleware/auth')
 const { hasMasterAccess } = require('../lib/policies')
+const { sendEmail, welcomeEmail, passwordResetEmail } = require('../lib/email')
 
 const router = express.Router()
 const BUSINESS_MODULES = ['painel','vendedor','agenda','material','precificacao','catalogo','itens-personalizacao','assinatura']
@@ -217,6 +218,7 @@ router.post('/register', (req, res) => {
     source: 'public-register'
   })
   writeStore(store)
+  sendEmail({ to: email, ...welcomeEmail(nome, empresa) }).catch(() => {})
   res.status(201).json({ token: issueToken(user), user: sanitizeUser(enrichUserForResponse(store, user)) })
 })
 
@@ -254,6 +256,7 @@ function handleForgotPassword(req, res){
   }
 
   writeStore(store)
+  sendEmail({ to: email, ...passwordResetEmail(user.name, token, getResetTtlMinutes()) }).catch(() => {})
   const extra = exposeResetToken() ? { reset_token_preview: token, reset_token_expires_at: expiresAt } : {}
   return res.json(genericResetResponse(extra))
 }
