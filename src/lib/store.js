@@ -3,7 +3,7 @@ const path = require('path')
 const bcrypt = require('bcryptjs')
 const { v4: uuidv4 } = require('uuid')
 
-const DATA_DIR = path.join(__dirname, '..', '..', 'data')
+const DATA_DIR = process.env.DATA_DIR || '/data'
 const STORE_FILE = path.join(DATA_DIR, 'store.json')
 
 const DEFAULT_STORE = {
