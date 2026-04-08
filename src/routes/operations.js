@@ -645,6 +645,21 @@ router.get('/quotes/:id', (req, res) => {
   return res.json(row)
 })
 
+router.patch('/quotes/:id', (req, res) => {
+  const store = ensureCollections(readStore())
+  const company = getCompanyContext(req, store)
+  const row = store.quotes.find(item => String(item.company_id) === String(company?.id) && String(item.id) === String(req.params.id))
+  if(!row) return res.status(404).json({ error:'not_found', message:'Orçamento não encontrado.' })
+  if(req.body?.cliente !== undefined) row.cliente = text(req.body.cliente, row.cliente)
+  if(req.body?.status !== undefined) row.status = text(req.body.status, row.status).toLowerCase()
+  if(req.body?.total_cents !== undefined) row.total_cents = Math.max(0, Math.round(num(req.body.total_cents, row.total_cents)))
+  if(req.body?.payload !== undefined && typeof req.body.payload === 'object') row.payload = req.body.payload
+  row.updated_at = nowIso()
+  audit(store, req, company.id, 'quote.update', `Orçamento atualizado: ${row.id}`)
+  writeStore(store)
+  return res.json(row)
+})
+
 router.delete('/quotes/:id', (req, res) => {
   const store = ensureCollections(readStore())
   const company = getCompanyContext(req, store)
