@@ -328,7 +328,24 @@ router.put('/materials/:id', (req, res) => {
   return res.json(row)
 })
 
-router.delete('/materials/:id', (req, res) => {
+router.patch('/materials/:id', (req, res) => {
+    const store = ensureCollections(readStore())
+    const company = getCompanyContext(req, store)
+    if(!company) return res.status(404).json({ error:'company_not_found', message:'Empresa não encontrada.' })
+    const id = Number(req.params.id)
+    const idx = store.materials.findIndex(item => item.id === id && String(item.company_id) === String(company.id))
+    if(idx === -1) return res.status(404).json({ error:'not_found', message:'Material não encontrado.' })
+    const { name, unit, price_cents } = req.body
+    if(name !== undefined) store.materials[idx].name = text(name)
+    if(unit !== undefined) store.materials[idx].unit = text(unit)
+    if(price_cents !== undefined) store.materials[idx].price_cents = num(price_cents)
+    store.materials[idx].updated_at = nowIso()
+    audit(store, req, company.id, 'material.updated', `Material #${id} atualizado (patch).`)
+    writeStore(store)
+    return res.json(store.materials[idx])
+  })
+
+  router.delete('/materials/:id', (req, res) => {
   const store = ensureCollections(readStore())
   const company = getCompanyContext(req, store)
   const before = store.materials.length
