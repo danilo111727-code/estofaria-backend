@@ -313,7 +313,12 @@ router.get('/me', requireAuth, (req, res) => {
 router.get('/team', requireAuth, (req, res) => {
   const store = readStore()
   const company = getCompanyContext(req, store)
-  if(!company) return res.status(404).json({ error:'company_not_found', message:'Empresa não encontrada para esta sessão.' })
+  if(!company){
+    if(hasMasterAccess(req.user)){
+      return res.json({ company: null, subscription: null, users: [], is_master: true, message: 'Usuário master não pertence a uma empresa específica.' })
+    }
+    return res.status(404).json({ error:'company_not_found', message:'Empresa não encontrada para esta sessão.' })
+  }
   res.json(teamPayload(store, company))
 })
 
