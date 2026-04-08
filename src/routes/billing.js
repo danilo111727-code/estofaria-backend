@@ -4,6 +4,9 @@ const { readStore, writeStore, findCompanyById, upsertAudit, nowIso, planPreset 
 const { requireAuth, optionalAuth, requireMaster, requirePermission } = require('../middleware/auth')
 const { hasMasterAccess } = require('../lib/policies')
 
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY
+const stripe = stripeSecretKey ? require('stripe')(stripeSecretKey) : null
+
 const router = express.Router()
 
 function normalizeText(value, max = 160){
@@ -215,9 +218,44 @@ router.post('/customer-portal', requireAuth, (req, res) => {
   res.json({ url: portalUrl, customer_portal_url: portalUrl })
 })
 
-router.post('/webhooks/stripe', (req, res) => {
+router.post('/stripe/create-checkout', requireAuth, async (req, res) => {
+  if(!stripe) return res.status(503).json({ error:'stripe_not_configured', message:'Stripe não configurado.' })
   const store = readStore()
-  const event = req.body || {}
+  const company = getCompanyFromSession(store, req)
+  if(!company) return res.status(404).json({ error:'company_not_found', message:'Empresa não encontrada.' })
+  const priceId = process.env.STRIPE_PRICE_ID
+  if(!priceId) return res.status(503).json({ error:'price_not_configured', message:'Plano não configurado.' })
+  const frontendUrl = process.env.FRONTEND_URL || 'https://estofaria-digital.pages.dev'
+  try {
+    const session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      payment_method_types: ['card'],
+      line_items: [{ price: priceId, quantity: 1 }],
+      metadata: { company_id: String(company.id) },
+      customer_email: company.owner_email || req.user?.email || undefined,
+      success_url: `${frontendUrl}/assinatura/?sucesso=1`,
+      cancel_url: `${frontendUrl}/assinatura/?cancelado=1`,
+      locale: 'pt-BR'
+    })
+    res.json({ url: session.url, session_id: session.id })
+  } catch(err) {
+    res.status(500).json({ error:'stripe_error', message: err.message })
+  }
+})
+
+router.post('/webhooks/stripe', express.raw({ type: 'application/json' }), (req, res) => {
+  const store = readStore()
+  let event
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
+  if(stripe && webhookSecret){
+    try {
+      event = stripe.webhooks.constructEvent(req.body, req.headers['stripe-signature'], webhookSecret)
+    } catch(err) {
+      return res.status(400).json({ error:'invalid_signature', message: err.message })
+    }
+  } else {
+    event = req.body || {}
+  }
   const eventId = String(event.id || '')
   if(!eventId) return res.status(400).json({ error:'invalid_event', message:'Evento sem id.' })
   if(store.webhookEvents.some(item => String(item.id) === eventId)) return res.json({ ok:true, duplicate:true })
