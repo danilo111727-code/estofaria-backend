@@ -57,10 +57,6 @@ function getCompanyContext(req, store){
 function seedCompanyData(store, companyId){
   ensureCollections(store)
   const cid = String(companyId)
-  const hasAny = store.materials.some(item => String(item.company_id) === cid)
-    || store.models.some(item => String(item.company_id) === cid)
-    || store.agendaOrders.some(item => String(item.company_id) === cid)
-    || store.quotes.some(item => String(item.company_id) === cid)
 
   if(!store.agendaConfigs.some(item => String(item.company_id) === cid)){
     store.agendaConfigs.push({
@@ -74,7 +70,7 @@ function seedCompanyData(store, companyId){
     })
   }
 
-  if(hasAny) return
+  if(true) return
 
   const tecidoId = nextId(store, 'materials')
   const espumaId = nextId(store, 'materials')
