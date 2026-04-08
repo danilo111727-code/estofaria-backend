@@ -57,7 +57,27 @@ function applyCompanyAction(company, action, payload){
   company.updated_at = nowIso()
 }
 
-router.get('/companies', requireAuth, requireMaster, requirePermission('saas.companies.read'), (req, res) => {
+
+  router.get('/stats', requireAuth, requireMaster, requirePermission('saas.companies.read'), (req, res) => {
+    const store = readStore()
+    const companies = store.companies || []
+    const total = companies.length
+    const active = companies.filter(c => c.access_status === 'active' || c.financial_status === 'active').length
+    const trialing = companies.filter(c => c.subscription_status === 'trialing' || !c.financial_status).length
+    const blocked = companies.filter(c => c.access_status === 'blocked').length
+    const leads = (store.billingLeads || []).length
+    res.json({ total_companies: total, active, trialing, blocked, total_leads: leads, total_users: (store.users || []).length })
+  })
+
+  router.get('/audit', requireAuth, requireMaster, requirePermission('saas.audit.read'), (req, res) => {
+    const store = readStore()
+    const limit = Math.min(Number(req.query.limit) || 100, 500)
+    const all = store.auditLog || []
+    const items = all.slice(-limit).reverse()
+    res.json({ items, total: all.length })
+  })
+
+  router.get('/companies', requireAuth, requireMaster, requirePermission('saas.companies.read'), (req, res) => {
   const store = readStore()
   const query = String(req.query.q || '').toLowerCase()
   const plan = String(req.query.plan || 'all').toLowerCase()
