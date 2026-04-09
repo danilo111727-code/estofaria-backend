@@ -633,7 +633,7 @@ router.patch('/agenda/config', (req, res) => {
     row = { id: nextId(store, 'agendaConfigs'), company_id: company.id, created_at: nowIso(), updated_at: nowIso() }
     store.agendaConfigs.push(row)
   }
-  const incomingCity = req.body?.city_code !== undefined ? String(req.body.city_code || '').trim().toUpperCase().replace(/-/g, '_') : null
+  const incomingCity = req.body?.city_code !== undefined ? String(req.body.city_code || '').trim().toUpperCase().replace(/\s/g, '_') : null
   const validCity = incomingCity !== null ? (incomingCity && VALID_CITY_CODES.has(incomingCity) ? incomingCity : '') : (row.city_code || '')
   Object.assign(row, {
     prazo_dias: Math.max(0, Math.round(num(req.body?.prazo_dias, row.prazo_dias || 7))),
@@ -838,7 +838,7 @@ router.get('/calendar/holidays', (req, res) => {
     .map(item => Number(String(item || '').trim()))
     .filter(year => Number.isInteger(year) && year >= 2000 && year <= 2100)
   const uniqueYears = Array.from(new Set(years.length ? years : [currentYear, currentYear + 1]))
-  const cityCode = String(req.query.city || '').trim().toUpperCase().replace(/-/g, '_').replace(/\s/g, '_')
+  const cityCode = String(req.query.city || '').trim().toUpperCase().replace(/\s/g, '_')
   const validCity = cityCode && VALID_CITY_CODES.has(cityCode) ? cityCode : null
   const national = uniqueYears.flatMap(getBrazilNationalHolidays)
   const regional = validCity ? uniqueYears.flatMap(y => getRegionalHolidays(y, validCity)) : []
