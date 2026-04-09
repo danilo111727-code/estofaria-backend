@@ -42,7 +42,8 @@ function requireAuth(req, res, next){
 
     if(!hasMasterAccess(req.user) && !isSubscriptionExempt(req)){
       const company = store.companies.find(item => String(item.id) === String(user.company_id || ''))
-      if(company && company.access_status && company.access_status !== 'active'){
+      const HARD_BLOCKED = ['blocked','suspended','disabled']
+    if(company && HARD_BLOCKED.includes(company.access_status)){
         return res.status(402).json({
           error:'subscription_required',
           message:'Sua assinatura está inativa. Acesse a tela de Assinatura para regularizar.',
