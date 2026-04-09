@@ -201,4 +201,28 @@ router.post('/companies/:companyId/users/:userId/reset-password', requireAuth, r
   res.json({ ok:true, message:'Senha redefinida com sucesso.' })
 })
 
+router.delete('/companies/:companyId', requireAuth, requireMaster, requirePermission('saas.companies.write'), (req, res) => {
+  const store = readStore()
+  const companyId = req.params.companyId
+  const idx = store.companies.findIndex(c => String(c.id) === String(companyId))
+  if(idx === -1) return res.status(404).json({ error:'company_not_found', message:'Empresa não encontrada.' })
+  const company = store.companies[idx]
+  upsertAudit(store, {
+    company_id: companyId,
+    action: 'company_deleted',
+    message: `Empresa "${company.name || company.business_name || companyId}" excluída pelo master.`,
+    actor_user_id: req.user.id,
+    actor_name: req.user.name,
+    actor_email: req.user.email,
+    actor_role: req.user.role,
+    source: 'master-ui',
+    ip_address: req.ip,
+    user_agent: req.headers['user-agent'] || ''
+  })
+  store.companies.splice(idx, 1)
+  store.companyUsers = (store.companyUsers || []).filter(cu => String(cu.company_id) !== String(companyId))
+  writeStore(store)
+  res.json({ ok:true, message:'Empresa excluída com sucesso.' })
+})
+
 module.exports = router
