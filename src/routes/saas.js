@@ -201,28 +201,25 @@ router.post('/companies/:companyId/users/:userId/reset-password', requireAuth, r
   res.json({ ok:true, message:'Senha redefinida com sucesso.' })
 })
 
-router.delete('/companies/:companyId', requireAuth, requireMaster, requirePermission('saas.companies.write'), (req, res) => {
+router.delete('/users/:userId', requireAuth, requireMaster, requirePermission('saas.companies.write'), (req, res) => {
   const store = readStore()
-  const companyId = req.params.companyId
-  const idx = store.companies.findIndex(c => String(c.id) === String(companyId))
-  if(idx === -1) return res.status(404).json({ error:'company_not_found', message:'Empresa não encontrada.' })
-  const company = store.companies[idx]
+  const userId = req.params.userId
+  const userIdx = store.users.findIndex(u => String(u.id) === userId || String(u.email) === userId)
+  if(userIdx === -1) return res.status(404).json({ error:'user_not_found', message:'Usuário não encontrado.' })
+  const user = store.users[userIdx]
+  store.users.splice(userIdx, 1)
+  store.companyUsers = (store.companyUsers || []).filter(cu => String(cu.user_id) !== String(user.id))
   upsertAudit(store, {
-    company_id: companyId,
-    action: 'company_deleted',
-    message: `Empresa "${company.name || company.business_name || companyId}" excluída pelo master.`,
+    action: 'user_deleted_by_master',
+    message: `Usuário ${user.email} removido pelo master.`,
     actor_user_id: req.user.id,
     actor_name: req.user.name,
     actor_email: req.user.email,
     actor_role: req.user.role,
-    source: 'master-ui',
-    ip_address: req.ip,
-    user_agent: req.headers['user-agent'] || ''
+    source: 'master-delete-user'
   })
-  store.companies.splice(idx, 1)
-  store.companyUsers = (store.companyUsers || []).filter(cu => String(cu.company_id) !== String(companyId))
   writeStore(store)
-  res.json({ ok:true, message:'Empresa excluída com sucesso.' })
+  res.json({ ok:true, message:`Usuário ${user.email} removido com sucesso.` })
 })
 
 module.exports = router
