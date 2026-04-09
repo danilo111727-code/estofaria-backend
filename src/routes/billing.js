@@ -229,7 +229,10 @@ router.post('/stripe/create-checkout', requireAuth, async (req, res) => {
   try {
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
-      payment_method_types: ['card'],
+      payment_method_types: ['card', 'boleto'],
+      payment_method_options: {
+        boleto: { expires_after_days: 3 }
+      },
       line_items: [{ price: priceId, quantity: 1 }],
       metadata: { company_id: String(company.id) },
       customer_email: company.owner_email || req.user?.email || undefined,
