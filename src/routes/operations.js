@@ -718,18 +718,21 @@ router.post('/quotes/:id/convert-to-order', (req, res) => {
 })
 
 router.get('/dashboard/summary', (req, res) => {
-  const store = ensureCollections(readStore())
-  const company = getCompanyContext(req, store)
-  if(!company) return res.json({ pedidos: 0, faturamento_cents: 0, ticket_medio_cents: 0 })
-  seedCompanyData(store, company.id)
-  writeStore(store)
-  const quotes = store.quotes.filter(item => String(item.company_id) === String(company.id) && String(item.status || '').toLowerCase() === 'pedido')
-  const pedidos = quotes.length
-  const faturamento_cents = quotes.reduce((sum, item) => sum + Math.max(0, Math.round(num(item.total_cents, 0))), 0)
-  const ticket_medio_cents = pedidos ? Math.round(faturamento_cents / pedidos) : 0
-  return res.json({ pedidos, faturamento_cents, ticket_medio_cents })
-})
-
+    const store = ensureCollections(readStore())
+    const company = getCompanyContext(req, store)
+    if(!company) return res.json({ pedidos: 0, faturamento_cents: 0, ticket_medio_cents: 0 })
+    seedCompanyData(store, company.id)
+    writeStore(store)
+    const orders = (store.agendaOrders || []).filter(item =>
+      String(item.company_id) === String(company.id) &&
+      String(item.status || '').toLowerCase() === 'pendente'
+    )
+    const pedidos = orders.length
+    const faturamento_cents = orders.reduce((sum, item) => sum + Math.max(0, Math.round(num(item.total_cents || item.value_cents || 0, 0))), 0)
+    const ticket_medio_cents = pedidos ? Math.round(faturamento_cents / pedidos) : 0
+    return res.json({ pedidos, faturamento_cents, ticket_medio_cents })
+  })
+  
 router.get('/calendar/holidays', (req, res) => {
   const requested = String(req.query.years || req.query.year || '').trim()
   const currentYear = new Date().getFullYear()
