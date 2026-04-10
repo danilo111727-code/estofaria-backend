@@ -261,104 +261,6 @@ function getBrazilNationalHolidays(year){
   return fixed.concat(movable).map(item => ({ ...item, scope: 'national' })).sort((a, b) => a.date.localeCompare(b.date))
 }
 
-const VALID_CITY_CODES = new Set([
-  'SP-SAO_PAULO','SP-CAMPINAS','SP-SANTOS','SP-SAO_BERNARDO','SP-RIBEIRAO_PRETO','SP-SOROCABA',
-  'SP-OSASCO','SP-GUARULHOS','SP-JUNDIAI','SP-BAURU',
-  'RJ-RIO_DE_JANEIRO','RJ-NITEROI','RJ-DUQUE_CAXIAS','RJ-NOVA_IGUACU',
-  'MG-BELO_HORIZONTE','MG-CONTAGEM','MG-UBERLANDIA','MG-JUIZ_DE_FORA',
-  'BA-SALVADOR','BA-FEIRA_SANTANA',
-  'CE-FORTALEZA',
-  'PR-CURITIBA','PR-LONDRINA',
-  'RS-PORTO_ALEGRE','RS-CAXIAS_DO_SUL',
-  'PE-RECIFE','PE-CARUARU',
-  'AM-MANAUS',
-  'PA-BELEM',
-  'GO-GOIANIA',
-  'DF-BRASILIA',
-  'ES-VITORIA',
-  'MS-CAMPO_GRANDE',
-  'SC-FLORIANOPOLIS','SC-JOINVILLE',
-  'RN-NATAL',
-  'AL-MACEIO',
-  'MA-SAO_LUIS',
-  'PI-TERESINA'
-])
-
-function getRegionalHolidays(year, cityCode) {
-  if (!cityCode || !VALID_CITY_CODES.has(cityCode)) return []
-  const easter = easterSunday(year)
-  const corpusChristi = toIsoUtc(addDaysUtc(easter, 60))
-  const carnavalSeg = toIsoUtc(addDaysUtc(easter, -48))
-  const carnavalTer = toIsoUtc(addDaysUtc(easter, -47))
-
-  const SP_STATE = [{ date: `${year}-07-09`, name: 'Revolução Constitucionalista', scope: 'state' }]
-  const RJ_STATE = [{ date: `${year}-04-23`, name: 'Dia de São Jorge', scope: 'state' }]
-  const PR_STATE = [{ date: `${year}-12-19`, name: 'Emancipação Política do Paraná', scope: 'state' }]
-  const RS_STATE = [{ date: `${year}-09-20`, name: 'Proclamação da República Rio-Grandense', scope: 'state' }]
-  const PE_STATE = [{ date: `${year}-03-06`, name: 'Revolução Pernambucana', scope: 'state' }]
-  const BA_STATE = [{ date: `${year}-07-02`, name: 'Independência da Bahia', scope: 'state' }]
-  const CE_STATE = [{ date: `${year}-03-25`, name: 'Data Magna do Ceará', scope: 'state' }]
-  const AM_STATE = [{ date: `${year}-09-05`, name: 'Elevação do Amazonas à Categoria de Estado', scope: 'state' }]
-  const PA_STATE = [{ date: `${year}-08-15`, name: 'Adesão do Grão-Pará à Independência', scope: 'state' }]
-  const GO_STATE = [{ date: `${year}-10-24`, name: 'Criação do Estado de Goiás', scope: 'state' }]
-  const ES_STATE = [{ date: `${year}-10-28`, name: 'Dia do Servidor Público (ES)', scope: 'state' }]
-  const MS_STATE = [{ date: `${year}-10-11`, name: 'Criação do Estado de Mato Grosso do Sul', scope: 'state' }]
-  const SC_STATE = [{ date: `${year}-08-11`, name: 'Criação da Capitania de Santa Catarina', scope: 'state' }]
-  const RN_STATE = [{ date: `${year}-10-03`, name: 'Mártires Potiguares', scope: 'state' }]
-  const AL_STATE = [
-    { date: `${year}-06-24`, name: 'São João - Padroeiro de Alagoas', scope: 'state' },
-    { date: `${year}-09-16`, name: 'Emancipação Política de Alagoas', scope: 'state' }
-  ]
-  const MA_STATE = [{ date: `${year}-07-28`, name: 'Adesão do Maranhão à Independência', scope: 'state' }]
-  const PI_STATE = [{ date: `${year}-10-19`, name: 'Dia do Piauí', scope: 'state' }]
-
-  const db = {
-    'SP-SAO_PAULO':     { state: SP_STATE, city: [{ date: `${year}-01-25`, name: 'Aniversário de São Paulo', scope: 'city' }, { date: corpusChristi, name: 'Corpus Christi', scope: 'city' }] },
-    'SP-CAMPINAS':      { state: SP_STATE, city: [{ date: `${year}-07-11`, name: 'Aniversário de Campinas', scope: 'city' }, { date: corpusChristi, name: 'Corpus Christi', scope: 'city' }] },
-    'SP-SANTOS':        { state: SP_STATE, city: [{ date: `${year}-01-26`, name: 'Aniversário de Santos', scope: 'city' }] },
-    'SP-SAO_BERNARDO':  { state: SP_STATE, city: [{ date: `${year}-10-22`, name: 'Aniversário de São Bernardo do Campo', scope: 'city' }] },
-    'SP-RIBEIRAO_PRETO':{ state: SP_STATE, city: [{ date: `${year}-06-19`, name: 'Aniversário de Ribeirão Preto', scope: 'city' }] },
-    'SP-SOROCABA':      { state: SP_STATE, city: [{ date: `${year}-08-15`, name: 'Nossa Senhora da Ponte - Padroeira', scope: 'city' }] },
-    'SP-OSASCO':        { state: SP_STATE, city: [{ date: `${year}-02-19`, name: 'Aniversário de Osasco', scope: 'city' }] },
-    'SP-GUARULHOS':     { state: SP_STATE, city: [{ date: `${year}-07-26`, name: 'Aniversário de Guarulhos', scope: 'city' }] },
-    'SP-JUNDIAI':       { state: SP_STATE, city: [{ date: `${year}-02-21`, name: 'Aniversário de Jundiaí', scope: 'city' }] },
-    'SP-BAURU':         { state: SP_STATE, city: [{ date: `${year}-08-01`, name: 'Aniversário de Bauru', scope: 'city' }] },
-    'RJ-RIO_DE_JANEIRO':{ state: RJ_STATE, city: [{ date: `${year}-01-20`, name: 'São Sebastião - Padroeiro do Rio', scope: 'city' }, { date: carnavalSeg, name: 'Segunda-feira de Carnaval', scope: 'city' }, { date: carnavalTer, name: 'Terça-feira de Carnaval', scope: 'city' }, { date: `${year}-10-28`, name: 'Dia do Servidor Público Municipal', scope: 'city' }] },
-    'RJ-NITEROI':       { state: RJ_STATE, city: [{ date: `${year}-11-22`, name: 'Aniversário de Niterói', scope: 'city' }] },
-    'RJ-DUQUE_CAXIAS':  { state: RJ_STATE, city: [{ date: `${year}-04-12`, name: 'Aniversário de Duque de Caxias', scope: 'city' }] },
-    'RJ-NOVA_IGUACU':   { state: RJ_STATE, city: [{ date: `${year}-01-15`, name: 'Aniversário de Nova Iguaçu', scope: 'city' }] },
-    'MG-BELO_HORIZONTE':{ state: [], city: [{ date: `${year}-12-08`, name: 'Nossa Senhora da Conceição - Padroeira', scope: 'city' }, { date: `${year}-12-12`, name: 'Aniversário de Belo Horizonte', scope: 'city' }] },
-    'MG-CONTAGEM':      { state: [], city: [{ date: `${year}-10-24`, name: 'Aniversário de Contagem', scope: 'city' }] },
-    'MG-UBERLANDIA':    { state: [], city: [{ date: `${year}-06-28`, name: 'Aniversário de Uberlândia', scope: 'city' }] },
-    'MG-JUIZ_DE_FORA':  { state: [], city: [{ date: `${year}-05-31`, name: 'Aniversário de Juiz de Fora', scope: 'city' }] },
-    'BA-SALVADOR':      { state: BA_STATE, city: [{ date: carnavalSeg, name: 'Segunda-feira de Carnaval', scope: 'city' }, { date: carnavalTer, name: 'Terça-feira de Carnaval', scope: 'city' }, { date: `${year}-12-08`, name: 'Nossa Senhora da Conceição', scope: 'city' }] },
-    'BA-FEIRA_SANTANA': { state: BA_STATE, city: [{ date: `${year}-05-13`, name: 'Aniversário de Feira de Santana', scope: 'city' }] },
-    'CE-FORTALEZA':     { state: CE_STATE, city: [{ date: `${year}-04-13`, name: 'Aniversário de Fortaleza', scope: 'city' }] },
-    'PR-CURITIBA':      { state: PR_STATE, city: [{ date: `${year}-03-29`, name: 'Aniversário de Curitiba', scope: 'city' }, { date: corpusChristi, name: 'Corpus Christi', scope: 'city' }] },
-    'PR-LONDRINA':      { state: PR_STATE, city: [{ date: `${year}-10-10`, name: 'Aniversário de Londrina', scope: 'city' }] },
-    'RS-PORTO_ALEGRE':  { state: RS_STATE, city: [{ date: `${year}-03-26`, name: 'Aniversário de Porto Alegre', scope: 'city' }, { date: corpusChristi, name: 'Corpus Christi', scope: 'city' }] },
-    'RS-CAXIAS_DO_SUL': { state: RS_STATE, city: [{ date: `${year}-06-20`, name: 'Aniversário de Caxias do Sul', scope: 'city' }] },
-    'PE-RECIFE':        { state: PE_STATE, city: [{ date: `${year}-03-12`, name: 'Aniversário do Recife', scope: 'city' }, { date: carnavalSeg, name: 'Segunda-feira de Carnaval', scope: 'city' }, { date: carnavalTer, name: 'Terça-feira de Carnaval', scope: 'city' }] },
-    'PE-CARUARU':       { state: PE_STATE, city: [{ date: `${year}-05-20`, name: 'Aniversário de Caruaru', scope: 'city' }] },
-    'AM-MANAUS':        { state: AM_STATE, city: [{ date: `${year}-10-24`, name: 'Aniversário de Manaus', scope: 'city' }, { date: `${year}-12-08`, name: 'Nossa Senhora da Conceição', scope: 'city' }] },
-    'PA-BELEM':         { state: PA_STATE, city: [{ date: `${year}-01-12`, name: 'Aniversário de Belém', scope: 'city' }] },
-    'GO-GOIANIA':       { state: GO_STATE, city: [{ date: `${year}-10-24`, name: 'Aniversário de Goiânia', scope: 'city' }] },
-    'DF-BRASILIA':      { state: [], city: [{ date: `${year}-04-21`, name: 'Fundação de Brasília / Dia do DF', scope: 'city' }] },
-    'ES-VITORIA':       { state: ES_STATE, city: [{ date: `${year}-09-08`, name: 'Nossa Senhora da Vitória - Padroeira', scope: 'city' }] },
-    'MS-CAMPO_GRANDE':  { state: MS_STATE, city: [{ date: `${year}-08-26`, name: 'Aniversário de Campo Grande', scope: 'city' }] },
-    'SC-FLORIANOPOLIS': { state: SC_STATE, city: [{ date: `${year}-03-23`, name: 'Aniversário de Florianópolis', scope: 'city' }] },
-    'SC-JOINVILLE':     { state: SC_STATE, city: [{ date: `${year}-03-09`, name: 'Aniversário de Joinville', scope: 'city' }] },
-    'RN-NATAL':         { state: RN_STATE, city: [{ date: `${year}-12-25`, name: 'Aniversário de Natal (mesmo dia de Natal)', scope: 'city' }] },
-    'AL-MACEIO':        { state: AL_STATE, city: [{ date: `${year}-12-05`, name: 'Aniversário de Maceió', scope: 'city' }] },
-    'MA-SAO_LUIS':      { state: MA_STATE, city: [{ date: `${year}-07-28`, name: 'Aniversário de São Luís', scope: 'city' }] },
-    'PI-TERESINA':      { state: PI_STATE, city: [{ date: `${year}-08-16`, name: 'Aniversário de Teresina', scope: 'city' }] }
-  }
-
-  const entry = db[cityCode]
-  if (!entry) return []
-  return [...(entry.state || []), ...(entry.city || [])]
-}
-
 function personalizationItemToFrontend(item){
   const values = item && typeof item.values === 'object' && item.values ? { ...item.values } : {}
   const valueCents = Number(
@@ -633,13 +535,10 @@ router.patch('/agenda/config', (req, res) => {
     row = { id: nextId(store, 'agendaConfigs'), company_id: company.id, created_at: nowIso(), updated_at: nowIso() }
     store.agendaConfigs.push(row)
   }
-  const incomingCity = req.body?.city_code !== undefined ? String(req.body.city_code || '').trim().toUpperCase().replace(/\s/g, '_') : null
-  const validCity = incomingCity !== null ? (incomingCity && VALID_CITY_CODES.has(incomingCity) ? incomingCity : '') : (row.city_code || '')
   Object.assign(row, {
     prazo_dias: Math.max(0, Math.round(num(req.body?.prazo_dias, row.prazo_dias || 7))),
     vagas_semana: Math.max(1, Math.round(num(req.body?.vagas_semana, row.vagas_semana || 5))),
     tipo_dias: ['uteis','corrido'].includes(text(req.body?.tipo_dias, row.tipo_dias || 'corrido')) ? text(req.body?.tipo_dias, row.tipo_dias || 'corrido') : 'corrido',
-    city_code: validCity,
     updated_at: nowIso()
   })
   audit(store, req, company.id, 'agenda.config.update', 'Configuração da agenda atualizada')
@@ -838,15 +737,8 @@ router.get('/calendar/holidays', (req, res) => {
     .map(item => Number(String(item || '').trim()))
     .filter(year => Number.isInteger(year) && year >= 2000 && year <= 2100)
   const uniqueYears = Array.from(new Set(years.length ? years : [currentYear, currentYear + 1]))
-  const cityCode = String(req.query.city || '').trim().toUpperCase().replace(/\s/g, '_')
-  const validCity = cityCode && VALID_CITY_CODES.has(cityCode) ? cityCode : null
-  const national = uniqueYears.flatMap(getBrazilNationalHolidays)
-  const regional = validCity ? uniqueYears.flatMap(y => getRegionalHolidays(y, validCity)) : []
-  const allDates = new Map()
-  for (const h of national) allDates.set(h.date + '|' + h.name, h)
-  for (const h of regional) if (!allDates.has(h.date + '|' + h.name)) allDates.set(h.date + '|' + h.name, h)
-  const holidays = Array.from(allDates.values()).sort((a, b) => a.date.localeCompare(b.date))
-  return res.json({ years: uniqueYears, city: validCity || null, holidays })
+  const holidays = uniqueYears.flatMap(getBrazilNationalHolidays)
+  return res.json({ years: uniqueYears, holidays })
 })
 
 module.exports = router
