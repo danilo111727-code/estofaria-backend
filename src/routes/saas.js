@@ -222,4 +222,40 @@ router.delete('/users/:userId', requireAuth, requireMaster, requirePermission('s
   res.json({ ok:true, message:`Usuário ${user.email} removido com sucesso.` })
 })
 
+
+router.delete('/companies/:companyId', requireAuth, requireMaster, requirePermission('saas.companies.write'), (req, res) => {
+  const store = readStore()
+  const companyId = req.params.companyId
+  const companyIdx = store.companies.findIndex(c => String(c.id) === String(companyId))
+  if (companyIdx === -1) return res.status(404).json({ error: 'company_not_found', message: 'Empresa não encontrada.' })
+  const company = store.companies[companyIdx]
+
+  const linkedUserIds = (store.companyUsers || [])
+    .filter(cu => String(cu.company_id) === String(company.id))
+    .map(cu => String(cu.user_id))
+
+  store.companies.splice(companyIdx, 1)
+  store.companyUsers = (store.companyUsers || []).filter(cu => String(cu.company_id) !== String(company.id))
+
+  const remainingLinked = new Set((store.companyUsers || []).map(cu => String(cu.user_id)))
+  store.users = (store.users || []).filter(u => {
+    if (!linkedUserIds.includes(String(u.id))) return true
+    return remainingLinked.has(String(u.id))
+  })
+
+  upsertAudit(store, {
+    company_id: company.id,
+    action: 'company_deleted_by_master',
+    message: 'Empresa "' + (company.name || company.trade_name || companyId) + '" excluida pelo master.',
+    actor_user_id: req.user.id,
+    actor_name: req.user.name,
+    actor_email: req.user.email,
+    actor_role: req.user.role,
+    source: 'master-delete-company'
+  })
+
+  writeStore(store)
+  res.json({ ok: true, message: 'Empresa "' + (company.name || company.trade_name || companyId) + '" excluida com sucesso.' })
+})
+
 module.exports = router
