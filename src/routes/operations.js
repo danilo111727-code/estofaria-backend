@@ -62,8 +62,8 @@ function seedCompanyData(store, companyId){
     store.agendaConfigs.push({
       id: nextId(store, 'agendaConfigs'),
       company_id: companyId,
-      prazo_dias: 7,
-      vagas_semana: 5,
+      prazo_dias: 0,
+      vagas_semana: 0,
       tipo_dias: 'corrido',
       created_at: nowIso(),
       updated_at: nowIso()
@@ -621,7 +621,7 @@ router.get('/agenda/config', (req, res) => {
   seedCompanyData(store, company.id)
   writeStore(store)
   const row = store.agendaConfigs.find(item => String(item.company_id) === String(company.id))
-  return res.json(row || { prazo_dias: 7, vagas_semana: 5, tipo_dias: 'corrido' })
+  return res.json(row || { prazo_dias: 0, vagas_semana: 0, tipo_dias: 'corrido' })
 })
 
 router.patch('/agenda/config', (req, res) => {
@@ -636,8 +636,8 @@ router.patch('/agenda/config', (req, res) => {
   const incomingCity = req.body?.city_code !== undefined ? String(req.body.city_code || '').trim().toUpperCase().replace(/\s/g, '_') : null
   const validCity = incomingCity !== null ? (incomingCity && VALID_CITY_CODES.has(incomingCity) ? incomingCity : '') : (row.city_code || '')
   Object.assign(row, {
-    prazo_dias: Math.max(0, Math.round(num(req.body?.prazo_dias, row.prazo_dias || 7))),
-    vagas_semana: Math.max(1, Math.round(num(req.body?.vagas_semana, row.vagas_semana || 5))),
+    prazo_dias: Math.max(0, Math.round(num(req.body?.prazo_dias, row.prazo_dias || 0))),
+    vagas_semana: Math.max(0, Math.round(num(req.body?.vagas_semana, row.vagas_semana || 0))),
     tipo_dias: ['uteis','corrido'].includes(text(req.body?.tipo_dias, row.tipo_dias || 'corrido')) ? text(req.body?.tipo_dias, row.tipo_dias || 'corrido') : 'corrido',
     city_code: validCity,
     updated_at: nowIso()
