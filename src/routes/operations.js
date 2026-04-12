@@ -11,6 +11,7 @@ function ensureCollections(store){
   if(!Array.isArray(store.agendaConfigs)) store.agendaConfigs = []
   if(!Array.isArray(store.agendaOrders)) store.agendaOrders = []
   if(!Array.isArray(store.quotes)) store.quotes = []
+  if(!Array.isArray(store.templates)) store.templates = []
   if(!store.counters || typeof store.counters !== 'object') store.counters = {}
   return store
 }
@@ -854,6 +855,70 @@ router.get('/calendar/holidays', (req, res) => {
   for (const h of regional) if (!allDates.has(h.date + '|' + h.name)) allDates.set(h.date + '|' + h.name, h)
   const holidays = Array.from(allDates.values()).sort((a, b) => a.date.localeCompare(b.date))
   return res.json({ years: uniqueYears, city: validCity || null, holidays })
+})
+
+// ── Templates de PDF ──────────────────────────────────────────────────────────
+
+router.get('/templates', (req, res) => {
+  const store = ensureCollections(readStore())
+  const company = getCompanyContext(req, store)
+  if(!company) return res.status(404).json({ error:'company_not_found', message:'Empresa não encontrada.' })
+  const rows = store.templates
+    .filter(t => String(t.company_id) === String(company.id))
+    .sort((a, b) => String(b.updated_at || b.created_at || '').localeCompare(String(a.updated_at || a.created_at || '')))
+  return res.json({ items: rows })
+})
+
+router.post('/templates', (req, res) => {
+  const store = ensureCollections(readStore())
+  const company = getCompanyContext(req, store)
+  if(!company) return res.status(404).json({ error:'company_not_found', message:'Empresa não encontrada.' })
+  const name = text(req.body?.name || req.body?.nome, 'Template')
+  const row = {
+    id: nextId(store, 'templates'),
+    company_id: company.id,
+    name,
+    payload: req.body?.payload && typeof req.body.payload === 'object' ? req.body.payload : req.body || {},
+    created_at: nowIso(),
+    updated_at: nowIso()
+  }
+  store.templates.unshift(row)
+  audit(store, req, company.id, 'template.create', `Template salvo: ${name}`)
+  writeStore(store)
+  return res.status(201).json(row)
+})
+
+router.get('/templates/:id', (req, res) => {
+  const store = ensureCollections(readStore())
+  const company = getCompanyContext(req, store)
+  const row = store.templates.find(t => String(t.company_id) === String(company?.id) && String(t.id) === String(req.params.id))
+  if(!row) return res.status(404).json({ error:'not_found', message:'Template não encontrado.' })
+  return res.json(row)
+})
+
+router.patch('/templates/:id', (req, res) => {
+  const store = ensureCollections(readStore())
+  const company = getCompanyContext(req, store)
+  const row = store.templates.find(t => String(t.company_id) === String(company?.id) && String(t.id) === String(req.params.id))
+  if(!row) return res.status(404).json({ error:'not_found', message:'Template não encontrado.' })
+  if(req.body?.name !== undefined) row.name = text(req.body.name, row.name)
+  if(req.body?.nome !== undefined) row.name = text(req.body.nome, row.name)
+  if(req.body?.payload !== undefined && typeof req.body.payload === 'object') row.payload = req.body.payload
+  row.updated_at = nowIso()
+  audit(store, req, company.id, 'template.update', `Template atualizado: ${row.id}`)
+  writeStore(store)
+  return res.json(row)
+})
+
+router.delete('/templates/:id', (req, res) => {
+  const store = ensureCollections(readStore())
+  const company = getCompanyContext(req, store)
+  const before = store.templates.length
+  store.templates = store.templates.filter(t => !(String(t.company_id) === String(company?.id) && String(t.id) === String(req.params.id)))
+  if(store.templates.length === before) return res.status(404).json({ error:'not_found', message:'Template não encontrado.' })
+  audit(store, req, company.id, 'template.delete', `Template removido: ${req.params.id}`)
+  writeStore(store)
+  return res.json({ ok: true })
 })
 
 module.exports = router
