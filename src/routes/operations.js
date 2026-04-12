@@ -62,14 +62,123 @@ function seedCompanyData(store, companyId){
     store.agendaConfigs.push({
       id: nextId(store, 'agendaConfigs'),
       company_id: companyId,
-      prazo_dias: 0,
-      vagas_semana: 0,
+      prazo_dias: 7,
+      vagas_semana: 5,
       tipo_dias: 'corrido',
       created_at: nowIso(),
       updated_at: nowIso()
     })
   }
 
+  if(true) return
+
+  const tecidoId = nextId(store, 'materials')
+  const espumaId = nextId(store, 'materials')
+  store.materials.push(
+    {
+      id: tecidoId,
+      company_id: companyId,
+      name: 'Tecido Suede',
+      unit: 'metro',
+      price_cents: 4590,
+      created_at: nowIso(),
+      updated_at: nowIso()
+    },
+    {
+      id: espumaId,
+      company_id: companyId,
+      name: 'Espuma D28',
+      unit: 'unidade',
+      price_cents: 1890,
+      created_at: nowIso(),
+      updated_at: nowIso()
+    }
+  )
+
+  const modelId = nextId(store, 'models')
+  store.models.push({
+    id: modelId,
+    company_id: companyId,
+    name: 'Sofá 2 lugares',
+    base_meters: 2.2,
+    spacing_cm: 10,
+    total_cost_cents: 28000,
+    target_profit_cents: 17000,
+    sale_price_cents: 45000,
+    materials: [
+      { material_id: tecidoId, material_name: 'Tecido Suede', unit: 'metro', quantity: 4, unit_price_cents: 4590, total_cents: 18360 },
+      { material_id: espumaId, material_name: 'Espuma D28', unit: 'unidade', quantity: 5, unit_price_cents: 1890, total_cents: 9450 }
+    ],
+    created_at: nowIso(),
+    updated_at: nowIso()
+  })
+
+  store.personalizationItems.push(
+    {
+      id: nextId(store, 'personalizationItems'),
+      company_id: companyId,
+      model_id: modelId,
+      name: 'Botão encapado',
+      unit: 'unidade',
+      values: { padrao: 1200 },
+      created_at: nowIso(),
+      updated_at: nowIso()
+    },
+    {
+      id: nextId(store, 'personalizationItems'),
+      company_id: companyId,
+      model_id: modelId,
+      name: 'Pé de madeira',
+      unit: 'jogo',
+      values: { padrao: 3500 },
+      created_at: nowIso(),
+      updated_at: nowIso()
+    }
+  )
+
+  const orderId = nextId(store, 'agendaOrders')
+  store.agendaOrders.push({
+    id: orderId,
+    company_id: companyId,
+    cliente: 'Cliente Demo',
+    descricao: 'Reforma de sofá retrátil',
+    prod_date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+    ent_date: new Date(Date.now() + 9 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+    tecido: 'Suede cinza',
+    qtd: 1,
+    tecido_comprado: false,
+    status: 'pendente',
+    created_at: nowIso(),
+    updated_at: nowIso()
+  })
+
+  store.quotes.push({
+    id: nextId(store, 'quotes'),
+    company_id: companyId,
+    cliente: 'Cliente Demo',
+    status: 'pedido',
+    total_cents: 45000,
+    payload: {
+      cliente: 'Cliente Demo',
+      modelos: [
+        {
+          model_id: modelId,
+          modelo: 'Sofá 2 lugares',
+          preco: 450,
+          preco_cents: 45000,
+          metragem: '2.20',
+          itens: [],
+          subtotal: 450,
+          subtotal_cents: 45000
+        }
+      ],
+      total: 450,
+      total_cents: 45000,
+      totais: { vista: 450, cartao: 495, nfvista: 495, nfcartao: 540 }
+    },
+    created_at: nowIso(),
+    updated_at: nowIso()
+  })
 }
 
 function audit(store, req, companyId, action, detail){
@@ -89,6 +198,7 @@ function modelToFrontend(model){
   const base = num(model.base_meters, 0)
   const pricePerMeter = base > 0 ? Math.round(sale / base) : sale
   const image = text(model.image_data_url || model.imageDataUrl || model.foto_data_url || model.fotoDataUrl)
+  const ve = num(model.valor_por_espacamento_cents || model.valorPorEspacamentoCents, 0)
   return {
     ...model,
     nome: model.name,
@@ -97,6 +207,8 @@ function modelToFrontend(model){
     priceCents: sale,
     price_cents: sale,
     pricePerMeterCents: pricePerMeter,
+    valor_por_espacamento_cents: ve,
+    valorPorEspacamentoCents: ve,
     image_data_url: image,
     imageDataUrl: image,
     foto_data_url: image,
@@ -367,6 +479,7 @@ router.post('/models', (req, res) => {
     total_cost_cents: Math.max(0, Math.round(num(req.body?.total_cost_cents, 0))),
     target_profit_cents: Math.max(0, Math.round(num(req.body?.target_profit_cents, 0))),
     sale_price_cents: Math.max(0, Math.round(num(req.body?.sale_price_cents, 0))),
+    valor_por_espacamento_cents: Math.max(0, Math.round(num(req.body?.valor_por_espacamento_cents || req.body?.valorPorEspacamentoCents, 0))),
     image_data_url: image,
     materials: Array.isArray(req.body?.materials) ? req.body.materials : [],
     created_at: nowIso(),
@@ -391,6 +504,7 @@ router.put('/models/:id', (req, res) => {
     total_cost_cents: Math.max(0, Math.round(num(req.body?.total_cost_cents, row.total_cost_cents))),
     target_profit_cents: Math.max(0, Math.round(num(req.body?.target_profit_cents, row.target_profit_cents))),
     sale_price_cents: Math.max(0, Math.round(num(req.body?.sale_price_cents, row.sale_price_cents))),
+    valor_por_espacamento_cents: Math.max(0, Math.round(num(req.body?.valor_por_espacamento_cents || req.body?.valorPorEspacamentoCents, row.valor_por_espacamento_cents || 0))),
     image_data_url: image,
     materials: Array.isArray(req.body?.materials) ? req.body.materials : (Array.isArray(row.materials) ? row.materials : []),
     updated_at: nowIso()
@@ -512,7 +626,7 @@ router.get('/agenda/config', (req, res) => {
   seedCompanyData(store, company.id)
   writeStore(store)
   const row = store.agendaConfigs.find(item => String(item.company_id) === String(company.id))
-  return res.json(row || { prazo_dias: 0, vagas_semana: 0, tipo_dias: 'corrido' })
+  return res.json(row || { prazo_dias: 7, vagas_semana: 5, tipo_dias: 'corrido' })
 })
 
 router.patch('/agenda/config', (req, res) => {
@@ -527,8 +641,8 @@ router.patch('/agenda/config', (req, res) => {
   const incomingCity = req.body?.city_code !== undefined ? String(req.body.city_code || '').trim().toUpperCase().replace(/\s/g, '_') : null
   const validCity = incomingCity !== null ? (incomingCity && VALID_CITY_CODES.has(incomingCity) ? incomingCity : '') : (row.city_code || '')
   Object.assign(row, {
-    prazo_dias: Math.max(0, Math.round(num(req.body?.prazo_dias, row.prazo_dias || 0))),
-    vagas_semana: Math.max(0, Math.round(num(req.body?.vagas_semana, row.vagas_semana || 0))),
+    prazo_dias: Math.max(0, Math.round(num(req.body?.prazo_dias, row.prazo_dias || 7))),
+    vagas_semana: Math.max(1, Math.round(num(req.body?.vagas_semana, row.vagas_semana || 5))),
     tipo_dias: ['uteis','corrido'].includes(text(req.body?.tipo_dias, row.tipo_dias || 'corrido')) ? text(req.body?.tipo_dias, row.tipo_dias || 'corrido') : 'corrido',
     city_code: validCity,
     updated_at: nowIso()
