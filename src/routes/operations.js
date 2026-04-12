@@ -480,6 +480,7 @@ router.post('/models', (req, res) => {
     target_profit_cents: Math.max(0, Math.round(num(req.body?.target_profit_cents, 0))),
     sale_price_cents: Math.max(0, Math.round(num(req.body?.sale_price_cents, 0))),
     valor_por_espacamento_cents: Math.max(0, Math.round(num(req.body?.valor_por_espacamento_cents || req.body?.valorPorEspacamentoCents, 0))),
+    descricao_modelo: text(req.body?.descricao_modelo || '').slice(0, 300),
     image_data_url: image,
     materials: Array.isArray(req.body?.materials) ? req.body.materials : [],
     created_at: nowIso(),
@@ -505,6 +506,7 @@ router.put('/models/:id', (req, res) => {
     target_profit_cents: Math.max(0, Math.round(num(req.body?.target_profit_cents, row.target_profit_cents))),
     sale_price_cents: Math.max(0, Math.round(num(req.body?.sale_price_cents, row.sale_price_cents))),
     valor_por_espacamento_cents: Math.max(0, Math.round(num(req.body?.valor_por_espacamento_cents || req.body?.valorPorEspacamentoCents, row.valor_por_espacamento_cents || 0))),
+    descricao_modelo: req.body?.descricao_modelo !== undefined ? text(req.body.descricao_modelo).slice(0, 300) : (row.descricao_modelo || ''),
     image_data_url: image,
     materials: Array.isArray(req.body?.materials) ? req.body.materials : (Array.isArray(row.materials) ? row.materials : []),
     updated_at: nowIso()
