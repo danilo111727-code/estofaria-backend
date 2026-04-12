@@ -1,1 +1,351 @@
-{"users":[{"id":"d3eab445-ea1f-4465-a934-eac1e9fff5c9","name":"Master SaaS","email":"master@estofaria.local","password_hash":"$2a$10$8.3dD4xmaKSbUnTVH4MO/e2lBhni2SzenmvY6gXdJApc/l2nnZN4G","role":"platform_admin","is_master":true,"is_superadmin":true,"master_access":true,"saas_admin":true,"permissions":["master","saas.companies.read","saas.companies.write","saas.audit.read","saas.audit.write","billing.read","billing.write"],"allowed_modules":["master","painel","vendedor","agenda","material","precificacao","catalogo","itens-personalizacao","assinatura"],"is_active":true,"created_at":"2026-03-31T16:44:38.330Z","updated_at":"2026-03-31T16:46:26.206Z"},{"id":"027f7cee-f32f-486f-bd42-1f08f79b389d","name":"Dono da Empresa Demo","email":"owner@demo.local","password_hash":"$2b$10$FqhoQ573DwQgAt4G/OjOb.U4Q/UIqtcOz5XMGrs1dsQP1if6oDTaS","role":"owner","company_id":"c76f6ec0-e339-4484-93c0-7085f2aa5c4a","is_owner":true,"permissions":["painel","vendedor","agenda","material","precificacao","catalogo","itens-personalizacao","assinatura"],"allowed_modules":["painel","vendedor","agenda","material","precificacao","catalogo","itens-personalizacao","assinatura"],"is_active":true,"created_at":"2026-03-31T16:44:38.418Z","updated_at":"2026-03-31T17:59:27.010Z","password":"$2b$10$FqhoQ573DwQgAt4G/OjOb.U4Q/UIqtcOz5XMGrs1dsQP1if6oDTaS"}],"companies":[{"id":"c76f6ec0-e339-4484-93c0-7085f2aa5c4a","name":"Estofaria Demo","owner_name":"Dono da Empresa Demo","owner_email":"owner@demo.local","owner_phone":"11999999999","plan_code":"gestao","plan_name":"Plano Gestão","billing_mode":"stripe","financial_status":"active","access_status":"active","seats_limit":2,"monthly_price_cents":8990,"next_charge_at":"2026-03-31T16:44:38.418Z","trial_ends_at":"","created_at":"2026-03-31T16:44:38.418Z","updated_at":"2026-03-31T16:44:38.418Z","notes":"Empresa demo inicial do starter SaaS."}],"companyUsers":[{"id":"6479137f-9462-410b-95eb-f53db66038e9","company_id":"c76f6ec0-e339-4484-93c0-7085f2aa5c4a","user_id":"027f7cee-f32f-486f-bd42-1f08f79b389d","role":"owner","status":"active","modules":["painel","vendedor","agenda","material","precificacao","catalogo","itens-personalizacao","assinatura"],"invited_at":"2026-03-31T16:44:38.418Z","last_login_at":"2026-03-31T17:59:27.010Z","is_owner":true}],"auditLogs":[{"id":"dbd25fdc-0e23-4b8e-bfbf-350d5f576d4d","created_at":"2026-03-31T17:59:27.091Z","company_id":"c76f6ec0-e339-4484-93c0-7085f2aa5c4a","action":"model.delete","message":"Modelo removido: 2","actor_name":"Dono da Empresa Demo","actor_email":"owner@demo.local","actor_role":"owner","source":"operations-api"},{"id":"a5b06f67-8cd0-4f57-8337-79d54cef492a","created_at":"2026-03-31T17:59:27.056Z","company_id":"c76f6ec0-e339-4484-93c0-7085f2aa5c4a","action":"model.create","message":"Modelo criado: Poltrona luxo","actor_name":"Dono da Empresa Demo","actor_email":"owner@demo.local","actor_role":"owner","source":"operations-api"},{"id":"56cac941-3960-49b3-8625-f3bcb029fc6b","created_at":"2026-03-31T17:59:27.045Z","company_id":"c76f6ec0-e339-4484-93c0-7085f2aa5c4a","action":"material.create","message":"Material criado: Percinta elástica","actor_name":"Dono da Empresa Demo","actor_email":"owner@demo.local","actor_role":"owner","source":"operations-api"},{"id":"02c6600d-f2b1-4940-affb-d487d70757b3","created_at":"2026-03-31T17:59:13.878Z","company_id":"c76f6ec0-e339-4484-93c0-7085f2aa5c4a","action":"personalization_item.delete","message":"Item removido: 3","actor_name":"Dono da Empresa Demo","actor_email":"owner@demo.local","actor_role":"owner","source":"operations-api"},{"id":"3729759f-7501-400c-b7d4-e7365847ce8b","created_at":"2026-03-31T17:59:13.852Z","company_id":"c76f6ec0-e339-4484-93c0-7085f2aa5c4a","action":"personalization_item.update","message":"Item atualizado: Braço slim premium","actor_name":"Dono da Empresa Demo","actor_email":"owner@demo.local","actor_role":"owner","source":"operations-api"},{"id":"a1716604-555f-4799-960a-142a16f957c1","created_at":"2026-03-31T17:59:13.808Z","company_id":"c76f6ec0-e339-4484-93c0-7085f2aa5c4a","action":"personalization_item.create","message":"Item criado: Braço slim","actor_name":"Dono da Empresa Demo","actor_email":"owner@demo.local","actor_role":"owner","source":"operations-api"},{"id":"b6f49a00-6e8f-462e-9ed2-8393e7f11cf2","created_at":"2026-03-31T16:44:38.418Z","company_id":"c76f6ec0-e339-4484-93c0-7085f2aa5c4a","action":"bootstrap","message":"Loja inicial criada automaticamente para o starter SaaS.","actor_name":"system","actor_email":"system@local","actor_role":"bootstrap","reason":"seed","source":"bootstrap"}],"billingConfig":{"enabled":true,"default_plan_code":"gestao","plan_code":"gestao","plan_name":"Plano Gestão","monthly_price_cents":8990,"annual_price_cents":0,"payment_provider":"stripe","payment_link":"","support_contact":"Atendimento comercial","trial_days":30,"notes":"Primeiro mês grátis"},"billingLeads":[],"webhookEvents":[],"materials":[{"id":1,"company_id":"c76f6ec0-e339-4484-93c0-7085f2aa5c4a","name":"Tecido Suede","unit":"metro","price_cents":4590,"created_at":"2026-03-31T17:59:13.714Z","updated_at":"2026-03-31T17:59:13.714Z"},{"id":2,"company_id":"c76f6ec0-e339-4484-93c0-7085f2aa5c4a","name":"Espuma D28","unit":"unidade","price_cents":1890,"created_at":"2026-03-31T17:59:13.714Z","updated_at":"2026-03-31T17:59:13.714Z"},{"id":3,"company_id":"c76f6ec0-e339-4484-93c0-7085f2aa5c4a","name":"Percinta elástica","unit":"metro","price_cents":2590,"created_at":"2026-03-31T17:59:27.045Z","updated_at":"2026-03-31T17:59:27.045Z"}],"models":[{"id":1,"company_id":"c76f6ec0-e339-4484-93c0-7085f2aa5c4a","name":"Sofá 2 lugares","base_meters":2.2,"spacing_cm":10,"total_cost_cents":28000,"target_profit_cents":17000,"sale_price_cents":45000,"materials":[{"material_id":1,"material_name":"Tecido Suede","unit":"metro","quantity":4,"unit_price_cents":4590,"total_cents":18360},{"material_id":2,"material_name":"Espuma D28","unit":"unidade","quantity":5,"unit_price_cents":1890,"total_cents":9450}],"created_at":"2026-03-31T17:59:13.714Z","updated_at":"2026-03-31T17:59:13.714Z"}],"personalizationItems":[{"id":1,"company_id":"c76f6ec0-e339-4484-93c0-7085f2aa5c4a","model_id":1,"name":"Botão encapado","unit":"unidade","values":{"padrao":1200},"created_at":"2026-03-31T17:59:13.714Z","updated_at":"2026-03-31T17:59:13.714Z"},{"id":2,"company_id":"c76f6ec0-e339-4484-93c0-7085f2aa5c4a","model_id":1,"name":"Pé de madeira","unit":"jogo","values":{"padrao":3500},"created_at":"2026-03-31T17:59:13.714Z","updated_at":"2026-03-31T17:59:13.714Z"}],"agendaConfigs":[{"id":1,"company_id":"c76f6ec0-e339-4484-93c0-7085f2aa5c4a","prazo_dias":0,"vagas_semana":0,"tipo_dias":"corrido","created_at":"2026-03-31T17:59:13.714Z","updated_at":"2026-03-31T17:59:13.714Z"}],"agendaOrders":[],"quotes":[{"id":1,"company_id":"c76f6ec0-e339-4484-93c0-7085f2aa5c4a","cliente":"Cliente Demo","status":"pedido","total_cents":45000,"payload":{"cliente":"Cliente Demo","modelos":[{"model_id":1,"modelo":"Sofá 2 lugares","preco":450,"preco_cents":45000,"metragem":"2.20","itens":[],"subtotal":450,"subtotal_cents":45000}],"total":450,"total_cents":45000,"totais":{"vista":450,"cartao":495,"nfvista":495,"nfcartao":540}},"created_at":"2026-03-31T17:59:13.714Z","updated_at":"2026-03-31T17:59:13.714Z"}],"counters":{"agendaConfigs":1,"materials":3,"models":2,"personalizationItems":3,"agendaOrders":1,"quotes":1}}
+{
+  "users": [
+    {
+      "id": "d3eab445-ea1f-4465-a934-eac1e9fff5c9",
+      "name": "Master SaaS",
+      "email": "master@estofaria.local",
+      "password_hash": "$2a$10$8.3dD4xmaKSbUnTVH4MO/e2lBhni2SzenmvY6gXdJApc/l2nnZN4G",
+      "role": "platform_admin",
+      "is_master": true,
+      "is_superadmin": true,
+      "master_access": true,
+      "saas_admin": true,
+      "permissions": [
+        "master",
+        "saas.companies.read",
+        "saas.companies.write",
+        "saas.audit.read",
+        "saas.audit.write",
+        "billing.read",
+        "billing.write"
+      ],
+      "allowed_modules": [
+        "master",
+        "painel",
+        "vendedor",
+        "agenda",
+        "material",
+        "precificacao",
+        "catalogo",
+        "itens-personalizacao",
+        "assinatura"
+      ],
+      "is_active": true,
+      "created_at": "2026-03-31T16:44:38.330Z",
+      "updated_at": "2026-03-31T16:46:26.206Z"
+    },
+    {
+      "id": "027f7cee-f32f-486f-bd42-1f08f79b389d",
+      "name": "Dono da Empresa Demo",
+      "email": "owner@demo.local",
+      "password_hash": "$2b$10$FqhoQ573DwQgAt4G/OjOb.U4Q/UIqtcOz5XMGrs1dsQP1if6oDTaS",
+      "role": "owner",
+      "company_id": "c76f6ec0-e339-4484-93c0-7085f2aa5c4a",
+      "is_owner": true,
+      "permissions": [
+        "painel",
+        "vendedor",
+        "agenda",
+        "material",
+        "precificacao",
+        "catalogo",
+        "itens-personalizacao",
+        "assinatura"
+      ],
+      "allowed_modules": [
+        "painel",
+        "vendedor",
+        "agenda",
+        "material",
+        "precificacao",
+        "catalogo",
+        "itens-personalizacao",
+        "assinatura"
+      ],
+      "is_active": true,
+      "created_at": "2026-03-31T16:44:38.418Z",
+      "updated_at": "2026-03-31T17:59:27.010Z",
+      "password": "$2b$10$FqhoQ573DwQgAt4G/OjOb.U4Q/UIqtcOz5XMGrs1dsQP1if6oDTaS"
+    }
+  ],
+  "companies": [
+    {
+      "id": "c76f6ec0-e339-4484-93c0-7085f2aa5c4a",
+      "name": "Estofaria Demo",
+      "owner_name": "Dono da Empresa Demo",
+      "owner_email": "owner@demo.local",
+      "owner_phone": "11999999999",
+      "plan_code": "gestao",
+      "plan_name": "Plano Gestão",
+      "billing_mode": "stripe",
+      "financial_status": "active",
+      "access_status": "active",
+      "seats_limit": 2,
+      "monthly_price_cents": 8990,
+      "next_charge_at": "2026-03-31T16:44:38.418Z",
+      "trial_ends_at": "",
+      "created_at": "2026-03-31T16:44:38.418Z",
+      "updated_at": "2026-03-31T16:44:38.418Z",
+      "notes": "Empresa demo inicial do starter SaaS."
+    }
+  ],
+  "companyUsers": [
+    {
+      "id": "6479137f-9462-410b-95eb-f53db66038e9",
+      "company_id": "c76f6ec0-e339-4484-93c0-7085f2aa5c4a",
+      "user_id": "027f7cee-f32f-486f-bd42-1f08f79b389d",
+      "role": "owner",
+      "status": "active",
+      "modules": [
+        "painel",
+        "vendedor",
+        "agenda",
+        "material",
+        "precificacao",
+        "catalogo",
+        "itens-personalizacao",
+        "assinatura"
+      ],
+      "invited_at": "2026-03-31T16:44:38.418Z",
+      "last_login_at": "2026-03-31T17:59:27.010Z",
+      "is_owner": true
+    }
+  ],
+  "auditLogs": [
+    {
+      "id": "dbd25fdc-0e23-4b8e-bfbf-350d5f576d4d",
+      "created_at": "2026-03-31T17:59:27.091Z",
+      "company_id": "c76f6ec0-e339-4484-93c0-7085f2aa5c4a",
+      "action": "model.delete",
+      "message": "Modelo removido: 2",
+      "actor_name": "Dono da Empresa Demo",
+      "actor_email": "owner@demo.local",
+      "actor_role": "owner",
+      "source": "operations-api"
+    },
+    {
+      "id": "a5b06f67-8cd0-4f57-8337-79d54cef492a",
+      "created_at": "2026-03-31T17:59:27.056Z",
+      "company_id": "c76f6ec0-e339-4484-93c0-7085f2aa5c4a",
+      "action": "model.create",
+      "message": "Modelo criado: Poltrona luxo",
+      "actor_name": "Dono da Empresa Demo",
+      "actor_email": "owner@demo.local",
+      "actor_role": "owner",
+      "source": "operations-api"
+    },
+    {
+      "id": "56cac941-3960-49b3-8625-f3bcb029fc6b",
+      "created_at": "2026-03-31T17:59:27.045Z",
+      "company_id": "c76f6ec0-e339-4484-93c0-7085f2aa5c4a",
+      "action": "material.create",
+      "message": "Material criado: Percinta elástica",
+      "actor_name": "Dono da Empresa Demo",
+      "actor_email": "owner@demo.local",
+      "actor_role": "owner",
+      "source": "operations-api"
+    },
+    {
+      "id": "02c6600d-f2b1-4940-affb-d487d70757b3",
+      "created_at": "2026-03-31T17:59:13.878Z",
+      "company_id": "c76f6ec0-e339-4484-93c0-7085f2aa5c4a",
+      "action": "personalization_item.delete",
+      "message": "Item removido: 3",
+      "actor_name": "Dono da Empresa Demo",
+      "actor_email": "owner@demo.local",
+      "actor_role": "owner",
+      "source": "operations-api"
+    },
+    {
+      "id": "3729759f-7501-400c-b7d4-e7365847ce8b",
+      "created_at": "2026-03-31T17:59:13.852Z",
+      "company_id": "c76f6ec0-e339-4484-93c0-7085f2aa5c4a",
+      "action": "personalization_item.update",
+      "message": "Item atualizado: Braço slim premium",
+      "actor_name": "Dono da Empresa Demo",
+      "actor_email": "owner@demo.local",
+      "actor_role": "owner",
+      "source": "operations-api"
+    },
+    {
+      "id": "a1716604-555f-4799-960a-142a16f957c1",
+      "created_at": "2026-03-31T17:59:13.808Z",
+      "company_id": "c76f6ec0-e339-4484-93c0-7085f2aa5c4a",
+      "action": "personalization_item.create",
+      "message": "Item criado: Braço slim",
+      "actor_name": "Dono da Empresa Demo",
+      "actor_email": "owner@demo.local",
+      "actor_role": "owner",
+      "source": "operations-api"
+    },
+    {
+      "id": "b6f49a00-6e8f-462e-9ed2-8393e7f11cf2",
+      "created_at": "2026-03-31T16:44:38.418Z",
+      "company_id": "c76f6ec0-e339-4484-93c0-7085f2aa5c4a",
+      "action": "bootstrap",
+      "message": "Loja inicial criada automaticamente para o starter SaaS.",
+      "actor_name": "system",
+      "actor_email": "system@local",
+      "actor_role": "bootstrap",
+      "reason": "seed",
+      "source": "bootstrap"
+    }
+  ],
+  "billingConfig": {
+    "enabled": true,
+    "default_plan_code": "gestao",
+    "plan_code": "gestao",
+    "plan_name": "Plano Gestão",
+    "monthly_price_cents": 8990,
+    "annual_price_cents": 0,
+    "payment_provider": "stripe",
+    "payment_link": "",
+    "support_contact": "Atendimento comercial",
+    "trial_days": 30,
+    "notes": "Primeiro mês grátis"
+  },
+  "billingLeads": [],
+  "webhookEvents": [],
+  "materials": [
+    {
+      "id": 1,
+      "company_id": "c76f6ec0-e339-4484-93c0-7085f2aa5c4a",
+      "name": "Tecido Suede",
+      "unit": "metro",
+      "price_cents": 4590,
+      "created_at": "2026-03-31T17:59:13.714Z",
+      "updated_at": "2026-03-31T17:59:13.714Z"
+    },
+    {
+      "id": 2,
+      "company_id": "c76f6ec0-e339-4484-93c0-7085f2aa5c4a",
+      "name": "Espuma D28",
+      "unit": "unidade",
+      "price_cents": 1890,
+      "created_at": "2026-03-31T17:59:13.714Z",
+      "updated_at": "2026-03-31T17:59:13.714Z"
+    },
+    {
+      "id": 3,
+      "company_id": "c76f6ec0-e339-4484-93c0-7085f2aa5c4a",
+      "name": "Percinta elástica",
+      "unit": "metro",
+      "price_cents": 2590,
+      "created_at": "2026-03-31T17:59:27.045Z",
+      "updated_at": "2026-03-31T17:59:27.045Z"
+    }
+  ],
+  "models": [
+    {
+      "id": 1,
+      "company_id": "c76f6ec0-e339-4484-93c0-7085f2aa5c4a",
+      "name": "Sofá 2 lugares",
+      "base_meters": 2.2,
+      "spacing_cm": 10,
+      "total_cost_cents": 28000,
+      "target_profit_cents": 17000,
+      "sale_price_cents": 45000,
+      "materials": [
+        {
+          "material_id": 1,
+          "material_name": "Tecido Suede",
+          "unit": "metro",
+          "quantity": 4,
+          "unit_price_cents": 4590,
+          "total_cents": 18360
+        },
+        {
+          "material_id": 2,
+          "material_name": "Espuma D28",
+          "unit": "unidade",
+          "quantity": 5,
+          "unit_price_cents": 1890,
+          "total_cents": 9450
+        }
+      ],
+      "created_at": "2026-03-31T17:59:13.714Z",
+      "updated_at": "2026-03-31T17:59:13.714Z",
+      "valor_por_espacamento_cents": 10000
+    }
+  ],
+  "personalizationItems": [
+    {
+      "id": 1,
+      "company_id": "c76f6ec0-e339-4484-93c0-7085f2aa5c4a",
+      "model_id": 1,
+      "name": "Botão encapado",
+      "unit": "unidade",
+      "values": {
+        "padrao": 1200
+      },
+      "created_at": "2026-03-31T17:59:13.714Z",
+      "updated_at": "2026-03-31T17:59:13.714Z"
+    },
+    {
+      "id": 2,
+      "company_id": "c76f6ec0-e339-4484-93c0-7085f2aa5c4a",
+      "model_id": 1,
+      "name": "Pé de madeira",
+      "unit": "jogo",
+      "values": {
+        "padrao": 3500
+      },
+      "created_at": "2026-03-31T17:59:13.714Z",
+      "updated_at": "2026-03-31T17:59:13.714Z"
+    }
+  ],
+  "agendaConfigs": [
+    {
+      "id": 1,
+      "company_id": "c76f6ec0-e339-4484-93c0-7085f2aa5c4a",
+      "prazo_dias": 0,
+      "vagas_semana": 0,
+      "tipo_dias": "corrido",
+      "created_at": "2026-03-31T17:59:13.714Z",
+      "updated_at": "2026-03-31T17:59:13.714Z"
+    }
+  ],
+  "agendaOrders": [],
+  "quotes": [
+    {
+      "id": 1,
+      "company_id": "c76f6ec0-e339-4484-93c0-7085f2aa5c4a",
+      "cliente": "Cliente Demo",
+      "status": "pedido",
+      "total_cents": 45000,
+      "payload": {
+        "cliente": "Cliente Demo",
+        "modelos": [
+          {
+            "model_id": 1,
+            "modelo": "Sofá 2 lugares",
+            "preco": 450,
+            "preco_cents": 45000,
+            "metragem": "2.20",
+            "itens": [],
+            "subtotal": 450,
+            "subtotal_cents": 45000
+          }
+        ],
+        "total": 450,
+        "total_cents": 45000,
+        "totais": {
+          "vista": 450,
+          "cartao": 495,
+          "nfvista": 495,
+          "nfcartao": 540
+        }
+      },
+      "created_at": "2026-03-31T17:59:13.714Z",
+      "updated_at": "2026-03-31T17:59:13.714Z"
+    }
+  ],
+  "counters": {
+    "agendaConfigs": 1,
+    "materials": 3,
+    "models": 2,
+    "personalizationItems": 3,
+    "agendaOrders": 1,
+    "quotes": 1
+  }
+}
