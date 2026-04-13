@@ -1,7 +1,8 @@
 const APP_NAME = 'Estofaria Digital'
 const APP_URL = process.env.APP_URL || 'https://estofaria-digital.pages.dev'
 const RESEND_API_KEY = process.env.RESEND_API_KEY || ''
-const FROM = `${APP_NAME} <onboarding@resend.dev>`
+const FROM_ADDRESS = process.env.EMAIL_FROM || 'noreply@estofariadigital.com.br'
+const FROM = `${APP_NAME} <${FROM_ADDRESS}>`
 
 function baseHtml(title, bodyContent) {
   return `<!DOCTYPE html>
