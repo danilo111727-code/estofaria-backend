@@ -52,7 +52,8 @@ function getCompanyContext(req, store){
   if(req.user?.company_id){
     return (store.companies || []).find(item => String(item.id) === String(req.user.company_id)) || null
   }
-  return (store.companies || [])[0] || null
+  // Sem company_id definido (ex.: master sem empresa): sem acesso a dados de nenhuma empresa
+  return null
 }
 
 function seedCompanyData(store, companyId){
