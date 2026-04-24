@@ -1,15 +1,14 @@
+'use strict'
+
 const express = require('express')
 const cors = require('cors')
-const { ensureStore, bootstrapStore, STORE_FILE } = require('./src/lib/store')
+const storeLib = require('./src/lib/store')
 const authRoutes = require('./src/routes/auth')
 const saasRoutes = require('./src/routes/saas')
 const billingRoutes = require('./src/routes/billing')
 const operationsRoutes = require('./src/routes/operations')
 
-ensureStore()
-bootstrapStore()
-
-function parseAllowedOrigins(){
+function parseAllowedOrigins() {
   return String(process.env.CORS_ALLOWED_ORIGINS || '')
     .split(',')
     .map(item => item.trim())
@@ -18,39 +17,51 @@ function parseAllowedOrigins(){
 
 const allowedOrigins = parseAllowedOrigins()
 const corsOptions = {
-  origin(origin, callback){
-    if(!origin) return callback(null, true)
-    if(!allowedOrigins.length) return callback(null, true)
-    if(allowedOrigins.includes(origin)) return callback(null, true)
+  origin(origin, callback) {
+    if (!origin) return callback(null, true)
+    if (!allowedOrigins.length) return callback(null, true)
+    if (allowedOrigins.includes(origin)) return callback(null, true)
     return callback(new Error('origin_not_allowed'))
   },
   credentials: true,
-  methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
-  allowedHeaders: ['Content-Type','Accept','Authorization']
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Accept', 'Authorization']
 }
 
 const app = express()
 app.set('trust proxy', 1)
 app.disable('x-powered-by')
+
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff')
   res.setHeader('X-Frame-Options', 'SAMEORIGIN')
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
-  if(req.path.startsWith('/api/')) res.setHeader('Cache-Control', 'no-store')
+  if (req.path.startsWith('/api/')) res.setHeader('Cache-Control', 'no-store')
   next()
 })
+
 app.use(cors(corsOptions))
 app.options('*', cors(corsOptions))
-app.use(express.json({ limit:'1mb' }))
-app.use(express.urlencoded({ extended:false, limit:'1mb' }))
+app.use(express.json({ limit: '1mb' }))
+app.use(express.urlencoded({ extended: false, limit: '1mb' }))
 
 app.get('/', (_req, res) => {
-  res.json({ ok:true, service:'estofaria-saas-backend-starter', health:'/api/health' })
+  res.json({
+    ok: true,
+    service: 'estofaria-saas-backend-starter',
+    storage: process.env.DATABASE_URL ? 'postgresql' : 'file',
+    health: '/api/health'
+  })
 })
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok:true, service:'estofaria-saas-backend-starter', store_file: STORE_FILE })
+  res.json({
+    ok: true,
+    service: 'estofaria-saas-backend-starter',
+    storage: process.env.DATABASE_URL ? 'postgresql' : 'file',
+    store_file: storeLib.STORE_FILE
+  })
 })
 
 app.use('/api/auth', authRoutes)
@@ -67,17 +78,45 @@ app.use('/api/subscription/admin', saasRoutes)
 app.use('/api/subscription', billingRoutes)
 
 app.use((err, _req, res, _next) => {
-  if(err && err.type === 'entity.parse.failed'){
-    return res.status(400).json({ error:'invalid_json', message:'JSON inválido na requisição.' })
+  if (err && err.type === 'entity.parse.failed') {
+    return res.status(400).json({ error: 'invalid_json', message: 'JSON inválido na requisição.' })
   }
-  if(err && err.message === 'origin_not_allowed'){
-    return res.status(403).json({ error:'forbidden_origin', message:'Origem não permitida por CORS.' })
+  if (err && err.message === 'origin_not_allowed') {
+    return res.status(403).json({ error: 'forbidden_origin', message: 'Origem não permitida por CORS.' })
   }
   console.error(err)
-  res.status(500).json({ error:'internal_error', message:'Erro interno do servidor.' })
+  res.status(500).json({ error: 'internal_error', message: 'Erro interno do servidor.' })
 })
 
-const port = Number(process.env.PORT || 8787)
-app.listen(port, () => {
-  console.log(`Estofaria SaaS backend starter rodando na porta ${port}`)
+async function start() {
+  if (process.env.DATABASE_URL) {
+    console.log('[server] DATABASE_URL detectada — usando PostgreSQL')
+    const pg = storeLib._pg
+    await pg.init()
+    await pg.bootstrapStore()
+    process.on('SIGTERM', async () => {
+      console.log('[server] SIGTERM — salvando dados pendentes...')
+      await pg.flushNow().catch(console.error)
+      process.exit(0)
+    })
+    process.on('SIGINT', async () => {
+      console.log('[server] SIGINT — salvando dados pendentes...')
+      await pg.flushNow().catch(console.error)
+      process.exit(0)
+    })
+  } else {
+    console.log('[server] DATABASE_URL não configurada — usando store.json')
+    storeLib.ensureStore()
+    storeLib.bootstrapStore()
+  }
+
+  const port = Number(process.env.PORT || 8787)
+  app.listen(port, () => {
+    console.log(`Estofaria SaaS backend rodando na porta ${port} (storage: ${process.env.DATABASE_URL ? 'postgresql' : 'file'})`)
+  })
+}
+
+start().catch(err => {
+  console.error('[server] Erro fatal na inicialização:', err)
+  process.exit(1)
 })

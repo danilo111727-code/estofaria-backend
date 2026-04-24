@@ -239,3 +239,14 @@ module.exports = {
   materializeCompany,
   nowIso
 }
+
+// Auto-switch para PostgreSQL quando DATABASE_URL estiver configurada
+if (process.env.DATABASE_URL) {
+  const pg = require('./store-pg')
+  module.exports.readStore      = pg.readStore
+  module.exports.writeStore     = pg.writeStore
+  module.exports.updateStore    = pg.updateStore
+  module.exports.bootstrapStore = pg.bootstrapStore
+  module.exports.ensureStore    = pg.ensureStore
+  module.exports._pg            = pg
+}
