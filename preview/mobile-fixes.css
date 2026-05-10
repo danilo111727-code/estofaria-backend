@@ -1,0 +1,31 @@
+html{
+  -webkit-text-size-adjust:100%;
+}
+
+input,
+select,
+textarea{
+  font-size:16px !important;
+}
+
+button,
+a{
+  touch-action:manipulation;
+}
+
+.nav{
+  scroll-behavior:auto;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:none;
+}
+
+.nav a,
+.nav button,
+.btn,
+.nav-btn{
+  -webkit-tap-highlight-color:transparent;
+}
+
+.nav::-webkit-scrollbar{
+  display:none;
+}

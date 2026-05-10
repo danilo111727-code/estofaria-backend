@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Modelos de PDF</title>
+  <link rel="stylesheet" href="style.css?v=20260413-modelos2">
+  <script src="../config.js"></script>
+  <script src="../auth-guard.js"></script>
+  <link rel="stylesheet" href="../mobile-fixes.css">
+</head>
+<body>
+<div class="container">
+  <div class="cabecalho">
+    <h1>Modelos de PDF</h1>
+    <div class="actions_row">
+      <a href="historico.html"><button class="btn_topo">Histórico</button></a>
+      <a href="#" onclick="history.back();return false;" style="margin-left:auto"><button class="btn_topo">← Voltar</button></a>
+    </div>
+  </div>
+
+  <div class="bloco">
+    <h3>📄 Orçamento</h3>
+    <div id="orcamentoStatus" style="margin-bottom:8px;color:#60708f;font-size:14px"></div>
+    <div id="orcamentoAcoes" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+  </div>
+
+  <div class="bloco">
+    <h3>📄 Pedido</h3>
+    <div id="pedidoStatus" style="margin-bottom:8px;color:#60708f;font-size:14px"></div>
+    <div id="pedidoAcoes" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+  </div>
+</div>
+
+<script>
+const STORAGE_TEMPLATES = 'pdf_templates_v1'
+
+function getTemplates(){
+  try{ return JSON.parse(localStorage.getItem(STORAGE_TEMPLATES) || '[]') }catch(_){ return [] }
+}
+
+function getTemplate(type){
+  return getTemplates().find(t => t.type === type) || null
+}
+
+function renderAcoes(type, statusId, acoesId){
+  const template = getTemplate(type)
+  const statusEl = document.getElementById(statusId)
+  const acoesEl = document.getElementById(acoesId)
+
+  if(template){
+    statusEl.innerHTML = 'Modelo criado ✔'
+    acoesEl.innerHTML = `
+      <button onclick="editarTemplate('${type}')">Editar</button>
+      <button class="action-danger" onclick="excluirTemplateUI('${type}')">Excluir</button>
+    `
+  } else {
+    statusEl.innerHTML = 'Não criado'
+    acoesEl.innerHTML = `
+      <button onclick="criarTemplate('${type}')">Criar</button>
+    `
+  }
+}
+
+function atualizarTela(){
+  renderAcoes('orcamento', 'orcamentoStatus', 'orcamentoAcoes')
+  renderAcoes('pedido', 'pedidoStatus', 'pedidoAcoes')
+}
+
+function criarTemplate(type){
+  window.location.href = 'criar-pdf.html?type=' + type
+}
+
+function editarTemplate(type){
+  window.location.href = 'criar-pdf.html?type=' + type + '&edit=1'
+}
+
+function excluirTemplateUI(type){
+  if(!confirm('Excluir modelo?')) return
+  let lista = getTemplates().filter(t => t.type !== type)
+  localStorage.setItem(STORAGE_TEMPLATES, JSON.stringify(lista))
+  atualizarTela()
+}
+
+window.addEventListener('load', atualizarTela)
+</script>
+<script src="../keyboard-dismiss.js"></script>
+</body>
+</html>

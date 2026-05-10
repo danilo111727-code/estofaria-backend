@@ -2,6 +2,7 @@
 
 const express = require('express')
 const cors = require('cors')
+const path = require('path')
 const storeLib = require('./src/lib/store')
 const authRoutes = require('./src/routes/auth')
 const saasRoutes = require('./src/routes/saas')
@@ -65,6 +66,11 @@ app.get('/api/health', (_req, res) => {
 })
 
 app.use('/api/auth', authRoutes)
+
+// Preview estático (versão modificada para testes)
+app.use('/preview', express.static(path.join(__dirname, 'preview'), { index: 'index.html' }))
+app.get('/preview', (_req, res) => res.redirect('/preview/vendedor/'))
+app.get('/preview/vendedor', (_req, res) => res.redirect('/preview/vendedor/'))
 
 // Rotas principais
 app.use('/api/saas', saasRoutes)
