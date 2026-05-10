@@ -1,0 +1,118 @@
+
+body{
+font-family:Arial;
+margin:0;
+background:#f2f3f5;
+}
+
+.container{
+max-width:800px;
+margin:auto;
+padding:16px;
+}
+
+.status{
+padding:12px;
+border-radius:10px;
+margin-bottom:14px;
+text-align:center;
+font-weight:bold;
+}
+
+.status.ok{
+background:#e8f7ee;
+color:#1f8a4c;
+}
+
+.status.alert{
+background:#fdeaea;
+color:#c62828;
+}
+
+.row{
+display:flex;
+gap:12px;
+flex-wrap:wrap;
+}
+
+.card{
+background:white;
+border-radius:14px;
+padding:14px;
+flex:1;
+box-shadow:0 4px 10px rgba(0,0,0,0.05);
+margin-bottom:14px;
+border:1px solid #edf0f7;
+}
+
+.line{
+display:flex;
+justify-content:space-between;
+align-items:flex-start;
+gap:10px;
+margin-top:8px;
+font-size:14px;
+line-height:1.35;
+}
+
+.line span{
+flex:0 0 auto;
+color:#333;
+}
+
+.card.agenda .line span,
+.card.agenda .line b{
+white-space:nowrap;
+}
+
+.line b{
+flex:1;
+text-align:right;
+word-break:break-word;
+}
+
+.card.agenda .line b{
+word-break:normal;
+font-size:12px;
+letter-spacing:-0.1px;
+}
+
+canvas{
+max-height:220px;
+width:100%;
+}
+
+.chart-card canvas{
+min-height:240px;
+}
+
+@media (max-width: 640px){
+  .line{
+    font-size:13px;
+  }
+
+  .line b{
+    max-width:58%;
+  }
+
+  .card.agenda .line b{
+    max-width:none;
+    font-size:11px;
+  }
+}
+
+
+.chart-card{
+overflow:hidden;
+}
+
+.chart-canvas.chart-enter{
+animation:chartRiseBounce 1s ease-out;
+transform-origin:center bottom;
+}
+
+@keyframes chartRiseBounce{
+0%{opacity:.15;transform:translateY(22px) scaleY(.92)}
+55%{opacity:1;transform:translateY(-8px) scaleY(1.03)}
+100%{opacity:1;transform:translateY(0) scaleY(1)}
+}

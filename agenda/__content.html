@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Estofaria Digital — Agenda</title>
+  <link rel="stylesheet" href="style.css?v=20260424i">
+  <link rel="stylesheet" href="../mobile-fixes.css">
+  <script src="../config.js"></script>
+<script src="../auth-guard.js"></script>
+</head>
+<body>
+  <header class="header">
+    <div class="brand">Estofaria Digital</div>
+    <div id="time"></div>
+  </header>
+
+  <nav class="nav">
+    <a class="nav-btn" href="../painel/">📊 Painel</a>
+    <a class="nav-btn" href="../material/">🧵 Materiais</a>
+    <a class="nav-btn" href="../precificacao/">💰 Precificação</a>
+    <a class="nav-btn" href="../catalogo/">🛋️ Catálogo</a>
+    <a class="nav-btn" href="../itens-personalizacao/">🎨 Itens para personalização</a>
+    <a class="nav-btn" href="../vendedor/">🤝 Vendedor</a>
+    <a class="nav-btn active" href="../agenda/">📅 Agenda</a>
+    <a class="nav-btn" href="../assinatura/">💳 Assinatura</a>
+  </nav>
+
+  <main class="page-shell">
+    <section class="card summary-card official-card">
+      <div class="card-head section-head summary-head">
+        <div>
+          <div class="section-label">Resumo da semana</div>
+          <div id="resumoData" class="summary-date-title">--/--/----</div>
+          <p>Mostra a produção da semana, os pedidos que vencem na semana e, quando não houver nada no período, exibe os pedidos mais próximos.</p>
+        </div>
+      </div>
+
+      <div class="table-wrap summary-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Entrega</th>
+              <th>Cliente</th>
+              <th>Pedido</th>
+            </tr>
+          </thead>
+          <tbody id="pedidosSemana"></tbody>
+        </table>
+      </div>
+
+      <div class="stats-row summary-stats summary-stats-bottom">
+        <div class="mini-stat mini-stat-highlight">
+          <span>Próxima vaga disponível</span>
+          <strong id="nextEnt">--/--</strong>
+        </div>
+        <div class="mini-stat mini-stat-grow mini-stat-capacity">
+          <span>Vagas</span>
+          <div class="bar-track"><div id="barra" class="bar-fill"></div></div>
+          <small id="barraTexto">0 / 0 vagas</small>
+        </div>
+      </div>
+    </section>
+
+    <div class="big-card" role="button" tabindex="0" onclick="openAgendaFullscreen()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openAgendaFullscreen()}">
+      <div class="big-icon">🗓️</div>
+      <div class="big-info">
+        <div class="big-title">Agenda</div>
+        <div class="big-sub">Toque para ver a agenda completa em tela cheia</div>
+        <div class="big-pills">
+          <span class="pill"><strong id="agendaCardCount">0</strong> pedidos</span>
+          <span class="pill pill-late"><strong id="agendaCardLate">0</strong> atrasados</span>
+        </div>
+      </div>
+      <div class="big-arrow">›</div>
+    </div>
+
+    <div id="agendaFullscreen" class="fullscreen-modal fs-blue" hidden>
+      <div class="fs-topbar">
+        <button class="fs-back" type="button" onclick="closeAgendaFullscreen()" aria-label="Voltar">‹</button>
+        <div class="fs-title">🗓️ Agenda</div>
+        <div class="fs-spacer"></div>
+        <div class="fs-badge"><span id="agendaModalCount">0</span> pedidos</div>
+      </div>
+      <div class="fs-container">
+        <div class="fs-card">
+          <p class="fs-help">Toque no status para marcar entregue, reprogramar, excluir pedido ou excluir uma data da agenda.</p>
+          <div class="fs-table-wrap">
+            <table class="agenda-table">
+              <thead>
+                <tr>
+                  <th class="col-datas">Datas</th>
+                  <th class="col-cli">Cliente / Pedido</th>
+                  <th class="col-status">Status</th>
+                </tr>
+              </thead>
+              <tbody id="agendaTabela"></tbody>
+            </table>
+          </div>
+          <p class="fs-hint">Toque em um status para abrir o menu de ações</p>
+          <div class="fs-footer-bar">
+            <span class="fs-count">Mostrando <span id="agendaShown">0</span> de <span id="agendaTotal">0</span></span>
+            <button class="fs-clear" type="button" onclick="limparAgenda()">Limpar agenda</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="big-card" role="button" tabindex="0" onclick="openPedidoFullscreen()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openPedidoFullscreen()}">
+      <div class="big-icon green">➕</div>
+      <div class="big-info">
+        <div class="big-title">Pedido rápido</div>
+        <div class="big-sub">Toque para registrar um pedido em tela cheia</div>
+      </div>
+      <div class="big-arrow">›</div>
+    </div>
+
+    <div id="pedidoFullscreen" class="fullscreen-modal fs-green" hidden>
+      <div class="fs-topbar">
+        <button class="fs-back" type="button" onclick="closePedidoFullscreen()" aria-label="Voltar">‹</button>
+        <div class="fs-title">➕ Pedido rápido</div>
+        <div class="fs-spacer"></div>
+      </div>
+      <div class="fs-container narrow">
+        <div class="fs-card">
+          <p class="fs-desc">A data de entrega é definida automaticamente na próxima vaga disponível.</p>
+          <div class="fs-form-grid">
+            <label class="fs-full">
+              <span>Cliente</span>
+              <input id="cliente" placeholder="Nome do cliente">
+            </label>
+            <label class="fs-full">
+              <span>Descrição</span>
+              <input id="descricao" placeholder="Ex.: Reforma de sofá 3 lugares">
+            </label>
+            <label>
+              <span>Quantidade</span>
+              <input id="qtd" type="number" value="1" min="1">
+            </label>
+            <label>
+              <span>Valor (R$)</span>
+              <input id="valor" type="number" min="0" step="0.01" placeholder="0,00">
+            </label>
+          </div>
+          <button id="agendaAddBtn" class="fs-primary-btn" onclick="novoPedido()" data-loading-text="Registrando...">Registrar pedido</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== 3 small cards row ===== -->
+    <div class="small-cards-row">
+      <div class="small-card sc-navy" role="button" tabindex="0" onclick="openConfigFullscreen()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openConfigFullscreen()}">
+        <div class="sc-icon">⚙️</div>
+        <div class="sc-label">Configurações</div>
+        <div class="sc-arrow">›</div>
+      </div>
+      <div class="small-card sc-red" role="button" tabindex="0" onclick="openFeriadosFullscreen()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openFeriadosFullscreen()}">
+        <div class="sc-icon">🏌🏼‍♂️</div>
+        <div class="sc-label">Feriados</div>
+        <div class="sc-arrow">›</div>
+      </div>
+      <div class="small-card sc-slate" role="button" tabindex="0" onclick="openHistoricoFullscreen()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openHistoricoFullscreen()}">
+        <div class="sc-icon">📜</div>
+        <div class="sc-label">Histórico</div>
+        <div class="sc-arrow">›</div>
+      </div>
+    </div>
+
+    <!-- ===== Configurações fullscreen ===== -->
+    <div id="configFullscreen" class="fullscreen-modal fs-navy" hidden>
+      <div class="fs-topbar">
+        <button class="fs-back" type="button" onclick="closeConfigFullscreen()" aria-label="Voltar">‹</button>
+        <div class="fs-title">⚙️ Configurações</div>
+        <div class="fs-spacer"></div>
+      </div>
+      <div class="fs-container narrow">
+        <div class="fs-card">
+          <p class="fs-desc">Defina o prazo de produção, vagas por semana e a localização para os feriados regionais.</p>
+          <div class="form-grid compact-grid">
+            <label>
+              <span>Prazo de produção (dias)</span>
+              <input id="prazo" type="number" value="0">
+            </label>
+            <label>
+              <span>Tipo de contagem de dias</span>
+              <select id="tipoDias" onchange="renderDiasUteisCheckboxes()">
+                <option value="corrido">Corrido</option>
+                <option value="uteis">Úteis</option>
+              </select>
+            </label>
+            <div id="diasUteisWrapper" style="display:none;grid-column:1/-1">
+              <span style="display:block;margin-bottom:6px;font-weight:600;font-size:13px">Dias de produção</span>
+              <div id="diasUteisCheckboxes" style="display:flex;flex-wrap:wrap;gap:10px"></div>
+            </div>
+            <label>
+              <span>Vagas por semana</span>
+              <input id="vagas" type="number" value="0">
+            </label>
+            <label>
+              <span>Data de entrega inicial</span>
+              <input id="dataSemana" type="date" />
+            </label>
+            <label>
+              <span>Estado</span>
+              <select id="estadoSelecionado" onchange="updateCidadesSelect()">
+                <option value="">Selecione o estado</option>
+              </select>
+            </label>
+            <label>
+              <span>Cidade</span>
+              <select id="cidadeSelecionada" onchange="handleCityChange()">
+                <option value="">Selecione a cidade</option>
+              </select>
+            </label>
+          </div>
+          <button id="agendaConfigBtn" class="fs-primary-btn" onclick="salvarConfig()" data-loading-text="Salvando...">Salvar configuração</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Feriados fullscreen ===== -->
+    <div id="feriadosFullscreen" class="fullscreen-modal fs-red" hidden>
+      <div class="fs-topbar">
+        <button class="fs-back" type="button" onclick="closeFeriadosFullscreen()" aria-label="Voltar">‹</button>
+        <div class="fs-title">🏌🏼‍♂️ Feriados</div>
+        <div class="fs-spacer"></div>
+        <div class="fs-badge"><span id="feriadosModalCount">0</span> datas</div>
+      </div>
+      <div class="fs-container">
+        <div class="fs-card">
+          <h3 class="fs-section-head">Oficiais (nacionais e estaduais)</h3>
+          <p class="fs-help">A agenda ignora estas datas quando o tipo estiver configurado como dias úteis.</p>
+          <div class="fs-table-wrap">
+            <table class="fs-gen-table">
+              <thead>
+                <tr>
+                  <th class="col-data">Data</th>
+                  <th>Feriado</th>
+                  <th class="col-tipo">Tipo</th>
+                </tr>
+              </thead>
+              <tbody id="feriadosTabela"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="fs-card" style="margin-top:14px">
+          <h3 class="fs-section-head">Feriados municipais</h3>
+          <p class="fs-help">Adicione os feriados do seu município. A agenda também irá ignorá-los nos dias úteis.</p>
+          <div class="form-grid compact-grid">
+            <label>
+              <span>Data</span>
+              <input id="feriadoData" type="date">
+            </label>
+            <label>
+              <span>Nome do feriado</span>
+              <input id="feriadoNome" placeholder="Ex.: Aniversário da cidade">
+            </label>
+          </div>
+          <button class="fs-secondary-btn" onclick="addManualHoliday()" style="margin-bottom:14px;">+ Adicionar feriado</button>
+          <div class="fs-table-wrap">
+            <table class="fs-gen-table">
+              <thead>
+                <tr>
+                  <th class="col-data">Data</th>
+                  <th>Feriado</th>
+                  <th class="col-tipo">Ação</th>
+                </tr>
+              </thead>
+              <tbody id="feriadosManuaisTabela"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Histórico fullscreen ===== -->
+    <div id="historicoFullscreen" class="fullscreen-modal fs-slate" hidden>
+      <div class="fs-topbar">
+        <button class="fs-back" type="button" onclick="closeHistoricoFullscreen()" aria-label="Voltar">‹</button>
+        <div class="fs-title">📜 Histórico</div>
+        <div class="fs-spacer"></div>
+        <div class="fs-badge"><span id="historicoCounter"></span></div>
+      </div>
+      <div class="fs-container">
+        <div class="fs-card">
+          <p class="fs-help">Pedidos finalizados (entregues ou cancelados). Role a tabela para ver mais.</p>
+          <div class="fs-table-wrap" style="max-height:calc(100vh - 220px)">
+            <table class="fs-gen-table">
+              <thead>
+                <tr>
+                  <th>Cliente</th>
+                  <th>Descrição</th>
+                  <th class="col-data">Entrega</th>
+                  <th class="col-tipo">Status</th>
+                </tr>
+              </thead>
+              <tbody id="historicoTabela"></tbody>
+            </table>
+          </div>
+          <div class="fs-footer-bar">
+            <span class="fs-count" id="historicoShownCount"></span>
+            <button class="fs-clear" type="button" onclick="limparHistorico()">Limpar histórico</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  <div id="sheetBackdrop" class="sheet-backdrop" hidden onclick="closeActionSheet(event)"></div>
+  <aside id="actionSheet" class="action-sheet" aria-hidden="true">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <div>
+        <span class="eyebrow">Ações rápidas</span>
+        <h3 id="sheetTitle">Pedido</h3>
+        <p id="sheetSubtitle" class="muted">Escolha uma ação</p>
+      </div>
+      <button class="icon-btn" type="button" onclick="closeActionSheet()">✕</button>
+    </div>
+    <div id="sheetActions" class="sheet-actions"></div>
+  </aside>
+
+  <script src="script.js?v=20260424l"></script>
+  <script src="../keyboard-dismiss.js"></script>
+</body>
+</html>

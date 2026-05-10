@@ -1,0 +1,109 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<style>
+body { margin:0; font-family: Arial, sans-serif; background:#f2f2f2;}
+.header {
+ position:fixed; top:0; left:0;
+ width:100%;
+ background:#4a67a1; color:white;
+ padding:10px 18px;
+ display:flex; justify-content:space-between;
+ font-size:14px; z-index:1000;
+ box-sizing:border-box;
+}
+.nav {
+ margin-top:65px;
+ display:flex;
+ gap:12px;
+ padding:10px;
+ overflow-x:auto;
+ white-space:nowrap;
+}
+.btn {
+ flex:0 0 auto;
+ background:#4a67a1;
+ color:white;
+ padding:14px 22px;
+ border-radius:30px;
+ text-decoration:none;
+ box-shadow:0 4px 8px rgba(0,0,0,0.2);
+ font-size:15px;
+ text-align:center;
+}
+</style>
+<script>
+function updateTime(){
+ const now = new Date();
+ document.getElementById("time").innerText = now.toLocaleString();
+}
+setInterval(updateTime,1000);
+</script>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel</title>
+<link rel="stylesheet" href="style.css?v=20260405-stability1">
+<script src="../config.js"></script>
+<script src="../auth-guard.js"></script>
+  <link rel="stylesheet" href="../mobile-fixes.css">
+</head>
+
+<body>
+<div class="header">
+    <div>Estofaria Digital</div>
+    <div id="time"></div>
+</div>
+
+<div class="nav">
+    <a class="btn active" href="../painel/">📊 Painel</a>
+    <a class="btn" href="../material/">🧵 Materiais</a>
+    <a class="btn" href="../precificacao/">💰 Precificação</a>
+    <a class="btn" href="../catalogo/">🛋️ Catálogo</a>
+    <a class="btn" href="../itens-personalizacao/">🎨 Itens para personalização</a>
+    <a class="btn" href="../vendedor/">🤝 Vendedor</a>
+    <a class="btn" href="../agenda/">📅 Agenda</a>
+    <a class="btn" href="../assinatura/">💳 Assinatura</a>
+</div>
+
+
+<div class="container">
+
+<div id="statusPedidos" class="status"></div>
+
+<div class="row">
+
+<div class="card agenda">
+<h3>Agenda</h3>
+<div class="line"><span>Feriados</span><b id="feriados">Nenhum</b></div>
+<div class="line"><span>Próxima vaga disponível</span><b id="agenda">-</b></div>
+</div>
+
+<div class="card resumo">
+<h3>Resumo</h3>
+<div class="line"><span>Número de pedidos</span><b id="pedidos">0</b></div>
+<div class="line"><span>Faturamento</span><b id="faturamento">R$ 0</b></div>
+<div class="line"><span>Ticket médio</span><b id="ticket">R$ 0</b></div>
+</div>
+
+</div>
+
+<div class="card chart-card">
+<h3>Modelos mais vendidos</h3>
+<canvas id="chartVendidos" class="chart-canvas"></canvas>
+</div>
+
+<div class="card chart-card">
+<h3>Modelos mais lucrativos</h3>
+<canvas id="chartLucro" class="chart-canvas"></canvas>
+</div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="script.js?v=20260405-stability1"></script>
+
+<script src="../keyboard-dismiss.js"></script>
+</body>
+</html>

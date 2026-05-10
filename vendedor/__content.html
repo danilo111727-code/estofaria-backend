@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<style>
+body { margin:0; font-family: Arial, sans-serif; background:#f2f2f2;}
+.header {
+ position:fixed; top:0; left:0;
+ width:100%;
+ background:#4a67a1; color:white;
+ padding:10px 18px;
+ display:flex; justify-content:space-between;
+ font-size:14px; z-index:1000;
+ box-sizing:border-box;
+}
+.nav {
+ margin-top:65px;
+ display:flex;
+ gap:12px;
+ padding:10px;
+ overflow-x:auto;
+ white-space:nowrap;
+}
+.btn {
+ flex:0 0 auto;
+ background:#4a67a1;
+ color:white;
+ padding:14px 22px;
+ border-radius:30px;
+ text-decoration:none;
+ box-shadow:0 4px 8px rgba(0,0,0,0.2);
+ font-size:15px;
+ text-align:center;
+}
+</style>
+<script>
+function updateTime(){
+ const now = new Date();
+ document.getElementById("time").innerText = now.toLocaleString();
+}
+setInterval(updateTime,1000);
+</script>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vendedor</title>
+<link rel="stylesheet" href="style.css?v=20260405-stability2">
+<script src="../config.js"></script>
+<script src="../auth-guard.js"></script>
+  <link rel="stylesheet" href="../mobile-fixes.css">
+</head>
+<body>
+<div class="header">
+    <div>Estofaria Digital</div>
+    <div id="time"></div>
+</div>
+
+<div class="nav">
+    <a class="btn" href="../painel/">📊 Painel</a>
+    <a class="btn" href="../material/">🧵 Materiais</a>
+    <a class="btn" href="../precificacao/">💰 Precificação</a>
+    <a class="btn" href="../catalogo/">🛋️ Catálogo</a>
+    <a class="btn" href="../itens-personalizacao/">🎨 Itens para personalização</a>
+    <a class="btn" href="../vendedor/">🤝 Vendedor</a>
+    <a class="btn" href="../agenda/">📅 Agenda</a>
+    <a class="btn" href="../assinatura/">💳 Assinatura</a>
+</div>
+
+<div class="container">
+
+<div class="cabecalho">
+  <h1>Vendedor</h1>
+  <div class="actions_row">
+    <a href="modelos-pdf.html"><button class="btn_topo">Modelos PDF</button></a>
+    <a href="historico.html"><button class="btn_topo">Histórico</button></a>
+  </div>
+</div>
+
+<div class="bloco">
+<h2>Dados do cliente</h2>
+
+<label>Nome do cliente</label>
+<input id="cliente" placeholder="Nome do cliente">
+
+<label>Telefone</label>
+<input id="telefone" placeholder="(00) 00000-0000" inputmode="tel">
+
+<label>Endereço</label>
+<input id="endereco" placeholder="Rua, número, bairro...">
+</div>
+
+<div class="bloco">
+<h2>Configuração do modelo</h2>
+
+<label>Modelo</label>
+<select id="modelo">
+<option value="">Carregando modelos...</option>
+</select>
+
+<label>Metragem rápida</label>
+<select id="metragemRapida">
+<option value="">Carregando metragens...</option>
+</select>
+
+<label>Metragem manual</label>
+<input id="metragemManual" placeholder="Digite ex: 235">
+<div id="previewManual"></div>
+
+<label>Observação</label>
+<textarea id="observacao" placeholder="Digite alguma observação do pedido..." rows="3" style="width:100%;box-sizing:border-box;resize:vertical;font-family:inherit;font-size:inherit;padding:8px;border:1px solid #ccc;border-radius:6px;"></textarea>
+
+<button id="sellerAddModelBtn" onclick="addModelo()">Adicionar modelo</button>
+</div>
+
+<div class="bloco">
+<h2>Personalização</h2>
+
+<div id="modeloAtivo">Nenhum modelo ativo</div>
+
+<input id="itemBusca" placeholder="Buscar item..." oninput="filtrarItens(this.value)" style="margin-bottom:6px;">
+
+<select id="item">
+<option value="">Selecione um modelo e cadastre itens na aba Itens para personalização</option>
+</select>
+
+<button id="sellerAddItemBtn" onclick="addItem()">Adicionar item</button>
+
+<div id="listaItens"></div>
+</div>
+
+<div class="bloco">
+<h2>Orçamento</h2>
+<div id="orcamento"></div>
+
+<div class="resumo">
+<div>Total à vista: <span id="vista"></span></div>
+<div>Total cartão: <span id="cartao"></span></div>
+<div>Nota fiscal à vista: <span id="nfvista"></span></div>
+<div>Nota fiscal cartão: <span id="nfcartao"></span></div>
+</div>
+
+<div class="actions_grid">
+  <button id="sellerSaveQuoteBtn" onclick="salvar()" data-loading-text="Salvando...">Salvar orçamento</button>
+  <button id="sellerPdfBtn" onclick="baixarPdfAtual()" data-loading-text="Visualizando PDF...">Visualizar PDF</button>
+  <button id="sellerShareBtn" onclick="enviarPdfAtual()" data-loading-text="Preparando envio...">Enviar PDF</button>
+</div>
+</div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="pdf-tools.js?v=20260405-stability2"></script>
+<script src="script.js?v=20260405-stability2"></script>
+<script src="../keyboard-dismiss.js"></script>
+</body>
+</html>

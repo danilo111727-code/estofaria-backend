@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<style>
+body { margin:0; font-family: Arial, sans-serif; background:#f2f2f2;}
+.header {
+ position:fixed; top:0; left:0;
+ width:100%;
+ background:#4a67a1; color:white;
+ padding:10px 18px;
+ display:flex; justify-content:space-between;
+ font-size:14px; z-index:1000;
+ box-sizing:border-box;
+}
+.nav {
+ margin-top:65px;
+ display:flex;
+ gap:12px;
+ padding:10px;
+ overflow-x:auto;
+ white-space:nowrap;
+}
+.btn {
+ flex:0 0 auto;
+ background:#4a67a1;
+ color:white;
+ padding:14px 22px;
+ border-radius:30px;
+ text-decoration:none;
+ box-shadow:0 4px 8px rgba(0,0,0,0.2);
+ font-size:15px;
+ text-align:center;
+}
+</style>
+<script>
+function updateTime(){
+ const now = new Date();
+ document.getElementById("time").innerText = now.toLocaleString();
+}
+setInterval(updateTime,1000);
+</script>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Histórico</title>
+<link rel="stylesheet" href="style.css?v=20260413-modern1">
+<script src="../config.js"></script>
+<script src="../auth-guard.js"></script>
+  <link rel="stylesheet" href="../mobile-fixes.css">
+</head>
+<body>
+<div class="header">
+    <div>Estofaria Digital</div>
+    <div id="time"></div>
+</div>
+
+<div class="nav">
+    <a class="btn" href="../painel/">📊 Painel</a>
+    <a class="btn" href="../material/">🧵 Materiais</a>
+    <a class="btn" href="../precificacao/">💰 Precificação</a>
+    <a class="btn" href="../catalogo/">🛋️ Catálogo</a>
+    <a class="btn" href="../itens-personalizacao/">🎨 Itens para personalização</a>
+    <a class="btn" href="../vendedor/">🤝 Vendedor</a>
+    <a class="btn" href="../agenda/">📅 Agenda</a>
+    <a class="btn" href="../assinatura/">💳 Assinatura</a>
+</div>
+
+<div class="container">
+<div class="cabecalho">
+  <h1>Histórico</h1>
+  <div class="actions_row">
+    <a href="modelos-pdf.html"><button class="btn_topo">Modelos PDF</button></a>
+    <a href="#" onclick="history.back();return false;" style="margin-left:auto"><button class="btn_topo">← Voltar</button></a>
+  </div>
+</div>
+
+<input id="busca" placeholder="Pesquisar cliente">
+
+<div class="filtros">
+  <button onclick="setFiltro('todos')" id="f_todos" class="ativo">Todos</button>
+  <button onclick="setFiltro('orcamento')" id="f_orc">Orçamentos</button>
+  <button onclick="setFiltro('pedido')" id="f_ped">Pedidos</button>
+</div>
+
+<div id="lista"></div>
+</div>
+
+<div class="overlay" id="overlay" onclick="fechar()">
+  <div class="sheet" onclick="event.stopPropagation()">
+    <div class="sheet_handle"></div>
+    <div class="sheet_actions">
+      <button class="sheet_item" onclick="converter()">
+        <span class="sheet_icon">🔄</span>
+        <span class="sheet_label">Converter em pedido</span>
+        <span class="sheet_arrow">›</span>
+      </button>
+      <button class="sheet_item" onclick="editar()">
+        <span class="sheet_icon">✏️</span>
+        <span class="sheet_label">Editar PDF</span>
+        <span class="sheet_arrow">›</span>
+      </button>
+      <button class="sheet_item" onclick="enviar()">
+        <span class="sheet_icon">📤</span>
+        <span class="sheet_label">Enviar PDF</span>
+        <span class="sheet_arrow">›</span>
+      </button>
+      <button class="sheet_item" onclick="baixar()">
+        <span class="sheet_icon">👁️</span>
+        <span class="sheet_label">Visualizar PDF</span>
+        <span class="sheet_arrow">›</span>
+      </button>
+      <button class="sheet_item sheet_item--danger" onclick="excluir()">
+        <span class="sheet_icon">🗑️</span>
+        <span class="sheet_label">Excluir</span>
+        <span class="sheet_arrow">›</span>
+      </button>
+    </div>
+    <button class="sheet_cancel" onclick="fechar()">Cancelar</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="pdf-tools.js"></script>
+<script>
+let selecionado=null
+let filtro="todos"
+
+function brlFromCents(cents){
+  let v = Number(cents||0)/100
+  return v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})
+}
+
+function dataPreferida(o){
+  if(o && o.payload && o.payload.created_at_local) return o.payload.created_at_local
+  if(o && o.created_at){
+    try{ return new Date(o.created_at).toLocaleDateString('pt-BR') }catch(e){}
+  }
+  return ''
+}
+
+async function fetchQuotes(){
+  let url = '/api/quotes'
+  if(filtro!=="todos") url += '?status=' + encodeURIComponent(filtro)
+  const res = await fetch((window.API_BASE||'') + url)
+  if(!res.ok) throw new Error('Falha ao carregar ('+res.status+')')
+  return await res.json()
+}
+
+async function carregar(){
+  let busca=document.getElementById("busca").value.toLowerCase()
+  let div=document.getElementById("lista")
+  div.innerHTML=""
+
+  try{
+    let lista = await fetchQuotes()
+    lista.forEach(o=>{
+      if(busca && !(o.cliente||"").toLowerCase().includes(busca)) return
+      let card=document.createElement("div")
+      card.className="card_orcamento"
+      card.id="card_"+o.id
+      card.innerHTML=`
+        <div class="info_cliente">
+          <b>${o.cliente||"Cliente"}</b><br>
+          ${dataPreferida(o)} • ${brlFromCents(o.total_cents)}<br>
+          <small>${o.status === 'pedido' ? '📦 Pedido' : '🧾 Orçamento'}</small>
+        </div>
+        <button class="menu_btn" aria-label="Opções">⋮</button>
+      `
+      const btn = card.querySelector('.menu_btn')
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation()
+        e.preventDefault()
+        abrirMenu(e, o.id)
+      })
+      div.appendChild(card)
+    })
+
+    if(div.innerHTML===""){
+      div.innerHTML = "<div style='padding:12px;color:#666'>Nenhum registro</div>"
+    }
+  }catch(e){
+    console.error(e)
+    div.innerHTML = "<div style='padding:12px;color:#c62828'>Não consegui carregar do servidor.</div>"
+  }
+}
+
+function abrirMenu(e,id){
+  if(e) e.stopPropagation()
+  selecionado=id
+  document.querySelectorAll(".card_orcamento").forEach(c=>c.classList.remove("ativo"))
+  let card=document.getElementById("card_"+id)
+  if(card) card.classList.add("ativo")
+  const overlay = document.getElementById("overlay")
+  if(!overlay) return
+  // Posiciona o overlay exatamente na área visível do iframe (sem rolar a página pai)
+  try {
+    const frame = window.frameElement
+    if(frame){
+      const rect = frame.getBoundingClientRect()
+      const parentViewH = (window.parent.visualViewport && window.parent.visualViewport.height)
+                          || window.parent.innerHeight
+      // Quantos px do topo da viewport estão ACIMA do iframe (0 se iframe já passou o topo)
+      const iframeTopInViewport = Math.max(0, rect.top)
+      // Quantos px do iframe já rolaram para FORA da viewport pelo topo
+      const scrolledIntoIframe = Math.max(0, -rect.top)
+      // Altura visível = viewport menos a parte que ainda está acima do iframe
+      const visibleH = Math.max(300, parentViewH - iframeTopInViewport)
+      overlay.style.cssText = [
+        'position:absolute',
+        'top:'    + scrolledIntoIframe + 'px',
+        'left:0', 'right:0', 'bottom:auto',
+        'height:' + visibleH + 'px'
+      ].join(';')
+    }
+  } catch(_) {}
+  overlay.classList.add("open")
+}
+
+function fechar(){
+  const overlay = document.getElementById("overlay")
+  if(!overlay) return
+  overlay.classList.remove("open")
+  overlay.style.cssText = ''
+  document.querySelectorAll(".card_orcamento").forEach(c=>c.classList.remove("ativo"))
+}
+
+async function getSelecionado(){
+  if(!selecionado) throw new Error('Nada selecionado')
+  return await window.VendedorPDF.getQuote(selecionado)
+}
+
+async function agendaApi(path, options={}){
+  const res = await fetch((window.API_BASE||'') + '/api' + path, {
+    cache: options.cache || 'no-store',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(options.headers || {})
+    }
+  })
+  const isJson = (res.headers.get('content-type')||'').includes('application/json')
+  const body = isJson ? await res.json().catch(()=>({})) : await res.text().catch(()=> '')
+  if(!res.ok){
+    const msg = (body && (body.error || body.message)) || ('Falha em ' + path + ' (' + res.status + ')')
+    throw new Error(msg)
+  }
+  return body
+}
+
+function toISODate(d){
+  const year = d.getFullYear()
+  const month = String(d.getMonth()+1).padStart(2,'0')
+  const day = String(d.getDate()).padStart(2,'0')
+  return `${year}-${month}-${day}`
+}
+
+function startOfWeek(base = new Date()){
+  const d = new Date(base.getFullYear(), base.getMonth(), base.getDate())
+  const day = d.getDay()
+  const diff = day === 0 ? -6 : 1 - day
+  d.setDate(d.getDate() + diff)
+  d.setHours(0,0,0,0)
+  return d
+}
+
+function addBusinessDays(date, days){
+  const d = new Date(date)
+  if(days <= 0) return d
+  let added = 0
+  while(added < days){
+    d.setDate(d.getDate() + 1)
+    const day = d.getDay()
+    if(day !== 0 && day !== 6) added++
+  }
+  return d
+}
+
+function addScheduleDays(date, days, tipo){
+  if(tipo === 'uteis') return addBusinessDays(date, days)
+  const d = new Date(date)
+  d.setDate(d.getDate() + days)
+  return d
+}
+
+function getActiveAgendaOrders(rows){
+  return (Array.isArray(rows) ? rows : [])
+    .filter(o => !['entregue','cancelado'].includes(o.status))
+    .sort((a,b) => String(a.prod_date||'').localeCompare(String(b.prod_date||'')) || Number(a.id||0) - Number(b.id||0))
+}
+
+function getSlotDatesByIndex(index, config){
+  const vagas = Math.max(1, Number(config?.vagas_semana) || 1)
+  const tipo = config?.tipo_dias || 'corrido'
+  const prazo = Math.max(0, Number(config?.prazo_dias) || 0)
+  const daysInWeek = tipo === 'uteis' ? 5 : 7
+
+  const weekIndex = Math.floor(index / vagas)
+  const slotIndex = index % vagas
+
+  const weekStart = startOfWeek(new Date())
+  weekStart.setDate(weekStart.getDate() + weekIndex * 7)
+
+  let dayOffset = 0
+  if(vagas <= 1){
+    dayOffset = 0
+  }else if(vagas <= daysInWeek){
+    dayOffset = Math.round((slotIndex * (daysInWeek - 1)) / (vagas - 1))
+  }else{
+    dayOffset = Math.floor((slotIndex * daysInWeek) / vagas)
+  }
+
+  const prodDate = addScheduleDays(weekStart, dayOffset, tipo)
+  const entDate = addScheduleDays(prodDate, prazo, tipo)
+
+  return { prod: toISODate(prodDate), ent: toISODate(entDate) }
+}
+
+function buildAgendaDescricaoFromQuote(quote){
+  const modelos = Array.isArray(quote?.payload?.modelos) ? quote.payload.modelos : []
+  if(!modelos.length) return 'Pedido vindo da aba vendedor'
+
+  return modelos.map(model => {
+    const nome = String(model?.modelo || 'Modelo').trim()
+    const metragem = Number(model?.metragem || 0)
+    const itens = Array.isArray(model?.itens) ? model.itens : []
+    const extras = itens.length ? ` + ${itens.length} item(ns)` : ''
+    const metragemTxt = metragem > 0 ? ` ${metragem.toFixed(2)}m` : ''
+    return `${nome}${metragemTxt}${extras}`.trim()
+  }).join(' | ')
+}
+
+function getAgendaQuantidadeFromQuote(quote){
+  const modelos = Array.isArray(quote?.payload?.modelos) ? quote.payload.modelos : []
+  return Math.max(1, modelos.length || 1)
+}
+
+function getAgendaQuoteRef(quoteId){
+  return `quote:${String(quoteId || '').trim()}`
+}
+
+async function registrarPedidoNaAgenda(quote){
+  const quoteId = String(quote?.id || '')
+  if(!quoteId) return { created:false, reason:'missing_quote_id' }
+
+  const [config, orders] = await Promise.all([
+    agendaApi('/agenda/config').catch(() => ({ prazo_dias: 7, vagas_semana: 5, tipo_dias: 'corrido' })),
+    agendaApi('/agenda/orders').catch(() => ([]))
+  ])
+
+  const quoteRef = getAgendaQuoteRef(quoteId)
+  const existing = (Array.isArray(orders) ? orders : []).find(row => {
+    return String(row?.source_quote_id || '') === quoteId || String(row?.tecido || '') === quoteRef
+  })
+  if(existing) return { created:false, reason:'already_exists', row: existing }
+
+  const slot = getSlotDatesByIndex(getActiveAgendaOrders(orders).length, config)
+  const basePayload = {
+    prod_date: slot.prod,
+    ent_date: slot.ent,
+    cliente: String(quote?.cliente || quote?.payload?.cliente || 'Cliente').trim() || 'Cliente',
+    descricao: buildAgendaDescricaoFromQuote(quote),
+    tecido: quoteRef,
+    qtd: getAgendaQuantidadeFromQuote(quote),
+    tecido_comprado: false,
+    status: 'pendente'
+  }
+
+  try{
+    const row = await agendaApi('/agenda/orders', {
+      method:'POST',
+      body: JSON.stringify({
+        ...basePayload,
+        source_quote_id: quoteId
+      })
+    })
+    return { created:true, row, mode:'source_quote_id' }
+  }catch(firstError){
+    console.warn('Agenda sem suporte a source_quote_id, tentando fallback compatível.', firstError)
+    const row = await agendaApi('/agenda/orders', {
+      method:'POST',
+      body: JSON.stringify(basePayload)
+    })
+    return { created:true, row, mode:'fallback_tecido' }
+  }
+}
+
+async function excluir(){
+  if(!selecionado) return
+  if(!confirm("Excluir este registro?")) return
+  try{
+    const res = await fetch((window.API_BASE||'') + '/api/quotes/'+selecionado, { method:'DELETE' })
+    if(!res.ok) throw new Error('Falha ao excluir ('+res.status+')')
+    fechar()
+    carregar()
+  }catch(e){
+    console.error(e)
+    alert('Não consegui excluir no servidor.')
+  }
+}
+
+async function converter(){
+  if(!selecionado) return
+  try{
+    const res = await fetch((window.API_BASE||'') + '/api/quotes/'+selecionado+'/convert-to-order', { method:'POST' })
+    if(!res.ok) throw new Error('Falha ao converter ('+res.status+')')
+    const row = await res.json()
+
+    let agendaStatus = { created:false, reason:'not_attempted' }
+    try{
+      agendaStatus = await registrarPedidoNaAgenda(row)
+    }catch(agendaError){
+      console.error('Falha ao registrar na agenda:', agendaError)
+      agendaStatus = { created:false, reason:'error', error: agendaError }
+    }
+
+    fechar()
+    carregar()
+    await window.VendedorPDF.downloadQuotePdf(row, 'pedido')
+
+    if(agendaStatus.created){
+      alert('Convertido em pedido, registrado automaticamente na agenda e PDF gerado ✅')
+    }else if(agendaStatus.reason === 'already_exists'){
+      alert('Convertido em pedido. Este pedido já estava registrado na agenda e o PDF foi gerado ✅')
+    }else if(agendaStatus.reason === 'error'){
+      alert('Convertido em pedido e PDF gerado, mas não consegui registrar automaticamente na agenda.')
+    }else{
+      alert('Convertido em pedido e PDF gerado ✅')
+    }
+  }catch(e){
+    console.error(e)
+    alert('Não consegui converter no servidor.')
+  }
+}
+
+async function baixar(){
+  // Abre a janela ANTES do await para não perder o contexto de gesto (iOS/Android)
+  window._pendingPdfWindow = window.open('', '_blank')
+  try{
+    const row = await getSelecionado()
+    fechar()
+    await window.VendedorPDF.downloadQuotePdf(row, row.status)
+  }catch(e){
+    if(window._pendingPdfWindow){ window._pendingPdfWindow.close(); window._pendingPdfWindow = null }
+    console.error(e)
+    alert('Não consegui visualizar o PDF.')
+  }
+}
+
+async function enviar(){
+  try{
+    const row = await getSelecionado()
+    fechar()
+    await window.VendedorPDF.shareQuotePdf(row, row.status)
+  }catch(e){
+    console.error(e)
+    alert('Não consegui enviar o PDF.')
+  }
+}
+
+function editar(){
+  if(!selecionado) return
+  window.location.href = 'pdf-editor.html?id=' + selecionado
+}
+
+function setFiltro(f){
+  filtro=f
+  document.querySelectorAll(".filtros button").forEach(b=>b.classList.remove("ativo"))
+  if(f=="todos") document.getElementById("f_todos").classList.add("ativo")
+  if(f=="orcamento") document.getElementById("f_orc").classList.add("ativo")
+  if(f=="pedido") document.getElementById("f_ped").classList.add("ativo")
+  carregar()
+}
+
+document.getElementById("busca").addEventListener("input", carregar)
+carregar()
+</script>
+<script src="../keyboard-dismiss.js"></script>
+</body>
+</html>

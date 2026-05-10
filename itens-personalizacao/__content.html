@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<style>
+body { margin:0; font-family: Arial, sans-serif; background:#f2f2f2; }
+.header {
+ position:fixed; top:0; left:0;
+ width:100%;
+ background:#4a67a1; color:white;
+ padding:10px 18px;
+ display:flex; justify-content:space-between;
+ font-size:14px; z-index:1000;
+ box-sizing:border-box;
+}
+.nav {
+ margin-top:65px;
+ display:flex;
+ gap:12px;
+ padding:10px;
+ overflow-x:auto;
+ white-space:nowrap;
+}
+.btn {
+ flex:0 0 auto;
+ background:#4a67a1;
+ color:white;
+ padding:14px 22px;
+ border-radius:30px;
+ text-decoration:none;
+ box-shadow:0 4px 8px rgba(0,0,0,0.2);
+ font-size:15px;
+ text-align:center;
+}
+</style>
+<script>
+function updateTime(){
+ const now = new Date();
+ const el = document.getElementById('time');
+ if(el) el.innerText = now.toLocaleString();
+}
+setInterval(updateTime,1000);
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Itens para personalização</title>
+<link rel="stylesheet" href="itens.css?v=20260425a">
+<script src="../config.js"></script>
+<script src="../auth-guard.js"></script>
+<link rel="stylesheet" href="../mobile-fixes.css">
+</head>
+<body>
+<div class="header">
+  <div>Estofaria Digital</div>
+  <div id="time"></div>
+</div>
+
+<div class="nav">
+  <a class="btn" href="../painel/">📊 Painel</a>
+  <a class="btn" href="../material/">🧵 Materiais</a>
+  <a class="btn" href="../precificacao/">💰 Precificação</a>
+  <a class="btn" href="../catalogo/">🛋️ Catálogo</a>
+  <a class="btn" href="../itens-personalizacao/">🎨 Itens para personalização</a>
+  <a class="btn" href="../vendedor/">🤝 Vendedor</a>
+  <a class="btn" href="../agenda/">📅 Agenda</a>
+  <a class="btn" href="../assinatura/">💳 Assinatura</a>
+</div>
+
+<div class="itens-page">
+  <h1 class="title">Itens para personalização</h1>
+
+  <!-- BLOCO 1: Seleção de modelo -->
+  <div class="card">
+    <label>Selecionar modelo(s)</label>
+    <div id="modelosContainer" class="modelos-grid"></div>
+    <div id="contadorModelos" style="margin-top:6px;font-size:13px;opacity:0.7;"></div>
+    <div class="row row-modelo" style="margin-top:10px;">
+      <button type="button" onclick="renderTabela()">Exibir tabela</button>
+    </div>
+  </div>
+
+  <!-- BLOCO 2: Cadastrar item -->
+  <div class="card">
+    <h3>Item</h3>
+    <div class="row row-cadastro">
+      <input id="nomeItem" placeholder="Nome do item">
+      <select id="unidade"></select>
+      <input
+        id="valorItem"
+        placeholder="R$ 0,00"
+        inputmode="numeric"
+        oninput="formatCurrency(this)"
+      >
+      <button type="button" onclick="adicionarItem()">Adicionar item à tabela</button>
+    </div>
+  </div>
+
+  <!-- BLOCO 3: Cadastro de álbuns -->
+  <div class="card">
+    <div class="row between" style="margin-bottom:14px;">
+      <h3 style="margin:0;">Álbuns</h3>
+      <button type="button" onclick="abrirModalAlbum()"
+        style="padding:8px 18px;border-radius:20px;background:#4a67a1;color:#fff;border:none;font-size:13px;cursor:pointer;">
+        + Novo álbum
+      </button>
+    </div>
+    <p style="font-size:13px;opacity:0.65;margin:0 0 14px;">Álbuns agrupam tecidos com custo fixo. Aparecem na busca do vendedor para consulta de preço.</p>
+    <div id="albumsSection"></div>
+  </div>
+
+  <!-- BLOCO 4: Tabela de Consumo -->
+  <div class="card">
+    <div class="row between table-topbar">
+      <h3>Tabela de Consumo</h3>
+      <button type="button" onclick="salvarTabela()">Salvar tabela</button>
+    </div>
+
+    <div class="table-wrap">
+      <table class="consumo-table">
+        <thead>
+          <tr id="headerRow">
+            <th class="metragem-col">Metragem</th>
+          </tr>
+        </thead>
+        <tbody id="bodyRows"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- Modal de álbum (criar / editar) — fullscreen em mobile -->
+<div id="modalAlbumOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9000;align-items:flex-start;justify-content:center;padding:24px 16px 40px;box-sizing:border-box;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+  <div style="background:#fff;border-radius:14px;width:100%;max-width:520px;padding:24px 20px;box-sizing:border-box;box-shadow:0 8px 32px rgba(0,0,0,0.2);margin:auto;">
+    <h3 id="modalAlbumTitulo" style="margin:0 0 20px;font-size:17px;color:#2c3e50;">Novo álbum</h3>
+
+    <label style="font-size:13px;font-weight:bold;display:block;margin-bottom:4px;">Nome do álbum *</label>
+    <input id="modalAlbumNome" placeholder="Ex: Veludo Premium"
+      style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid #ccc;border-radius:8px;font-size:14px;margin-bottom:14px;">
+
+    <div style="display:flex;gap:10px;margin-bottom:14px;">
+      <div style="flex:1;">
+        <label style="font-size:13px;font-weight:bold;display:block;margin-bottom:4px;">Custo (R$)</label>
+        <input id="modalAlbumCusto" placeholder="R$ 0,00" inputmode="numeric" oninput="formatCurrency(this)"
+          style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid #ccc;border-radius:8px;font-size:14px;">
+      </div>
+      <div style="flex:1;">
+        <label style="font-size:13px;font-weight:bold;display:block;margin-bottom:4px;">Unidade</label>
+        <select id="modalAlbumUnidade"
+          style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid #ccc;border-radius:8px;font-size:14px;background:#fff;">
+          <option value="">— sem unidade —</option>
+        </select>
+      </div>
+    </div>
+
+    <label style="font-size:13px;font-weight:bold;display:block;margin-bottom:10px;">Tecidos <span style="font-weight:normal;opacity:0.6;">(opcional)</span></label>
+    <div id="modalTecidosList" style="margin-bottom:10px;"></div>
+    <button type="button" onclick="adicionarTecidoModal()"
+      style="font-size:12px;padding:6px 16px;border-radius:20px;border:1px solid #4a67a1;color:#4a67a1;background:transparent;cursor:pointer;margin-bottom:20px;">
+      + Tecido
+    </button>
+
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+      <button type="button" onclick="fecharModalAlbum()"
+        style="padding:10px 22px;border-radius:8px;border:1px solid #ccc;background:#fff;color:#555;font-size:14px;cursor:pointer;">
+        Cancelar
+      </button>
+      <button type="button" onclick="salvarAlbumDoModal()"
+        style="padding:10px 22px;border-radius:8px;border:none;background:#4a67a1;color:#fff;font-size:14px;cursor:pointer;">
+        Salvar álbum
+      </button>
+    </div>
+  </div>
+</div>
+
+<script src="itens.js?v=20260425a"></script>
+<script src="../keyboard-dismiss.js"></script>
+</body>
+</html>

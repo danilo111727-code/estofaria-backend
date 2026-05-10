@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<style>
+body { margin:0; font-family: Arial, sans-serif; background:#f2f2f2;}
+.header {
+ position:fixed; top:0; left:0;
+ width:100%;
+ background:#4a67a1; color:white;
+ padding:10px 18px;
+ display:flex; justify-content:space-between;
+ font-size:14px; z-index:1000;
+ box-sizing:border-box;
+}
+.nav {
+ margin-top:65px;
+ display:flex;
+ gap:12px;
+ padding:10px;
+ overflow-x:auto;
+ white-space:nowrap;
+}
+.btn {
+ flex:0 0 auto;
+ background:#4a67a1;
+ color:white;
+ padding:14px 22px;
+ border-radius:30px;
+ text-decoration:none;
+ box-shadow:0 4px 8px rgba(0,0,0,0.2);
+ font-size:15px;
+ text-align:center;
+}
+</style>
+<script>
+function updateTime(){
+ const now = new Date();
+ document.getElementById('time').innerText = now.toLocaleString();
+}
+setInterval(updateTime,1000);
+window.addEventListener('load', updateTime);
+</script>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Catálogo</title>
+<link rel="stylesheet" href="style.css?v=20260405-stability2">
+<script src="../config.js"></script>
+<script src="../auth-guard.js"></script>
+<link rel="stylesheet" href="../mobile-fixes.css">
+</head>
+
+<body>
+<div class="header">
+    <div>Estofaria Digital</div>
+    <div id="time"></div>
+</div>
+
+<div class="nav">
+    <a class="btn" href="../painel/">📊 Painel</a>
+    <a class="btn" href="../material/">🧵 Materiais</a>
+    <a class="btn" href="../precificacao/">💰 Precificação</a>
+    <a class="btn" href="../catalogo/">🛋️ Catálogo</a>
+    <a class="btn" href="../itens-personalizacao/">🎨 Itens para personalização</a>
+    <a class="btn" href="../vendedor/">🤝 Vendedor</a>
+    <a class="btn" href="../agenda/">📅 Agenda</a>
+    <a class="btn" href="../assinatura/">💳 Assinatura</a>
+</div>
+
+<h1>Catálogo</h1>
+
+<div class="topo">
+  <select id="modelo" onchange="catalogoOnSelectChange()" oninput="catalogoOnSelectChange()">
+    <option value="">Carregando modelos...</option>
+  </select>
+
+  <select id="taxa" onchange="catalogoOnSelectChange()" oninput="catalogoOnSelectChange()">
+    <option value="1.01">Cartão 1%</option>
+    <option value="1.02">Cartão 2%</option>
+    <option value="1.03">Cartão 3%</option>
+    <option value="1.04">Cartão 4%</option>
+    <option value="1.05" selected>Cartão 5%</option>
+    <option value="1.06">Cartão 6%</option>
+    <option value="1.07">Cartão 7%</option>
+    <option value="1.08">Cartão 8%</option>
+    <option value="1.09">Cartão 9%</option>
+    <option value="1.10">Cartão 10%</option>
+    <option value="1.11">Cartão 11%</option>
+    <option value="1.12">Cartão 12%</option>
+    <option value="1.13">Cartão 13%</option>
+    <option value="1.14">Cartão 14%</option>
+    <option value="1.15">Cartão 15%</option>
+  </select>
+
+  <select id="notaFiscal" onchange="catalogoOnSelectChange()" oninput="catalogoOnSelectChange()">
+    <option value="0.01">Nota fiscal 1%</option>
+    <option value="0.02">Nota fiscal 2%</option>
+    <option value="0.03">Nota fiscal 3%</option>
+    <option value="0.04">Nota fiscal 4%</option>
+    <option value="0.05">Nota fiscal 5%</option>
+    <option value="0.06">Nota fiscal 6%</option>
+    <option value="0.07">Nota fiscal 7%</option>
+    <option value="0.08">Nota fiscal 8%</option>
+    <option value="0.09">Nota fiscal 9%</option>
+    <option value="0.10">Nota fiscal 10%</option>
+  </select>
+
+  <button type="button" class="catalogo-action" onclick="exibir()">Exibir modelo</button>
+  <div class="pdf-actions-inline pdf-actions-inline-triple">
+    <button type="button" class="catalogo-action pdf-lock-btn" id="toggle" onclick="toggleEdit()">Tabela trancada</button>
+    <button type="button" class="catalogo-action pdf-generate-btn" onclick="exportPDF()">Visualizar PDF</button>
+    <button type="button" class="catalogo-action pdf-send-btn" onclick="sendPDF()">Enviar PDF</button>
+  </div>
+</div>
+
+<div id="catalogoInfo" class="catalogo-info"></div>
+
+<div class="table-wrap">
+  <table id="tabela">
+    <thead>
+      <tr>
+        <th>Metragem</th>
+        <th>Valor à vista</th>
+        <th>Valor cartão</th>
+        <th>Nota fiscal à vista</th>
+        <th>Nota fiscal cartão</th>
+        <th>Lucro</th>
+        <th>Margem</th>
+      </tr>
+    </thead>
+    <tbody id="corpo"></tbody>
+  </table>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="script.js?v=20260405-stability2"></script>
+<script src="../keyboard-dismiss.js"></script>
+</body>
+</html>
