@@ -7,6 +7,7 @@
   // NÃO proteger a própria tela de login
   if (pathname.startsWith('/login/')) {
     document.documentElement.removeAttribute('data-auth-pending');
+    document.documentElement.setAttribute('data-auth-ok', '1');
     return;
   }
 
@@ -95,8 +96,14 @@
         return;
       }
 
+      // backend indisponível temporariamente
       if (!response.ok) {
-        throw new Error('auth_error');
+        console.warn('Backend temporariamente indisponível');
+
+        document.documentElement.setAttribute('data-auth-ok', '1');
+        document.documentElement.removeAttribute('data-auth-pending');
+
+        return;
       }
 
       const data = await response.json();
@@ -113,11 +120,10 @@
       console.error('AUTH ERROR:', err);
 
       // evita loop infinito
-      clearSession();
+      document.documentElement.setAttribute('data-auth-ok', '1');
+      document.documentElement.removeAttribute('data-auth-pending');
 
-      if (!pathname.startsWith('/login/')) {
-        goLogin();
-      }
+      console.warn('Backend temporariamente indisponível');
     }
   }
 
