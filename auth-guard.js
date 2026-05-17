@@ -1,3 +1,4 @@
+// deploy force
 (function () {
   const LOGIN_PATH = '/login/';
   const pathname = window.location.pathname || '/';
