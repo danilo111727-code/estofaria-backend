@@ -264,6 +264,5 @@ function load(){
   document.getElementById("nextProd").innerText=format(datas.prod)
   document.getElementById("nextEnt").innerText=format(datas.ent)
   }
-
-  load()
+   load()
   
