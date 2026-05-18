@@ -232,7 +232,11 @@ async function loadBlockMeta(){
     const total = Array.isArray(materials) ? materials.length : 0
     updateBlockMeta(total)
     updateModalBadge(total)
-  }catch(_){}
+  }catch(e){
+    console.warn('[materiais] loadBlockMeta erro:', e && e.message || e)
+    const meta = document.getElementById('materiaisBlockMeta')
+    if(meta && meta.textContent === 'Carregando...') meta.textContent = 'Toque para abrir'
+  }
 }
 
 // ── renderizar cards (dentro do fullscreen) ──────────────────
@@ -242,7 +246,11 @@ async function renderMaterials(){
   if(!container) return
 
   let materials=[]
-  try{ materials=await apiGet('/materials') }catch(e){ console.error(e) }
+  try{ materials=await apiGet('/materials') }catch(e){
+    console.error('[materiais] renderMaterials erro:', e && e.message || e)
+    if(container) container.innerHTML='<div class="materials-empty" style="color:#c0392b">Erro ao carregar materiais.<br><button onclick="renderMaterials()" style="margin-top:12px;padding:8px 18px;background:#4a67a1;color:white;border:none;border-radius:8px;font-size:14px;cursor:pointer">Tentar novamente</button></div>'
+    return
+  }
 
   // sync units
   const apiUnits=[...new Set(materials.map(m=>String(m.unit||'').trim().toLowerCase()).filter(Boolean))]
@@ -365,5 +373,18 @@ async function seedMateriaisPadrao(){
 // ── init ─────────────────────────────────────────────────────
 
 refreshUnits()
-loadBlockMeta()
-seedMateriaisPadrao().then(()=>loadBlockMeta())
+
+function _initMateriaisData(){
+  loadBlockMeta()
+  seedMateriaisPadrao().then(()=>loadBlockMeta())
+}
+
+// Se auth-guard já concluiu (shell estava no cache), inicializar agora.
+// Caso contrário, aguardar o evento estofaria-auth-ready.
+if(!document.documentElement.hasAttribute('data-auth-pending')){
+  _initMateriaisData()
+} else {
+  window.addEventListener('estofaria-auth-ready', _initMateriaisData, { once: true })
+  // Fallback: se o evento nunca disparar, tentar após 4 segundos
+  setTimeout(_initMateriaisData, 4000)
+}
