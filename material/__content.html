@@ -1,128 +1,113 @@
-
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
 <style>
 body { margin:0; font-family: Arial, sans-serif; background:#f2f2f2;}
 .header {
- position:fixed; top:0; left:0;
- width:100%;
+ position:fixed; top:0; left:0; width:100%;
  background:#4a67a1; color:white;
- padding:10px 18px;
- display:flex; justify-content:space-between;
- font-size:14px; z-index:1000;
- box-sizing:border-box;
+ padding:10px 18px; display:flex; justify-content:space-between;
+ font-size:14px; z-index:1000; box-sizing:border-box;
 }
 .nav {
- margin-top:65px;
- display:flex;
- gap:12px;
- padding:10px;
- overflow-x:auto;
- white-space:nowrap;
+ margin-top:65px; display:flex; gap:12px;
+ padding:10px; overflow-x:auto; white-space:nowrap;
 }
 .btn {
- flex:0 0 auto;
- background:#4a67a1;
- color:white;
- padding:14px 22px;
- border-radius:30px;
- text-decoration:none;
- box-shadow:0 4px 8px rgba(0,0,0,0.2);
- font-size:15px;
- text-align:center;
+ flex:0 0 auto; background:#4a67a1; color:white;
+ padding:14px 22px; border-radius:30px; text-decoration:none;
+ box-shadow:0 4px 8px rgba(0,0,0,0.2); font-size:15px; text-align:center;
 }
 </style>
 <script>
 function updateTime(){
- const now = new Date();
- document.getElementById("time").innerText = now.toLocaleString();
+  const now = new Date();
+  document.getElementById("time").innerText = now.toLocaleString();
 }
 setInterval(updateTime,1000);
 </script>
-
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Materiais</title>
-<link rel="stylesheet" href="materiais.css?v=20260425a">
+<link rel="stylesheet" href="materiais.css?v=20260510h">
 <script src="../config.js"></script>
 <script src="../auth-guard.js"></script>
 <link rel="stylesheet" href="../mobile-fixes.css">
 </head>
-
 <body>
 <div class="header">
-    <div>Estofaria Digital</div>
-    <div id="time"></div>
+  <div>Estofaria Digital</div>
+  <div id="time"></div>
 </div>
-
 <div class="nav">
-    <a class="btn" href="../painel/">📊 Painel</a>
-    <a class="btn" href="../material/">🧵 Materiais</a>
-    <a class="btn" href="../precificacao/">💰 Precificação</a>
-    <a class="btn" href="../catalogo/">🛋️ Catálogo</a>
-    <a class="btn" href="../itens-personalizacao/">🎨 Itens para personalização</a>
-    <a class="btn" href="../vendedor/">🤝 Vendedor</a>
-    <a class="btn" href="../agenda/">📅 Agenda</a>
-    <a class="btn" href="../assinatura/">💳 Assinatura</a>
+  <a class="btn" href="../painel/">📊 Painel</a>
+  <a class="btn" href="../material/">🧵 Materiais</a>
+  <a class="btn" href="../precificacao/">💰 Precificação</a>
+  <a class="btn" href="../catalogo/">🛋️ Catálogo</a>
+  <a class="btn" href="../itens-personalizacao/">🎨 Itens para personalização</a>
+  <a class="btn" href="../vendedor/">🤝 Vendedor</a>
+  <a class="btn" href="../agenda/">📅 Agenda</a>
+  <a class="btn" href="../assinatura/">💳 Assinatura</a>
 </div>
 
 <div id="app">
 
-<div class="card">
-<h3>Cadastrar material</h3>
+  <!-- Cadastrar material -->
+  <div class="card">
+    <h3>Cadastrar material</h3>
+    <div class="row">
+      <input id="materialNome" placeholder="Material">
+      <select id="materialUnidade"></select>
+    </div>
+    <div class="row">
+      <input id="materialValor" placeholder="R$ 0,00" oninput="formatCurrency(this)">
+      <button id="materialAddBtn" onclick="addMaterial()" data-loading-text="Adicionando...">Adicionar</button>
+    </div>
+  </div>
 
-<div class="row">
-<input id="materialNome" placeholder="Material">
-<select id="materialUnidade"></select>
-</div>
+  <!-- Unidades de medida -->
+  <div class="card">
+    <h3>Unidades de medida</h3>
+    <div class="row">
+      <input id="novaUnidade" placeholder="Nova unidade">
+      <button id="materialUnitAddBtn" onclick="addUnit()">Adicionar</button>
+    </div>
+    <div class="units-scroll" id="unitsContainer"></div>
+  </div>
 
-<div class="row">
-<input id="materialValor" placeholder="R$ 0,00" oninput="formatCurrency(this)">
-<button id="materialAddBtn" onclick="addMaterial()" data-loading-text="Adicionando...">Adicionar</button>
-</div>
-</div>
-
-<div class="card">
-<h3>Unidades de medida</h3>
-
-<div class="row">
-<input id="novaUnidade" placeholder="Nova unidade">
-<button id="materialUnitAddBtn" onclick="addUnit()">Adicionar</button>
-</div>
-
-<div class="units-scroll" id="unitsContainer"></div>
-</div>
-
-<div class="card">
-
-<div class="row between">
-<h3>Tabela de materiais</h3>
-<button id="lockBtn" onclick="toggleLock()">🔒 Tabela trancada</button>
-</div>
-
-<input id="search" placeholder="🔎 Pesquisar material" oninput="filterTable()">
-
-<div class="materials-scroll">
-<table>
-<thead>
-<tr>
-<th>Material</th>
-<th>Unidade</th>
-<th>Valor</th>
-<th></th>
-</tr>
-</thead>
-<tbody id="materialsTable"></tbody>
-</table>
-</div>
+  <!-- Bloco grande: Lista de materiais -->
+  <div class="big-card" role="button" tabindex="0"
+       onclick="openMateriaisFullscreen()"
+       onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openMateriaisFullscreen()}">
+    <div class="big-icon mat-icon">🧵</div>
+    <div class="big-info">
+      <div class="big-title">Lista de materiais</div>
+      <div class="big-sub" id="materiaisBlockMeta">Carregando...</div>
+    </div>
+    <div class="big-arrow">›</div>
+  </div>
 
 </div>
 
+<!-- ===== Fullscreen: Lista de materiais ===== -->
+<div id="materiaisFullscreen" class="fullscreen-modal fs-teal" hidden>
+  <div class="fs-topbar">
+    <button class="fs-back" type="button" onclick="closeMateriaisFullscreen()" aria-label="Voltar">‹</button>
+    <div class="fs-title">🧵 Lista de materiais</div>
+    <div class="fs-spacer"></div>
+    <div class="fs-badge"><span id="materiaisModalCount">0</span> materiais</div>
+  </div>
+  <div class="fs-container">
+    <div class="fs-card">
+      <div class="list-controls">
+        <input id="search" placeholder="🔎 Pesquisar material" oninput="filterTable()">
+      </div>
+      <div id="materialsContainer"></div>
+    </div>
+  </div>
 </div>
 
-<script src="materiais.js?v=20260425a"></script>
-
+<script src="materiais.js?v=20260510h"></script>
 <script src="../keyboard-dismiss.js"></script>
 </body>
 </html>

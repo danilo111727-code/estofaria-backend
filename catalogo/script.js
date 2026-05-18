@@ -702,9 +702,9 @@ function getLinhaCalculada(modelo, metragem) {
   const vendaBase = calcularPrecoPorEspacamento({
     metragem, baseMeters: bm, basePriceCents: modelo.salePriceCents, espacamentoCm: sc, valorPorEspacamentoCents: ve
   })
-  const cartao   = Math.round(vendaBase * taxa)
-  const nfVista  = Math.round(vendaBase * (1 + notaFiscal))
-  const nfCartao = Math.round(cartao   * (1 + notaFiscal))
+  const cartaoRaw   = Math.round(vendaBase * taxa)
+  const vistaFinal  = Math.round(vendaBase * (1 + notaFiscal))
+  const cartaoFinal = Math.round(cartaoRaw * (1 + notaFiscal))
 
   let lucro = 0
 
@@ -726,7 +726,7 @@ function getLinhaCalculada(modelo, metragem) {
 
   const margem = vendaBase > 0 ? (lucro / vendaBase) * 100 : 0
 
-  return { metragem, vendaBase, cartao, nfVista, nfCartao, lucro, margem }
+  return { metragem, vendaBase: vistaFinal, cartao: cartaoFinal, lucro, margem }
 }
 
 function emptyState(message) {
@@ -735,7 +735,7 @@ function emptyState(message) {
 
   corpo.innerHTML = `
     <tr>
-      <td colspan="7" style="text-align:center; padding:16px;">
+      <td colspan="5" style="text-align:center; padding:16px;">
         ${escapeHtml(message)}
       </td>
     </tr>
@@ -774,13 +774,9 @@ function recalcularDerivedOverrides() {
     const vendaBaseCents = Math.round(parseNumber(vistaRaw, 0) * 100)
     if (!vendaBaseCents) return
 
-    const cartaoCents  = Math.round(vendaBaseCents * taxa)
-    const nfVistaCents = Math.round(vendaBaseCents * (1 + notaFiscal))
-    const nfCartaoCents = Math.round(cartaoCents   * (1 + notaFiscal))
+    const cartaoCents = Math.round(vendaBaseCents * taxa)
 
-    mapa['cartao']   = moedaFromCents(cartaoCents)
-    mapa['nfVista']  = moedaFromCents(nfVistaCents)
-    mapa['nfCartao'] = moedaFromCents(nfCartaoCents)
+    mapa['cartao'] = moedaFromCents(cartaoCents)
 
     // Lucro e margem voltam ao cálculo do modelo (sem override)
     delete mapa['lucro']
@@ -817,8 +813,6 @@ function getLinhasExibicao(modelo) {
       metragem: `${m.toFixed(2).replace('.', ',')} m`,
       vista: aplicarOverride(key, 'vendaBase', moedaFromCents(linha.vendaBase)),
       cartao: aplicarOverride(key, 'cartao', moedaFromCents(linha.cartao)),
-      nfVista: aplicarOverride(key, 'nfVista', moedaFromCents(linha.nfVista)),
-      nfCartao: aplicarOverride(key, 'nfCartao', moedaFromCents(linha.nfCartao)),
       lucro: aplicarOverride(key, 'lucro', moedaFromCents(linha.lucro)),
       margem: aplicarOverride(key, 'margem', formatPercent(linha.margem))
     }
@@ -871,8 +865,6 @@ function exibir() {
     const colunas = [
       ['vendaBase', linha.vista, 'avista'],
       ['cartao', linha.cartao, ''],
-      ['nfVista', linha.nfVista, ''],
-      ['nfCartao', linha.nfCartao, ''],
       ['lucro', linha.lucro, ''],
       ['margem', linha.margem, '']
     ]
@@ -937,14 +929,12 @@ function drawPdfColumnHeader(doc, x, y, width, topLabel, bottomLines) {
 }
 
 function desenharCabecalhoPdf(doc, y) {
-  const cols = [10, 48, 86, 124, 162]
-  const width = 36
-  const totalHeight = drawPdfColumnHeader(doc, cols[1], y, width, 'À vista', ['Sem nota', 'fiscal'])
+  const cols = [10, 73, 136]
+  const width = 60
+  const totalHeight = drawPdfColumnHeader(doc, cols[1], y, width, 'À vista', ['Com nota', 'fiscal'])
 
-  drawPdfBlueBlock(doc, cols[0], y, width, totalHeight, 'Metragem', 11.2)
-  drawPdfColumnHeader(doc, cols[2], y, width, 'Cartão', ['Sem nota', 'fiscal'])
-  drawPdfColumnHeader(doc, cols[3], y, width, 'À vista', ['Com nota', 'fiscal'])
-  drawPdfColumnHeader(doc, cols[4], y, width, 'Cartão', ['Com nota', 'fiscal'])
+  drawPdfBlueBlock(doc, cols[0], y, 60, totalHeight, 'Metragem', 11.2)
+  drawPdfColumnHeader(doc, cols[2], y, width, 'Cartão', ['Com nota', 'fiscal'])
 
   doc.setTextColor(0, 0, 0)
   doc.setFont('helvetica', 'normal')
@@ -1003,9 +993,9 @@ async function buildCatalogoPdfPayload() {
       y = desenharCabecalhoPdf(doc, y)
     }
 
-    const values = [row.metragem, row.vista, row.cartao, row.nfVista, row.nfCartao]
-    const cols = [10, 49, 88, 127, 166]
-    const width = 35
+    const values = [row.metragem, row.vista, row.cartao]
+    const cols = [10, 73, 136]
+    const width = 60
 
     doc.setFontSize(10)
     values.forEach((value, index) => {

@@ -1,0 +1,27 @@
+/*/__content.html
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Pragma: no-cache
+
+/*/index.html
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Pragma: no-cache
+
+/app-shell.css
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Pragma: no-cache
+
+/app-shell.js
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Pragma: no-cache
+
+/auth-guard.js
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Pragma: no-cache
+
+/config.js
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Pragma: no-cache
+
+/sw.js
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Pragma: no-cache

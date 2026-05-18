@@ -1120,13 +1120,9 @@ function calc(){
 
   const vista = document.getElementById('vista')
   const cartao = document.getElementById('cartao')
-  const nfvista = document.getElementById('nfvista')
-  const nfcartao = document.getElementById('nfcartao')
 
   if(vista) vista.innerText = moeda(total)
   if(cartao) cartao.innerText = moeda(total * 1.10)
-  if(nfvista) nfvista.innerText = moeda(total * 1.10)
-  if(nfcartao) nfcartao.innerText = moeda(total * 1.20)
 }
 
 function addModelo(){
@@ -1275,9 +1271,7 @@ function buildDraftQuote(status = 'orcamento'){
       total_cents: totalCents,
       totais: {
         vista: total,
-        cartao: Number((total * 1.10).toFixed(2)),
-        nfvista: Number((total * 1.10).toFixed(2)),
-        nfcartao: Number((total * 1.20).toFixed(2))
+        cartao: Number((total * 1.10).toFixed(2))
       },
       created_at_local: new Date().toLocaleString('pt-BR')
     }

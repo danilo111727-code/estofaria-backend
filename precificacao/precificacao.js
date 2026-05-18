@@ -63,6 +63,11 @@ function ready(){
 function boot(){
   if(booted || !ready()) return
   booted = true
+  const cached = loadLocalModelFallback()
+  if(cached.length){
+    modelos = cached
+    renderModelos()
+  }
   carregarTudo()
 }
 
@@ -382,6 +387,7 @@ async function carregarMateriaisCatalogo(){
 function renderMaterialSelect(){
   const select = document.getElementById('materialSelect')
   if(!select) return
+  const prevVal = select.value
   select.innerHTML = ''
   if(!catalogoMateriais.length){
     const opt = document.createElement('option')
@@ -390,12 +396,15 @@ function renderMaterialSelect(){
     select.appendChild(opt)
     return
   }
+  const jaAdicionados = new Set(materiaisModelo.map(m => m.material_id))
   catalogoMateriais.forEach(m=>{
     const opt = document.createElement('option')
     opt.value = String(m.id)
-    opt.textContent = `${m.name} (${m.unit}) — ${formatBRLFromCents(m.price_cents)}`
+    const tick = jaAdicionados.has(m.id) ? '✅ ' : ''
+    opt.textContent = `${tick}${m.name} (${m.unit}) — ${formatBRLFromCents(m.price_cents)}`
     select.appendChild(opt)
   })
+  if(prevVal) select.value = prevVal
 }
 
 function addMaterial(){
@@ -459,23 +468,90 @@ function renderMateriais(){
   })
 
   updateResumo()
+  renderMaterialSelect()
+}
+
+const GAUGE_CIRC = 238.76
+
+function getMarginInfo(pct){
+  if(pct < 35) return {
+    label: 'Margem baixa',
+    msg: 'Atenção: sua margem pode não cobrir imprevistos, garantia e custos ocultos.',
+    badge: 'resumo-badge--low',
+    box: 'resumo-infobox--low',
+    lucro: 'resumo-value--red',
+    gaugeColor: '#dc2626'
+  }
+  if(pct < 55) return {
+    label: 'Margem saudável',
+    msg: 'Precificação saudável com boa relação entre custo e lucratividade.',
+    badge: 'resumo-badge--ok',
+    box: 'resumo-infobox--ok',
+    lucro: 'resumo-value--green',
+    gaugeColor: '#ca8a04'
+  }
+  if(pct < 75) return {
+    label: 'Margem excelente',
+    msg: 'Excelente margem de lucro e alta lucratividade.',
+    badge: 'resumo-badge--great',
+    box: 'resumo-infobox--great',
+    lucro: 'resumo-value--green',
+    gaugeColor: '#16a34a'
+  }
+  return {
+    label: 'Margem excelente',
+    msg: 'Alta lucratividade e excelente retorno financeiro.',
+    badge: 'resumo-badge--great',
+    box: 'resumo-infobox--great',
+    lucro: 'resumo-value--green',
+    gaugeColor: '#059669'
+  }
 }
 
 function updateResumo(){
   const custo = materiaisModelo.reduce((acc,m)=> acc + Number(m.total_cents || 0), 0)
   const lucro = parseCurrencyToCents(document.getElementById('lucroDesejado')?.value || '')
   const venda = custo + lucro
-  const margem = venda > 0 ? ((lucro / venda) * 100).toFixed(1) : '0.0'
+  const margemPct = venda > 0 ? (lucro / venda) * 100 : 0
 
-  const custoEl = document.getElementById('custoTotal')
-  const lucroEl = document.getElementById('lucroTotal')
-  const vendaEl = document.getElementById('valorVenda')
-  const margemEl = document.getElementById('margem')
+  const custoEl   = document.getElementById('custoTotal')
+  const lucroEl   = document.getElementById('lucroTotal')
+  const vendaEl   = document.getElementById('valorVenda')
+  const margemEl  = document.getElementById('resumoMargem')
+  const badgeEl   = document.getElementById('resumoBadge')
+  const msgEl     = document.getElementById('resumoMsg')
+  const boxEl     = document.getElementById('resumoInfoBox')
+  const gaugeFill = document.getElementById('resumoGaugeFill')
 
   if(custoEl) custoEl.innerText = formatBRLFromCents(custo)
   if(lucroEl) lucroEl.innerText = formatBRLFromCents(lucro)
   if(vendaEl) vendaEl.innerText = formatBRLFromCents(venda)
-  if(margemEl) margemEl.innerText = margem + '%'
+  if(margemEl) margemEl.innerText = margemPct.toFixed(0) + '%'
+
+  if(venda > 0){
+    const info = getMarginInfo(margemPct)
+    const offset = GAUGE_CIRC - (Math.min(margemPct, 100) / 100) * GAUGE_CIRC
+    if(gaugeFill){
+      gaugeFill.style.strokeDashoffset = offset
+      gaugeFill.setAttribute('stroke', info.gaugeColor)
+    }
+    if(badgeEl){
+      badgeEl.textContent = info.label
+      badgeEl.className = 'resumo-badge ' + info.badge
+      badgeEl.style.display = 'inline-block'
+    }
+    if(msgEl) msgEl.textContent = info.msg
+    if(boxEl) boxEl.className = 'resumo-infobox ' + info.box
+    if(lucroEl) lucroEl.className = 'resumo-value ' + info.lucro
+  } else {
+    if(gaugeFill){
+      gaugeFill.style.strokeDashoffset = GAUGE_CIRC
+      gaugeFill.setAttribute('stroke', '#e2e8f0')
+    }
+    if(badgeEl){ badgeEl.style.display = 'none' }
+    if(lucroEl) lucroEl.className = 'resumo-value'
+    if(boxEl) boxEl.className = 'resumo-infobox'
+  }
 }
 
 async function salvarModelo(){
@@ -563,7 +639,13 @@ async function carregarModelos(){
   )
 
   try{
-    const data = await apiGet('/models')
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 8000)
+    const data = await window.ESTOFARIA_HTTP.fetchJson(API + '/models', {
+      headers: authHeaders(),
+      cache: 'no-store',
+      signal: controller.signal
+    }).finally(() => clearTimeout(timer))
     const fetched = Array.isArray(data) ? data : (Array.isArray(data?.models) ? data.models : [])
     modelos = fetched.map((raw, index) => {
       const normalized = normalizeSharedModel(raw, index)
@@ -624,6 +706,7 @@ function renderModelos(){
 
   visibleModels.forEach(m=>{
       const tr = document.createElement('tr')
+      if(m.id === modeloEditandoId) tr.classList.add('editing-row')
       tr.innerHTML = `
         <td>${escapeHtml(m.name)}</td>
         <td>${formatQty(m.base_meters)} m</td>
@@ -636,6 +719,7 @@ function renderModelos(){
       `
       table.appendChild(tr)
     })
+  updateModelosBlockMeta()
 }
 
 function editarModelo(id){
@@ -657,7 +741,10 @@ function editarModelo(id){
   materiaisModelo = Array.isArray(modelo.materials) ? modelo.materials.map(m=>({ ...m })) : []
   renderMateriais()
   renderItensIncluidos(Array.isArray(modelo.itens_incluidos) ? modelo.itens_incluidos : [])
+  renderModelos()
   persistDraftState()
+  closeModelosFullscreen()
+  window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 async function excluirModelo(id){
@@ -743,6 +830,87 @@ function limparFormulario(){
 
 function filtrarModelos(){
   renderModelos()
+}
+
+function updateModelosBlockMeta(){
+  const meta = document.getElementById('modelosBlockMeta')
+  const badge = document.getElementById('modelosModalCount')
+  const count = modelos.length
+  const editando = modeloEditandoId ? modelos.find(m => m.id === modeloEditandoId) : null
+  const txt = count === 0
+    ? 'Nenhum modelo salvo ainda'
+    : editando
+      ? `${count} modelo${count !== 1 ? 's' : ''} · Editando: ${editando.name}`
+      : `${count} modelo${count !== 1 ? 's' : ''} cadastrado${count !== 1 ? 's' : ''}`
+  if(meta) meta.textContent = txt
+  if(badge) badge.textContent = count
+}
+
+let _modelosScrollY = 0
+let _itensScrollY = 0
+
+function _openFullscreen(modalId){
+  const modal = document.getElementById(modalId)
+  if(!modal) return modal
+  try{ window.parent.scrollTo({ top: 0, behavior: 'instant' }) }catch(e){}
+  try{ window.top.scrollTo({ top: 0, behavior: 'instant' }) }catch(e){}
+  const scrollY = window.scrollY || window.pageYOffset || 0
+  document.body.style.position = 'fixed'
+  document.body.style.top = `-${scrollY}px`
+  document.body.style.width = '100%'
+  document.body.style.overflow = 'hidden'
+  modal.scrollTop = 0
+  modal.hidden = false
+  modal.scrollTop = 0
+  return { modal, scrollY }
+}
+
+function _closeFullscreen(modalId, scrollY){
+  const modal = document.getElementById(modalId)
+  if(!modal) return
+  modal.hidden = true
+  document.body.style.position = ''
+  document.body.style.top = ''
+  document.body.style.width = ''
+  document.body.style.overflow = ''
+  window.scrollTo(0, scrollY || 0)
+}
+
+function openModelosFullscreen(){
+  const r = _openFullscreen('modelosFullscreen')
+  if(!r) return
+  _modelosScrollY = r.scrollY
+  renderModelos()
+  r.modal.scrollTop = 0
+}
+
+function closeModelosFullscreen(){
+  _closeFullscreen('modelosFullscreen', _modelosScrollY)
+  updateModelosBlockMeta()
+}
+
+function openItensFullscreen(){
+  const r = _openFullscreen('itensFullscreen')
+  if(!r) return
+  _itensScrollY = r.scrollY
+  r.modal.scrollTop = 0
+}
+
+function closeItensFullscreen(){
+  updateItensBlockMeta()
+  _closeFullscreen('itensFullscreen', _itensScrollY)
+}
+
+function updateItensBlockMeta(){
+  const lista = document.getElementById('itensIncluidosLista')
+  const meta = document.getElementById('itensBlockMeta')
+  const badge = document.getElementById('itensModalCount')
+  const marcados = lista ? lista.querySelectorAll('input[type=checkbox]:checked').length : 0
+  const total = lista ? lista.querySelectorAll('input[type=checkbox]').length : 0
+  if(meta) meta.textContent = marcados === 0
+    ? 'Nenhum item marcado'
+    : `${marcados} de ${total} item${total !== 1 ? 's' : ''} marcado${marcados !== 1 ? 's' : ''}`
+  if(badge) badge.textContent = marcados
 }
 
 async function buildPrecificacaoPdfPayload(){
@@ -1104,12 +1272,15 @@ function openPdfPreview(pdfBlob, fileName, title, existingWindow){
 }
 
 window.addMaterial = addMaterial
-window.addMaterial = addMaterial
 window.deleteMaterial = deleteMaterial
 window.salvarModelo = salvarModelo
 window.editarModelo = editarModelo
 window.excluirModelo = excluirModelo
 window.filtrarModelos = filtrarModelos
+window.openModelosFullscreen = openModelosFullscreen
+window.closeModelosFullscreen = closeModelosFullscreen
+window.openItensFullscreen = openItensFullscreen
+window.closeItensFullscreen = closeItensFullscreen
 window.gerarPDF = gerarPDF
 window.enviarPDF = enviarPDF
 window.formatCurrency = function(input){

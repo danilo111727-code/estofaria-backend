@@ -405,6 +405,18 @@ function promptDuasDatas({ title, prodValue, entValue }) {
       })
       inp.addEventListener('focus', () => { inp.style.borderColor = '#2563eb'; inp.style.boxShadow = '0 0 0 3px rgba(37,99,235,.14)' })
       inp.addEventListener('blur',  () => { inp.style.borderColor = '#cbd5e1'; inp.style.boxShadow = '' })
+      function applyMask(inp) {
+        const digits = inp.value.replace(/\D/g, '').slice(0, 8)
+        let out = digits
+        if (digits.length > 2) out = digits.slice(0,2) + '/' + digits.slice(2)
+        if (digits.length > 4) out = digits.slice(0,2) + '/' + digits.slice(2,4) + '/' + digits.slice(4)
+        if (inp.value !== out) {
+          inp.value = out
+          try { inp.setSelectionRange(out.length, out.length) } catch(e) {}
+        }
+      }
+      inp.addEventListener('input', function() { applyMask(this) })
+      inp.addEventListener('keyup',  function() { applyMask(this) })
       wrap.appendChild(lbl); wrap.appendChild(inp)
       return { wrap, inp }
     }
@@ -1307,6 +1319,67 @@ async function reprogramarEntrega(id) {
   }
 }
 
+async function reprogramarProducao(id) {
+  try {
+    const current = state.orders.find(o => o.id === id) || {}
+    const prodAtual = formatEditableDateInput(current.prod_date || calcProdDate(current.ent_date))
+    const entAtual  = formatEditableDateInput(current.ent_date)
+
+    const result = await promptDuasDatas({
+      title: 'Reprogramar produção e entrega',
+      prodValue: prodAtual,
+      entValue:  entAtual
+    })
+    if (result === null) return false
+
+    const novaEnt  = normalizeEditableDateInput(result.ent)
+    const novaProd = normalizeEditableDateInput(result.prod)
+
+    if (!novaEnt) {
+      await ui().alert('Data de entrega inválida. Use o padrão DD/MM/AAAA.', { title: 'Data inválida' })
+      return false
+    }
+    if (!novaProd) {
+      await ui().alert('Data de produção inválida. Use o padrão DD/MM/AAAA.', { title: 'Data inválida' })
+      return false
+    }
+
+    const weekKey = getSemanaKey(novaEnt)
+    const vagasSemana = getVagasSemana(weekKey)
+    const ordersInWeek = getActiveOrders().filter(o =>
+      o.id !== id && getSemanaKey(o.ent_date || o.prod_date) === weekKey
+    ).length
+    const bloqueiosSemana = getBloqueiosSemana(weekKey)
+    const semanaCheia = ordersInWeek + bloqueiosSemana >= vagasSemana
+
+    if (semanaCheia) {
+      const confirmar = await ui().confirm(
+        'Essa semana está cheia.\nDeseja abrir uma nova vaga para incluir este pedido?',
+        { title: 'Semana cheia', confirmText: 'Abrir vaga', type: 'warning' }
+      )
+      if (!confirmar) return false
+      abrirVagaExtra(weekKey)
+    }
+
+    const row = await apiPatch('/agenda/orders/' + id, {
+      prod_date: novaProd,
+      ent_date:  novaEnt
+    })
+    replaceOrder(row)
+    notifyPainelRefresh('order-rescheduled')
+    renderAll()
+    await ui().alert(
+      `Datas atualizadas.\nProdução: ${formatFullDate(novaProd)}\nEntrega: ${formatFullDate(novaEnt)}`,
+      { title: 'Reprogramado' }
+    )
+    return true
+  } catch (e) {
+    console.error(e)
+    notifyError('Erro ao reprogramar produção: ' + e.message)
+    return false
+  }
+}
+
 function buildActionContextKey(context) {
   if (!context || typeof context !== 'object') return ''
   if (context.kind === 'order') {
@@ -1554,10 +1627,22 @@ function renderActionSheetButtons(context, actions, targetDocument) {
     actions.appendChild(
       buildSheetButton({
         label: 'Reprogramar entrega',
-        hint: 'Permite ajustar as datas de produção e entrega do mesmo pedido.',
+        hint: 'Define nova data de entrega — produção calculada automaticamente.',
         className: 'is-success',
         action: async () => {
           const updated = await reprogramarEntrega(context.row.id)
+          if (updated) closeActionSheet()
+        }
+      }, targetDocument)
+    )
+
+    actions.appendChild(
+      buildSheetButton({
+        label: '📅 Reprogramar produção e entrega',
+        hint: 'Edita livremente as datas de produção e entrega deste pedido.',
+        className: 'is-success',
+        action: async () => {
+          const updated = await reprogramarProducao(context.row.id)
           if (updated) closeActionSheet()
         }
       }, targetDocument)
@@ -2257,6 +2342,7 @@ window.excluir = excluir
 window.recuperarData = recuperarData
 window.recuperarPedido = recuperarPedido
 window.reprogramarEntrega = reprogramarEntrega
+window.reprogramarProducao = reprogramarProducao
 window.addManualHoliday = addManualHoliday
 window.deleteManualHoliday = deleteManualHoliday
 window.updateCidadesSelect = updateCidadesSelect

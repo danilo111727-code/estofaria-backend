@@ -44,7 +44,7 @@ window.addEventListener('load', updateTime);
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Catálogo</title>
-<link rel="stylesheet" href="style.css?v=20260405-stability2">
+<link rel="stylesheet" href="style.css?v=20260510l">
 <script src="../config.js"></script>
 <script src="../auth-guard.js"></script>
 <link rel="stylesheet" href="../mobile-fixes.css">
@@ -93,6 +93,7 @@ window.addEventListener('load', updateTime);
   </select>
 
   <select id="notaFiscal" onchange="catalogoOnSelectChange()" oninput="catalogoOnSelectChange()">
+    <option value="0">Nota fiscal 0%</option>
     <option value="0.01">Nota fiscal 1%</option>
     <option value="0.02">Nota fiscal 2%</option>
     <option value="0.03">Nota fiscal 3%</option>
@@ -122,8 +123,6 @@ window.addEventListener('load', updateTime);
         <th>Metragem</th>
         <th>Valor à vista</th>
         <th>Valor cartão</th>
-        <th>Nota fiscal à vista</th>
-        <th>Nota fiscal cartão</th>
         <th>Lucro</th>
         <th>Margem</th>
       </tr>
@@ -133,7 +132,7 @@ window.addEventListener('load', updateTime);
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-<script src="script.js?v=20260405-stability2"></script>
+<script src="script.js?v=20260510j"></script>
 <script src="../keyboard-dismiss.js"></script>
 </body>
 </html>

@@ -88,13 +88,13 @@ background:white;
 
 table{
 width:100%;
-min-width:860px;
+min-width:420px;
 border-collapse:collapse;
 background:white;
 }
 
 th,td{
-padding:12px;
+padding:12px 10px;
 border-bottom:1px solid #eee;
 text-align:center;
 white-space:nowrap;
@@ -111,7 +111,7 @@ z-index:1;
 background:#e6ecff;
 color:#111;
 font-weight:700;
-font-size:16px;
+font-size:15px;
 }
 
 .avista{

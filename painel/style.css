@@ -1,4 +1,3 @@
-
 body{
 font-family:Arial;
 margin:0;
@@ -60,21 +59,34 @@ flex:0 0 auto;
 color:#333;
 }
 
-.card.agenda .line span,
-.card.agenda .line b{
-white-space:nowrap;
-}
-
 .line b{
 flex:1;
 text-align:right;
 word-break:break-word;
 }
 
-.card.agenda .line b{
-word-break:normal;
+/* Agenda card: label acima, valor abaixo */
+.card.agenda .line{
+flex-direction:column;
+align-items:flex-start;
+gap:2px;
+}
+
+.card.agenda .line span{
+color:#555;
 font-size:12px;
-letter-spacing:-0.1px;
+font-weight:normal;
+text-transform:uppercase;
+letter-spacing:0.3px;
+}
+
+.card.agenda .line b{
+text-align:left;
+font-size:14px;
+font-weight:bold;
+word-break:break-word;
+white-space:normal;
+letter-spacing:normal;
 }
 
 canvas{
@@ -97,10 +109,9 @@ min-height:240px;
 
   .card.agenda .line b{
     max-width:none;
-    font-size:11px;
+    font-size:14px;
   }
 }
-
 
 .chart-card{
 overflow:hidden;

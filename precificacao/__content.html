@@ -44,7 +44,7 @@ setInterval(updateTime,1000);
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Teste Precificação</title>
-<link rel="stylesheet" href="precificacao.css?v=20260405-stability2">
+<link rel="stylesheet" href="precificacao.css?v=20260511t">
 <script src="../config.js"></script>
 <script src="../auth-guard.js"></script>
   <link rel="stylesheet" href="../mobile-fixes.css">
@@ -71,7 +71,7 @@ setInterval(updateTime,1000);
 <div id="app"></div>
 
 <script>
-fetch("precificacao.html?v=20260405-stability2")
+fetch("precificacao.html?v=20260511t")
 .then(r=>r.text())
 .then(html=>{
 document.getElementById("app").innerHTML = html
@@ -80,7 +80,7 @@ if(window.initPrecificacao) window.initPrecificacao()
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-<script src="precificacao.js?v=20260405-stability2"></script>
+<script src="precificacao.js?v=20260511t"></script>
 
 <script src="../keyboard-dismiss.js"></script>
 </body>
