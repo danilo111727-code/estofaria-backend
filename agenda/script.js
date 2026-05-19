@@ -20,6 +20,7 @@ const DIAS_SEMANA = [
 const state = {
   config: { prazo_dias: 0, vagas_semana: 0, tipo_dias: '', city_code: '', data_inicio_entrega: '' },
   orders: [],
+  blocos: [],
   actionContext: null,
   actionSheetOpen: false,
   actionSheetContextKey: '',
@@ -1624,43 +1625,7 @@ function renderActionSheetButtons(context, actions, targetDocument) {
       )
     }
 
-    actions.appendChild(
-      buildSheetButton({
-        label: 'Reprogramar entrega',
-        hint: 'Define nova data de entrega — produção calculada automaticamente.',
-        className: 'is-success',
-        action: async () => {
-          const updated = await reprogramarEntrega(context.row.id)
-          if (updated) closeActionSheet()
-        }
-      }, targetDocument)
-    )
 
-    actions.appendChild(
-      buildSheetButton({
-        label: '📅 Reprogramar produção e entrega',
-        hint: 'Edita livremente as datas de produção e entrega deste pedido.',
-        className: 'is-success',
-        action: async () => {
-          const updated = await reprogramarProducao(context.row.id)
-          if (updated) closeActionSheet()
-        }
-      }, targetDocument)
-    )
-
-    const orderWeekKey = getSemanaKey(context.row.ent_date || context.row.prod_date)
-    actions.appendChild(
-      buildSheetButton({
-        label: '➕ Abrir vaga extra',
-        hint: 'Adiciona mais uma vaga nesta semana, além do padrão configurado.',
-        className: 'is-success',
-        action: () => {
-          abrirVagaExtra(orderWeekKey)
-          renderAll()
-          closeActionSheet()
-        }
-      }, targetDocument)
-    )
 
     actions.appendChild(
       buildSheetButton({
@@ -2188,7 +2153,7 @@ function renderSummary() {
 function renderAll() {
   renderSummary()
   renderSemana()
-  renderAgendaTabela()
+  renderBlocos()
   renderHistoricoTabela()
   renderHolidayTable()
   renderManualHolidayTable()
@@ -2196,7 +2161,7 @@ function renderAll() {
 }
 
 async function load() {
-  await Promise.all([loadConfig(), loadOrders()])
+  await Promise.all([loadConfig(), loadOrders(), loadBlocos()])
   await loadHolidays()
   renderAll()
   populateEstadoSelect()
@@ -2332,8 +2297,343 @@ function renderManualHolidayTable() {
   })
 }
 
+
+
+// ===== BLOCOS DE PRODUÇÃO =====
+
+async function loadBlocos() {
+  try {
+    const blocos = await apiGet('/agenda/blocos')
+    state.blocos = Array.isArray(blocos) ? blocos : []
+  } catch (e) {
+    console.error('loadBlocos', e)
+    state.blocos = []
+  }
+}
+
+function getActiveBlocoOrders(blocoId) {
+  return state.orders.filter(o =>
+    String(o.bloco_id) === String(blocoId) &&
+    !['entregue', 'cancelado', 'indisponivel'].includes(String(o.status))
+  )
+}
+
+function renderBlocos() {
+  const container = document.getElementById('blocosList')
+  if (!container) return
+
+  const total = state.blocos.reduce((acc, b) => acc + getActiveBlocoOrders(b.id).length, 0)
+  const countEl = document.getElementById('agendaModalCount')
+  if (countEl) countEl.textContent = String(total)
+  const cardEl = document.getElementById('agendaCardCount')
+  if (cardEl) cardEl.textContent = String(total)
+
+  container.innerHTML = ''
+
+  if (!state.blocos.length) {
+    container.innerHTML = '<div class="blocos-empty">Nenhum bloco de produção.<br>Toque em <strong>+ Adicionar nova produção</strong> para começar.</div>'
+    return
+  }
+
+  state.blocos.forEach(bloco => {
+    const ordens = getActiveBlocoOrders(bloco.id)
+    const ocupadas = ordens.length
+    const totalVagas = bloco.qtd_vagas
+    const livres = Math.max(0, totalVagas - ocupadas)
+
+    const card = document.createElement('div')
+    card.className = 'bloco-card'
+    card.dataset.blocoId = bloco.id
+
+    // ---- Header azul ----
+    const header = document.createElement('div')
+    header.className = 'bloco-header'
+    header.innerHTML = `
+      <div class="bloco-header-inner">
+        <div class="bloco-date-col">
+          <div class="bloco-date-label">📅 PRODUÇÃO</div>
+          <div class="bloco-date-val">${formatShortDate(bloco.data_producao)}</div>
+        </div>
+        <div class="bloco-header-sep"></div>
+        <div class="bloco-date-col">
+          <div class="bloco-date-label">📅 ENTREGA</div>
+          <div class="bloco-date-val">${formatShortDate(bloco.data_entrega)}</div>
+        </div>
+      </div>
+      <button type="button" class="bloco-edit-dates-btn" data-bloco-id="${bloco.id}" aria-label="Editar datas">✏️</button>
+    `
+    header.querySelector('.bloco-edit-dates-btn').addEventListener('click', () => editarDatasBloco(bloco.id))
+    card.appendChild(header)
+
+    // ---- Contagem de vagas ----
+    const countRow = document.createElement('div')
+    countRow.className = 'bloco-count-row'
+    countRow.innerHTML = `<span class="bloco-count-icon">👥</span> Vagas: <strong>${ocupadas} de ${totalVagas} ocupadas</strong>`
+    card.appendChild(countRow)
+
+    // ---- Lista de vagas ----
+    const list = document.createElement('div')
+    list.className = 'bloco-vagas-list'
+
+    let vagaNum = 1
+
+    // Vagas ocupadas
+    ordens.forEach(ordem => {
+      const row = document.createElement('div')
+      row.className = 'bloco-vaga bloco-vaga-ocupada'
+
+      const numEl = document.createElement('div')
+      numEl.className = 'bloco-vaga-num bloco-vaga-num-ok'
+      numEl.textContent = String(vagaNum)
+
+      const info = document.createElement('div')
+      info.className = 'bloco-vaga-info'
+      info.innerHTML = `<div class="bloco-vaga-cliente">${ordem.cliente || '-'}</div><div class="bloco-vaga-produto">${ordem.descricao || '-'}</div>`
+
+      const pill = document.createElement('button')
+      pill.type = 'button'
+      pill.className = 'bloco-status-pill status-' + (ordem.status || 'pendente')
+      pill.textContent = statusLabel(ordem)
+      pill.addEventListener('click', () => menuPedido({ kind: 'order', row: ordem }))
+
+      const menuBtn = makeActionButton(() => menuPedido({ kind: 'order', row: ordem }))
+
+      row.appendChild(numEl)
+      row.appendChild(info)
+      row.appendChild(pill)
+      row.appendChild(menuBtn)
+      list.appendChild(row)
+      vagaNum++
+    })
+
+    // Vagas vazias
+    for (let i = 0; i < livres; i++) {
+      const vNum = vagaNum + i
+      const row = document.createElement('div')
+      row.className = 'bloco-vaga bloco-vaga-vazia'
+
+      const numEl = document.createElement('div')
+      numEl.className = 'bloco-vaga-num bloco-vaga-num-vazia'
+      numEl.textContent = String(vNum)
+
+      const info = document.createElement('div')
+      info.className = 'bloco-vaga-info'
+      info.innerHTML = '<span class="bloco-vaga-disponivel">Vaga disponível</span>'
+
+      const addBtn = document.createElement('button')
+      addBtn.type = 'button'
+      addBtn.className = 'bloco-add-pedido-btn'
+      addBtn.textContent = '+ Adicionar pedido'
+      addBtn.addEventListener('click', () => adicionarPedidoNaVaga(bloco.id))
+
+      const removeBtn = document.createElement('button')
+      removeBtn.type = 'button'
+      removeBtn.className = 'bloco-remove-vaga-btn'
+      removeBtn.innerHTML = '&times;'
+      removeBtn.title = 'Remover vaga'
+      removeBtn.addEventListener('click', () => removerVagaDoBloco(bloco.id))
+
+      row.appendChild(numEl)
+      row.appendChild(info)
+      row.appendChild(addBtn)
+      row.appendChild(removeBtn)
+      list.appendChild(row)
+    }
+
+    card.appendChild(list)
+
+    // ---- Rodapé: Adicionar vaga ----
+    const footer = document.createElement('div')
+    footer.className = 'bloco-card-footer'
+    const addVagaBtn = document.createElement('button')
+    addVagaBtn.type = 'button'
+    addVagaBtn.className = 'bloco-add-vaga-btn'
+    addVagaBtn.textContent = '+ Adicionar vaga'
+    addVagaBtn.addEventListener('click', () => adicionarVagaAoBloco(bloco.id))
+    footer.appendChild(addVagaBtn)
+    card.appendChild(footer)
+
+    container.appendChild(card)
+  })
+  scheduleRenderSync()
+}
+
+async function adicionarBloco() {
+  try {
+    const result = await promptDuasDatas({
+      title: 'Nova produção',
+      prodValue: '',
+      entValue: ''
+    })
+    if (result === null) return
+
+    const dataProd = normalizeEditableDateInput(result.prod)
+    const dataEnt  = normalizeEditableDateInput(result.ent)
+    if (!dataProd) { notifyError('Data de produção inválida.'); return }
+    if (!dataEnt)  { notifyError('Data de entrega inválida.'); return }
+
+    const vagasInput = await ui().prompt({
+      title: 'Quantidade de vagas',
+      message: 'Quantas vagas terá este bloco de produção?',
+      label: 'Vagas',
+      value: '5',
+      placeholder: 'Ex.: 5'
+    })
+    if (vagasInput === null) return
+    const qtdVagas = Math.max(1, parseInt(vagasInput) || 1)
+
+    const bloco = await apiPost('/agenda/blocos', {
+      data_producao: dataProd,
+      data_entrega: dataEnt,
+      qtd_vagas: qtdVagas
+    })
+    state.blocos.push(bloco)
+    state.blocos.sort((a, b) => String(a.data_producao).localeCompare(String(b.data_producao)))
+    notifyPainelRefresh('bloco-created')
+    renderBlocos()
+    notifySuccess('Bloco de produção criado!')
+  } catch (e) {
+    console.error(e)
+    notifyError('Erro ao criar bloco: ' + e.message)
+  }
+}
+
+async function editarDatasBloco(blocoId) {
+  try {
+    const bloco = state.blocos.find(b => String(b.id) === String(blocoId))
+    if (!bloco) return
+
+    const result = await promptDuasDatas({
+      title: 'Editar datas do bloco',
+      prodValue: formatEditableDateInput(bloco.data_producao),
+      entValue:  formatEditableDateInput(bloco.data_entrega)
+    })
+    if (result === null) return
+
+    const dataProd = normalizeEditableDateInput(result.prod)
+    const dataEnt  = normalizeEditableDateInput(result.ent)
+    if (!dataProd) { notifyError('Data de produção inválida.'); return }
+    if (!dataEnt)  { notifyError('Data de entrega inválida.'); return }
+
+    const updated = await apiPatch('/agenda/blocos/' + blocoId, {
+      data_producao: dataProd,
+      data_entrega: dataEnt
+    })
+    const idx = state.blocos.findIndex(b => String(b.id) === String(blocoId))
+    if (idx >= 0) state.blocos[idx] = updated
+    state.blocos.sort((a, b) => String(a.data_producao).localeCompare(String(b.data_producao)))
+
+    // Update matching orders' dates
+    state.orders.forEach(o => {
+      if (String(o.bloco_id) === String(blocoId)) {
+        o.prod_date = dataProd
+        o.ent_date = dataEnt
+      }
+    })
+
+    notifyPainelRefresh('bloco-updated')
+    renderBlocos()
+    notifySuccess('Datas atualizadas!')
+  } catch (e) {
+    console.error(e)
+    notifyError('Erro ao editar datas: ' + e.message)
+  }
+}
+
+async function adicionarVagaAoBloco(blocoId) {
+  try {
+    const updated = await apiPost('/agenda/blocos/' + blocoId + '/vaga', {})
+    const idx = state.blocos.findIndex(b => String(b.id) === String(blocoId))
+    if (idx >= 0) state.blocos[idx] = updated
+    renderBlocos()
+  } catch (e) {
+    console.error(e)
+    notifyError('Erro ao adicionar vaga: ' + e.message)
+  }
+}
+
+async function removerVagaDoBloco(blocoId) {
+  try {
+    const updated = await apiDelete('/agenda/blocos/' + blocoId + '/vaga')
+    const idx = state.blocos.findIndex(b => String(b.id) === String(blocoId))
+    if (idx >= 0) state.blocos[idx] = updated
+    renderBlocos()
+  } catch (e) {
+    if (e.message && e.message.includes('no_empty_slots')) {
+      notifyError('Não há vagas vazias para remover.')
+    } else {
+      console.error(e)
+      notifyError('Erro ao remover vaga: ' + e.message)
+    }
+  }
+}
+
+async function excluirBloco(blocoId, ocupadas) {
+  try {
+    const bloco = state.blocos.find(b => String(b.id) === String(blocoId))
+    if (!bloco) return
+    const msg = ocupadas > 0
+      ? `Este bloco tem ${ocupadas} pedido${ocupadas !== 1 ? 's' : ''}. Excluir irá remover o bloco e todos os seus pedidos. Deseja continuar?`
+      : 'Excluir este bloco de produção?'
+    const confirmed = await ui().confirm(msg, { title: 'Excluir bloco', confirmText: 'Excluir', type: 'danger' })
+    if (!confirmed) return
+    await apiDelete('/agenda/blocos/' + blocoId)
+    state.blocos = state.blocos.filter(b => String(b.id) !== String(blocoId))
+    state.orders = state.orders.filter(o => String(o.bloco_id) !== String(blocoId))
+    notifyPainelRefresh('bloco-deleted')
+    renderBlocos()
+    notifySuccess('Bloco excluído.')
+  } catch (e) {
+    console.error(e)
+    notifyError('Erro ao excluir bloco: ' + e.message)
+  }
+}
+
+async function adicionarPedidoNaVaga(blocoId) {
+  try {
+    const clienteVal = await ui().prompt({
+      title: 'Adicionar pedido',
+      message: 'Nome do cliente',
+      label: 'Cliente',
+      placeholder: 'Ex.: João Silva'
+    })
+    if (clienteVal === null) return
+    const cliente = clienteVal.trim()
+    if (!cliente) { notifyError('Informe o nome do cliente.'); return }
+
+    const descricaoVal = await ui().prompt({
+      title: 'Adicionar pedido',
+      message: 'Descrição do produto',
+      label: 'Produto',
+      placeholder: 'Ex.: Sofá Istanbul 3 lugares'
+    })
+    if (descricaoVal === null) return
+    const descricao = descricaoVal.trim()
+    if (!descricao) { notifyError('Informe a descrição do produto.'); return }
+
+    const row = await apiPost('/agenda/blocos/' + blocoId + '/pedido', { cliente, descricao })
+    state.orders.push(normalizeOrder(row))
+    notifyPainelRefresh('order-created')
+    renderBlocos()
+    notifySuccess('Pedido adicionado!')
+  } catch (e) {
+    if (e.message && e.message.includes('bloco_full')) {
+      notifyError('Todas as vagas deste bloco já estão ocupadas.')
+    } else {
+      console.error(e)
+      notifyError('Erro ao adicionar pedido: ' + e.message)
+    }
+  }
+}
+
+window.adicionarBloco = adicionarBloco
+window.editarDatasBloco = editarDatasBloco
+window.adicionarVagaAoBloco = adicionarVagaAoBloco
+window.removerVagaDoBloco = removerVagaDoBloco
+window.excluirBloco = excluirBloco
+window.adicionarPedidoNaVaga = adicionarPedidoNaVaga
+
 window.salvarConfig = salvarConfig
-window.novoPedido = novoPedido
 window.mudarStatus = mudarStatus
 window.toggleTecido = toggleTecido
 window.menuPedido = menuPedido
@@ -2431,7 +2731,7 @@ function openAgendaFullscreen() {
   m.hidden = false
   document.body.style.overflow = 'hidden'
   applyShellFullscreen(true)
-  if (typeof renderAgendaTabela === 'function') { try { renderAgendaTabela() } catch (_) {} }
+  if (typeof renderBlocos === 'function') { try { renderBlocos() } catch (_) {} }
   requestAnimationFrame(function(){
     m.scrollTop = 0
     var wrap = m.querySelector('.fs-table-wrap')
@@ -2469,7 +2769,11 @@ window.closePedidoFullscreen = closePedidoFullscreen
 function updateAgendaCardTeaser() {
   try {
     const ativos = (typeof getActiveOrders === 'function') ? getActiveOrders() : []
-    const total = ativos.length || 0
+    const blocoTotal = (state.blocos || []).reduce((acc, b) => {
+      if (typeof getActiveBlocoOrders === 'function') return acc + getActiveBlocoOrders(b.id).length
+      return acc + ativos.filter(o => String(o.bloco_id) === String(b.id)).length
+    }, 0)
+    const total = Math.max(ativos.length, blocoTotal) || 0
     const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val }
     setText('agendaCardCount',  String(total))
     setText('agendaModalCount', String(total))
