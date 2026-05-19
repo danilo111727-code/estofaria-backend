@@ -65,8 +65,8 @@
     <div class="big-card" role="button" tabindex="0" onclick="openAgendaFullscreen()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openAgendaFullscreen()}">
       <div class="big-icon">🗓️</div>
       <div class="big-info">
-        <div class="big-title">Agenda</div>
-        <div class="big-sub">Toque para ver a agenda completa em tela cheia</div>
+        <div class="big-title">Agenda de Produção</div>
+        <div class="big-sub">Toque para gerenciar os blocos de produção</div>
         <div class="big-pills">
           <span class="pill"><strong id="agendaCardCount">0</strong> pedidos</span>
           <span class="pill pill-late"><strong id="agendaCardLate">0</strong> atrasados</span>
@@ -78,74 +78,25 @@
     <div id="agendaFullscreen" class="fullscreen-modal fs-blue" hidden>
       <div class="fs-topbar">
         <button class="fs-back" type="button" onclick="closeAgendaFullscreen()" aria-label="Voltar">‹</button>
-        <div class="fs-title">🗓️ Agenda</div>
+        <div class="fs-title">📅 Agenda de Produção</div>
         <div class="fs-spacer"></div>
         <div class="fs-badge"><span id="agendaModalCount">0</span> pedidos</div>
       </div>
       <div class="fs-container">
-        <div class="fs-card">
-          <p class="fs-help">Toque no status para marcar entregue, reprogramar, excluir pedido ou excluir uma data da agenda.</p>
-          <div class="fs-table-wrap">
-            <table class="agenda-table">
-              <thead>
-                <tr>
-                  <th class="col-datas">Datas</th>
-                  <th class="col-cli">Cliente / Pedido</th>
-                  <th class="col-status">Status</th>
-                </tr>
-              </thead>
-              <tbody id="agendaTabela"></tbody>
-            </table>
-          </div>
-          <p class="fs-hint">Toque em um status para abrir o menu de ações</p>
-          <div class="fs-footer-bar">
-            <span class="fs-count">Mostrando <span id="agendaShown">0</span> de <span id="agendaTotal">0</span></span>
-            <button class="fs-clear" type="button" onclick="limparAgenda()">Limpar agenda</button>
-          </div>
+        <p class="fs-help" style="padding:0 16px;margin:12px 0 4px">Organize os pedidos por períodos de produção.<br>Cada bloco representa uma produção com suas vagas.</p>
+        <div id="blocosList" class="blocos-list"></div>
+        <div class="bloco-add-producao-wrap">
+          <button type="button" class="bloco-add-producao-btn" onclick="adicionarBloco()">
+            <span class="bloco-add-producao-icon">+</span>
+            <div>
+              <div class="bloco-add-producao-label">+ Adicionar nova produção</div>
+              <div class="bloco-add-producao-sub">Criar um novo período de produção com vagas</div>
+            </div>
+          </button>
         </div>
       </div>
     </div>
 
-    <div class="big-card" role="button" tabindex="0" onclick="openPedidoFullscreen()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openPedidoFullscreen()}">
-      <div class="big-icon green">➕</div>
-      <div class="big-info">
-        <div class="big-title">Pedido rápido</div>
-        <div class="big-sub">Toque para registrar um pedido em tela cheia</div>
-      </div>
-      <div class="big-arrow">›</div>
-    </div>
-
-    <div id="pedidoFullscreen" class="fullscreen-modal fs-green" hidden>
-      <div class="fs-topbar">
-        <button class="fs-back" type="button" onclick="closePedidoFullscreen()" aria-label="Voltar">‹</button>
-        <div class="fs-title">➕ Pedido rápido</div>
-        <div class="fs-spacer"></div>
-      </div>
-      <div class="fs-container narrow">
-        <div class="fs-card">
-          <p class="fs-desc">A data de entrega é definida automaticamente na próxima vaga disponível.</p>
-          <div class="fs-form-grid">
-            <label class="fs-full">
-              <span>Cliente</span>
-              <input id="cliente" placeholder="Nome do cliente">
-            </label>
-            <label class="fs-full">
-              <span>Descrição</span>
-              <input id="descricao" placeholder="Ex.: Reforma de sofá 3 lugares">
-            </label>
-            <label>
-              <span>Quantidade</span>
-              <input id="qtd" type="number" value="1" min="1">
-            </label>
-            <label>
-              <span>Valor (R$)</span>
-              <input id="valor" type="number" min="0" step="0.01" placeholder="0,00">
-            </label>
-          </div>
-          <button id="agendaAddBtn" class="fs-primary-btn" onclick="novoPedido()" data-loading-text="Registrando...">Registrar pedido</button>
-        </div>
-      </div>
-    </div>
 
     <!-- ===== 3 small cards row ===== -->
     <div class="small-cards-row">
