@@ -10,6 +10,7 @@ function ensureCollections(store){
   if(!Array.isArray(store.personalizationItems)) store.personalizationItems = []
   if(!Array.isArray(store.agendaConfigs)) store.agendaConfigs = []
   if(!Array.isArray(store.agendaOrders)) store.agendaOrders = []
+  if(!Array.isArray(store.agendaBlocos)) store.agendaBlocos = []
   if(!Array.isArray(store.quotes)) store.quotes = []
   if(!Array.isArray(store.templates)) store.templates = []
   if(!store.counters || typeof store.counters !== 'object') store.counters = {}
@@ -726,6 +727,119 @@ router.delete('/agenda/orders/:id', (req, res) => {
   audit(store, req, company.id, 'agenda.order.delete', `Pedido removido da agenda: ${req.params.id}`)
   writeStore(store)
   return res.json({ ok:true })
+})
+
+
+// ===== AGENDA — BLOCOS DE PRODUÇÃO =====
+router.get('/agenda/blocos', (req, res) => {
+  const store = ensureCollections(readStore())
+  const company = getCompanyContext(req, store)
+  if(!company) return res.status(404).json({ error:'company_not_found' })
+  const blocos = store.agendaBlocos
+    .filter(b => String(b.company_id) === String(company.id))
+    .sort((a, b) => String(a.data_producao||'').localeCompare(String(b.data_producao||'')))
+  return res.json(blocos)
+})
+
+router.post('/agenda/blocos', (req, res) => {
+  const store = ensureCollections(readStore())
+  const company = getCompanyContext(req, store)
+  if(!company) return res.status(404).json({ error:'company_not_found' })
+  const bloco = {
+    id: nextId(store, 'agendaBlocos'),
+    company_id: company.id,
+    data_producao: toDateOnly(req.body?.data_producao),
+    data_entrega: toDateOnly(req.body?.data_entrega),
+    qtd_vagas: Math.max(1, Math.round(num(req.body?.qtd_vagas, 1))),
+    created_at: nowIso(),
+    updated_at: nowIso()
+  }
+  store.agendaBlocos.push(bloco)
+  audit(store, req, company.id, 'agenda.bloco.create', `Bloco criado: produção ${bloco.data_producao}`)
+  writeStore(store)
+  return res.status(201).json(bloco)
+})
+
+router.patch('/agenda/blocos/:id', (req, res) => {
+  const store = ensureCollections(readStore())
+  const company = getCompanyContext(req, store)
+  const bloco = store.agendaBlocos.find(b => String(b.company_id) === String(company?.id) && String(b.id) === String(req.params.id))
+  if(!bloco) return res.status(404).json({ error:'not_found', message:'Bloco não encontrado.' })
+  if(req.body?.data_producao !== undefined) bloco.data_producao = toDateOnly(req.body.data_producao) || bloco.data_producao
+  if(req.body?.data_entrega !== undefined) bloco.data_entrega = toDateOnly(req.body.data_entrega) || bloco.data_entrega
+  bloco.updated_at = nowIso()
+  audit(store, req, company.id, 'agenda.bloco.update', `Bloco atualizado: ${bloco.id}`)
+  writeStore(store)
+  return res.json(bloco)
+})
+
+router.delete('/agenda/blocos/:id', (req, res) => {
+  const store = ensureCollections(readStore())
+  const company = getCompanyContext(req, store)
+  const bloco = store.agendaBlocos.find(b => String(b.company_id) === String(company?.id) && String(b.id) === String(req.params.id))
+  if(!bloco) return res.status(404).json({ error:'not_found', message:'Bloco não encontrado.' })
+  store.agendaOrders = store.agendaOrders.filter(o => !(String(o.company_id) === String(company.id) && String(o.bloco_id) === String(bloco.id)))
+  store.agendaBlocos = store.agendaBlocos.filter(b => !(String(b.company_id) === String(company.id) && String(b.id) === String(req.params.id)))
+  audit(store, req, company.id, 'agenda.bloco.delete', `Bloco removido: ${req.params.id}`)
+  writeStore(store)
+  return res.json({ ok:true })
+})
+
+router.post('/agenda/blocos/:id/vaga', (req, res) => {
+  const store = ensureCollections(readStore())
+  const company = getCompanyContext(req, store)
+  const bloco = store.agendaBlocos.find(b => String(b.company_id) === String(company?.id) && String(b.id) === String(req.params.id))
+  if(!bloco) return res.status(404).json({ error:'not_found', message:'Bloco não encontrado.' })
+  bloco.qtd_vagas = bloco.qtd_vagas + 1
+  bloco.updated_at = nowIso()
+  audit(store, req, company.id, 'agenda.bloco.vaga.add', `Vaga adicionada ao bloco ${bloco.id}`)
+  writeStore(store)
+  return res.json(bloco)
+})
+
+router.delete('/agenda/blocos/:id/vaga', (req, res) => {
+  const store = ensureCollections(readStore())
+  const company = getCompanyContext(req, store)
+  const bloco = store.agendaBlocos.find(b => String(b.company_id) === String(company?.id) && String(b.id) === String(req.params.id))
+  if(!bloco) return res.status(404).json({ error:'not_found', message:'Bloco não encontrado.' })
+  const ocupadas = store.agendaOrders.filter(o => String(o.bloco_id) === String(bloco.id) && !['entregue','cancelado','indisponivel'].includes(String(o.status))).length
+  if(bloco.qtd_vagas <= ocupadas) return res.status(400).json({ error:'no_empty_slots', message:'Não há vagas vazias para remover.' })
+  bloco.qtd_vagas = Math.max(ocupadas, bloco.qtd_vagas - 1)
+  bloco.updated_at = nowIso()
+  audit(store, req, company.id, 'agenda.bloco.vaga.remove', `Vaga removida do bloco ${bloco.id}`)
+  writeStore(store)
+  return res.json(bloco)
+})
+
+router.post('/agenda/blocos/:id/pedido', (req, res) => {
+  const store = ensureCollections(readStore())
+  const company = getCompanyContext(req, store)
+  const bloco = store.agendaBlocos.find(b => String(b.company_id) === String(company?.id) && String(b.id) === String(req.params.id))
+  if(!bloco) return res.status(404).json({ error:'not_found', message:'Bloco não encontrado.' })
+  const ocupadas = store.agendaOrders.filter(o => String(o.bloco_id) === String(bloco.id) && !['entregue','cancelado','indisponivel'].includes(String(o.status))).length
+  if(ocupadas >= bloco.qtd_vagas) return res.status(400).json({ error:'bloco_full', message:'Todas as vagas deste bloco estão ocupadas.' })
+  const cliente = text(req.body?.cliente, 'Cliente')
+  const descricao = text(req.body?.descricao, 'Pedido')
+  const row = {
+    id: nextId(store, 'agendaOrders'),
+    company_id: company.id,
+    bloco_id: bloco.id,
+    cliente,
+    descricao,
+    prod_date: bloco.data_producao,
+    ent_date: bloco.data_entrega,
+    tecido: text(req.body?.tecido),
+    qtd: 1,
+    tecido_comprado: false,
+    valor: num(req.body?.valor, 0),
+    status: 'pendente',
+    created_at: nowIso(),
+    updated_at: nowIso()
+  }
+  store.agendaOrders.push(row)
+  audit(store, req, company.id, 'agenda.bloco.pedido.create', `Pedido adicionado ao bloco ${bloco.id}: ${cliente}`)
+  writeStore(store)
+  return res.status(201).json(row)
 })
 
 router.get('/quotes', (req, res) => {
