@@ -765,9 +765,18 @@ router.patch('/agenda/blocos/:id', (req, res) => {
   const company = getCompanyContext(req, store)
   const bloco = store.agendaBlocos.find(b => String(b.company_id) === String(company?.id) && String(b.id) === String(req.params.id))
   if(!bloco) return res.status(404).json({ error:'not_found', message:'Bloco não encontrado.' })
-  if(req.body?.data_producao !== undefined) bloco.data_producao = toDateOnly(req.body.data_producao) || bloco.data_producao
-  if(req.body?.data_entrega !== undefined) bloco.data_entrega = toDateOnly(req.body.data_entrega) || bloco.data_entrega
+  const newProd = req.body?.data_producao !== undefined ? (toDateOnly(req.body.data_producao) || bloco.data_producao) : bloco.data_producao
+  const newEnt  = req.body?.data_entrega  !== undefined ? (toDateOnly(req.body.data_entrega)  || bloco.data_entrega)  : bloco.data_entrega
+  bloco.data_producao = newProd
+  bloco.data_entrega  = newEnt
   bloco.updated_at = nowIso()
+  store.agendaOrders.forEach(o => {
+    if(String(o.bloco_id) === String(bloco.id) && String(o.company_id) === String(company.id)) {
+      o.prod_date   = newProd
+      o.ent_date    = newEnt
+      o.updated_at  = nowIso()
+    }
+  })
   audit(store, req, company.id, 'agenda.bloco.update', `Bloco atualizado: ${bloco.id}`)
   writeStore(store)
   return res.json(bloco)
