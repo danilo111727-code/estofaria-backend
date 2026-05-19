@@ -711,3 +711,306 @@ input:focus,select:focus,textarea:focus{
 /* scroll on feriados/historico table-wrap (scoped — does NOT affect agenda) */
 .fs-red   .fs-table-wrap { max-height:320px; overflow-y:auto; -webkit-overflow-scrolling:touch; }
 .fs-slate .fs-table-wrap { max-height:calc(100vh - 220px); overflow-y:auto; -webkit-overflow-scrolling:touch; }
+
+/* ===== BLOCOS DE PRODUÇÃO ===== */
+.blocos-list {
+  padding: 0 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.blocos-empty {
+  text-align: center;
+  padding: 48px 24px;
+  color: #6b7280;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.bloco-card {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 2px 12px rgba(0,0,0,.10);
+  overflow: hidden;
+  border: 1px solid #e8edf5;
+}
+
+/* Header azul */
+.bloco-header {
+  background: #1a3fa0;
+  color: #fff;
+  padding: 18px 16px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.bloco-header-inner {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex: 1;
+}
+
+.bloco-date-col {
+  flex: 1;
+  padding: 0 8px;
+}
+
+.bloco-date-col:first-child {
+  padding-left: 0;
+}
+
+.bloco-header-sep {
+  width: 1px;
+  height: 40px;
+  background: rgba(255,255,255,.25);
+}
+
+.bloco-date-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  opacity: .85;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.bloco-date-val {
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.bloco-edit-dates-btn {
+  background: rgba(255,255,255,.18);
+  border: none;
+  color: #fff;
+  border-radius: 10px;
+  width: 36px;
+  height: 36px;
+  font-size: 16px;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+}
+
+.bloco-edit-dates-btn:active { opacity: .7; }
+
+/* Contagem de vagas */
+.bloco-count-row {
+  padding: 10px 16px;
+  font-size: 14px;
+  color: #374151;
+  border-bottom: 1px solid #f0f3fb;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bloco-count-icon { font-size: 16px; }
+
+/* Lista de vagas */
+.bloco-vagas-list {
+  padding: 0;
+}
+
+.bloco-vaga {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f3fb;
+  min-height: 56px;
+}
+
+.bloco-vaga:last-child { border-bottom: none; }
+
+/* Número da vaga */
+.bloco-vaga-num {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.bloco-vaga-num-ok {
+  background: #1a3fa0;
+  color: #fff;
+}
+
+.bloco-vaga-num-vazia {
+  background: #e8edf5;
+  color: #9ca3af;
+}
+
+/* Informações da vaga */
+.bloco-vaga-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.bloco-vaga-cliente {
+  font-size: 14px;
+  font-weight: 700;
+  color: #111827;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bloco-vaga-produto {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bloco-vaga-disponivel {
+  font-size: 13px;
+  color: #9ca3af;
+}
+
+/* Status pill na vaga */
+.bloco-status-pill {
+  border: 1.5px solid #d1d5db;
+  background: transparent;
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #374151;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  touch-action: manipulation;
+}
+
+.bloco-status-pill.status-producao {
+  border-color: #2563eb;
+  color: #1d4ed8;
+  background: #eff6ff;
+}
+
+.bloco-status-pill.status-entregue {
+  border-color: #059669;
+  color: #065f46;
+  background: #ecfdf5;
+}
+
+.bloco-status-pill.status-pendente {
+  border-color: #d1d5db;
+  color: #374151;
+}
+
+/* Botões da vaga vazia */
+.bloco-add-pedido-btn {
+  border: none;
+  background: transparent;
+  color: #1a3fa0;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 0;
+  white-space: nowrap;
+  flex-shrink: 0;
+  touch-action: manipulation;
+}
+
+.bloco-add-pedido-btn:active { opacity: .6; }
+
+.bloco-remove-vaga-btn {
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  font-size: 18px;
+  font-weight: 400;
+  cursor: pointer;
+  padding: 2px 4px;
+  flex-shrink: 0;
+  line-height: 1;
+  touch-action: manipulation;
+}
+
+.bloco-remove-vaga-btn:active { color: #ef4444; }
+
+/* Rodapé do bloco */
+.bloco-card-footer {
+  border-top: 1.5px dashed #d1d9f0;
+  padding: 12px 16px;
+}
+
+.bloco-add-vaga-btn {
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: #1a3fa0;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+  padding: 6px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.bloco-add-vaga-btn:active { opacity: .6; }
+
+/* Botão Adicionar nova produção (bottom) */
+.bloco-add-producao-wrap {
+  padding: 8px 12px 24px;
+}
+
+.bloco-add-producao-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: #fff;
+  border: 1.5px solid #d1d9f0;
+  border-radius: 16px;
+  padding: 16px 20px;
+  cursor: pointer;
+  touch-action: manipulation;
+  text-align: left;
+  box-shadow: 0 2px 8px rgba(0,0,0,.06);
+}
+
+.bloco-add-producao-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: #1a3fa0;
+  color: #fff;
+  font-size: 24px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.bloco-add-producao-label {
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.bloco-add-producao-sub {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+.bloco-add-producao-btn:active { opacity: .8; }
