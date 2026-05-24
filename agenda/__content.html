@@ -121,6 +121,24 @@
         <div class="fs-badge"><span id="feriadosModalCount">0</span> datas</div>
       </div>
       <div class="fs-container">
+        <div class="fs-card" style="margin-bottom:14px">
+          <h3 class="fs-section-head">Localização</h3>
+          <p class="fs-help">Selecione seu estado e cidade para incluir os feriados estaduais e municipais oficiais.</p>
+          <div class="form-grid compact-grid">
+            <label>
+              <span>Estado</span>
+              <select id="estadoSelecionado" onchange="updateCidadesSelect()">
+                <option value="">Selecione o estado</option>
+              </select>
+            </label>
+            <label>
+              <span>Cidade</span>
+              <select id="cidadeSelecionada" onchange="handleCityChange()">
+                <option value="">Selecione a cidade</option>
+              </select>
+            </label>
+          </div>
+        </div>
         <div class="fs-card">
           <h3 class="fs-section-head">Oficiais (nacionais e estaduais)</h3>
           <p class="fs-help">A agenda ignora estas datas quando o tipo estiver configurado como dias úteis.</p>
@@ -213,7 +231,7 @@
     <div id="sheetActions" class="sheet-actions"></div>
   </aside>
 
-  <script src="script.js?v=20260524a"></script>
+  <script src="script.js?v=20260524b"></script>
   <script src="../keyboard-dismiss.js"></script>
 </body>
 </html>
