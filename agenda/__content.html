@@ -98,13 +98,8 @@
     </div>
 
 
-    <!-- ===== 3 small cards row ===== -->
+    <!-- ===== 2 small cards row ===== -->
     <div class="small-cards-row">
-      <div class="small-card sc-navy" role="button" tabindex="0" onclick="openConfigFullscreen()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openConfigFullscreen()}">
-        <div class="sc-icon">⚙️</div>
-        <div class="sc-label">Configurações</div>
-        <div class="sc-arrow">›</div>
-      </div>
       <div class="small-card sc-red" role="button" tabindex="0" onclick="openFeriadosFullscreen()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openFeriadosFullscreen()}">
         <div class="sc-icon">🏌🏼‍♂️</div>
         <div class="sc-label">Feriados</div>
@@ -114,58 +109,6 @@
         <div class="sc-icon">📜</div>
         <div class="sc-label">Histórico</div>
         <div class="sc-arrow">›</div>
-      </div>
-    </div>
-
-    <!-- ===== Configurações fullscreen ===== -->
-    <div id="configFullscreen" class="fullscreen-modal fs-navy" hidden>
-      <div class="fs-topbar">
-        <button class="fs-back" type="button" onclick="closeConfigFullscreen()" aria-label="Voltar">‹</button>
-        <div class="fs-title">⚙️ Configurações</div>
-        <div class="fs-spacer"></div>
-      </div>
-      <div class="fs-container narrow">
-        <div class="fs-card">
-          <p class="fs-desc">Defina o prazo de produção, vagas por semana e a localização para os feriados regionais.</p>
-          <div class="form-grid compact-grid">
-            <label>
-              <span>Prazo de produção (dias)</span>
-              <input id="prazo" type="number" value="0">
-            </label>
-            <label>
-              <span>Tipo de contagem de dias</span>
-              <select id="tipoDias" onchange="renderDiasUteisCheckboxes()">
-                <option value="corrido">Corrido</option>
-                <option value="uteis">Úteis</option>
-              </select>
-            </label>
-            <div id="diasUteisWrapper" style="display:none;grid-column:1/-1">
-              <span style="display:block;margin-bottom:6px;font-weight:600;font-size:13px">Dias de produção</span>
-              <div id="diasUteisCheckboxes" style="display:flex;flex-wrap:wrap;gap:10px"></div>
-            </div>
-            <label>
-              <span>Vagas por semana</span>
-              <input id="vagas" type="number" value="0">
-            </label>
-            <label>
-              <span>Data de entrega inicial</span>
-              <input id="dataSemana" type="date" />
-            </label>
-            <label>
-              <span>Estado</span>
-              <select id="estadoSelecionado" onchange="updateCidadesSelect()">
-                <option value="">Selecione o estado</option>
-              </select>
-            </label>
-            <label>
-              <span>Cidade</span>
-              <select id="cidadeSelecionada" onchange="handleCityChange()">
-                <option value="">Selecione a cidade</option>
-              </select>
-            </label>
-          </div>
-          <button id="agendaConfigBtn" class="fs-primary-btn" onclick="salvarConfig()" data-loading-text="Salvando...">Salvar configuração</button>
-        </div>
       </div>
     </div>
 
@@ -270,7 +213,7 @@
     <div id="sheetActions" class="sheet-actions"></div>
   </aside>
 
-  <script src="script.js?v=20260424l"></script>
+  <script src="script.js?v=20260524a"></script>
   <script src="../keyboard-dismiss.js"></script>
 </body>
 </html>
