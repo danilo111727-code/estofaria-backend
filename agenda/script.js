@@ -2119,36 +2119,46 @@ function renderHolidayTable() {
 }
 
 function renderSummary() {
-    const ativos = getActiveOrders()
-    const configurado =
-      Number(state.config.vagas_semana) > 0 &&
-      Number(state.config.prazo_dias) > 0
+  const barra = $('barra')
+  const barraTexto = $('barraTexto')
+  const nextEntEl = $('nextEnt')
+  const resumoDataEl = $('resumoData')
 
-    const barra = $('barra')
-    const barraTexto = $('barraTexto')
-    const nextEntEl = $('nextEnt')
-    const resumoDataEl = $('resumoData')
+  if (resumoDataEl) resumoDataEl.innerText = formatWeekRange()
 
-    if (!configurado) {
-      if (barra) barra.style.width = '0%'
-      if (barraTexto) barraTexto.innerText = '-'
-      if (nextEntEl) nextEntEl.innerText = '-'
-      if (resumoDataEl) resumoDataEl.innerText = formatWeekRange()
-      return
-    }
+  const today = toISODate(new Date())
+  const blocosFuturos = state.blocos.filter(b => (b.data_entrega || '') >= today)
+  const sorted = [...blocosFuturos].sort((a, b) =>
+    String(a.data_entrega).localeCompare(String(b.data_entrega))
+  )
 
-    const vagas = Number(state.config.vagas_semana)
-    const nextSlots = getNextFreeSlots()
-    const vagasLivres = nextSlots.length
-    const percent = vagasLivres === 0 ? 100 : Math.min(100, Math.round(((vagas - vagasLivres) / vagas) * 100))
-    if (barra) barra.style.width = percent + '%'
-    if (barraTexto) barraTexto.innerText = `${vagasLivres} vagas`
-
-    const next = nextSlots[0] || null
-    if (nextEntEl) nextEntEl.innerText = next ? formatShortDate(next.ent) : '-'
-    if (resumoDataEl) resumoDataEl.innerText = formatWeekRange()
-    try { localStorage.setItem('esd_proxima_vaga', next ? next.ent : '') } catch (_) {}
+  if (!sorted.length) {
+    if (barra) barra.style.width = '0%'
+    if (barraTexto) barraTexto.innerText = '-'
+    if (nextEntEl) nextEntEl.innerText = '-'
+    return
   }
+
+  let totalVagas = 0
+  let totalLivres = 0
+  let proximaData = null
+
+  for (const bloco of sorted) {
+    const ocupadas = getActiveBlocoOrders(bloco.id).length
+    const livres = Math.max(0, (bloco.qtd_vagas || 0) - ocupadas)
+    totalVagas += (bloco.qtd_vagas || 0)
+    totalLivres += livres
+    if (proximaData === null && livres > 0) {
+      proximaData = bloco.data_entrega
+    }
+  }
+
+  const percent = totalVagas === 0 ? 0 : Math.min(100, Math.round(((totalVagas - totalLivres) / totalVagas) * 100))
+  if (barra) barra.style.width = percent + '%'
+  if (barraTexto) barraTexto.innerText = `${totalLivres} vagas`
+  if (nextEntEl) nextEntEl.innerText = proximaData ? formatShortDate(proximaData) : '-'
+  try { localStorage.setItem('esd_proxima_vaga', proximaData || '') } catch (_) {}
+}
 
 function renderAll() {
   renderSummary()
