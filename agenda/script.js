@@ -2621,16 +2621,7 @@ async function adicionarPedidoNaVaga(blocoId) {
     const descricao = descricaoVal.trim()
     if (!descricao) { notifyError('Informe a descrição do produto.'); return }
 
-    const valorVal = await ui().prompt({
-      title: 'Adicionar pedido',
-      message: 'Valor da venda (opcional)',
-      label: 'Valor (R$)',
-      placeholder: 'Ex.: 1500,00'
-    })
-    if (valorVal === null) return
-    const valor = valorVal.trim() === '' ? 0 : parseFloat(valorVal.trim().replace(',', '.')) || 0
-
-    const row = await apiPost('/agenda/blocos/' + blocoId + '/pedido', { cliente, descricao, valor })
+    const row = await apiPost('/agenda/blocos/' + blocoId + '/pedido', { cliente, descricao })
     state.orders.push(normalizeOrder(row))
     notifyPainelRefresh('order-created')
     renderBlocos()
