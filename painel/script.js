@@ -237,7 +237,8 @@ function getAgendaOrderRevenueCents(order) {
     order?.preco_total_cents,
     order?.preco_venda_cents,
     order?.sale_total_cents,
-    order?.amount_cents
+    order?.amount_cents,
+    order?.valor_cents
   ]
   for (const value of centsCandidates) {
     const n = Number(value)
@@ -251,7 +252,8 @@ function getAgendaOrderRevenueCents(order) {
     order?.preco_total,
     order?.preco_venda,
     order?.sale_total,
-    order?.amount
+    order?.amount,
+    order?.valor
   ]
   for (const value of reaisCandidates) {
     const n = Number(value)
