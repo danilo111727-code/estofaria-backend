@@ -2398,7 +2398,14 @@ function renderBlocos() {
 
       const info = document.createElement('div')
       info.className = 'bloco-vaga-info'
-      info.innerHTML = `<div class="bloco-vaga-cliente">${ordem.cliente || '-'}</div><div class="bloco-vaga-produto">${ordem.descricao || '-'}</div>`
+      info.style.cursor = 'pointer'
+      info.title = 'Toque para editar'
+      const valorInfo = Number(ordem.valor_total || ordem.valor || 0)
+      const valorStr = valorInfo > 0
+        ? `<div class="bloco-vaga-valor">R$ ${valorInfo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>`
+        : ''
+      info.innerHTML = `<div class="bloco-vaga-cliente">${ordem.cliente || '-'}</div><div class="bloco-vaga-produto">${ordem.descricao || '-'}</div>${valorStr}`
+      info.addEventListener('click', (e) => { e.stopPropagation(); editarPedido(ordem) })
 
       const pill = document.createElement('button')
       pill.type = 'button'
@@ -2599,6 +2606,59 @@ async function excluirBloco(blocoId, ocupadas) {
   }
 }
 
+async function editarPedido(ordem) {
+  try {
+    const clienteVal = await ui().prompt({
+      title: 'Editar pedido',
+      message: 'Nome do cliente',
+      label: 'Cliente',
+      placeholder: 'Ex.: João Silva',
+      value: ordem.cliente || ''
+    })
+    if (clienteVal === null) return
+    const cliente = clienteVal.trim()
+    if (!cliente) { notifyError('Informe o nome do cliente.'); return }
+
+    const descricaoVal = await ui().prompt({
+      title: 'Editar pedido',
+      message: 'Descrição do produto',
+      label: 'Produto',
+      placeholder: 'Ex.: Sofá Istanbul 3 lugares',
+      value: ordem.descricao || ''
+    })
+    if (descricaoVal === null) return
+    const descricao = descricaoVal.trim()
+    if (!descricao) { notifyError('Informe a descrição do produto.'); return }
+
+    const valorAtual = Number(ordem.valor_total || ordem.valor || 0)
+    const valorVal = await ui().prompt({
+      title: 'Editar pedido',
+      message: 'Valor da venda (deixe em branco se não souber)',
+      label: 'Valor (R$)',
+      placeholder: 'Ex.: 1500,00',
+      value: valorAtual > 0 ? String(valorAtual).replace('.', ',') : ''
+    })
+    if (valorVal === null) return
+    const valorNum = valorVal.trim() === ''
+      ? 0
+      : parseFloat(valorVal.trim().replace(/\./g, '').replace(',', '.')) || 0
+
+    const row = await apiPatch('/agenda/orders/' + ordem.id, {
+      cliente,
+      descricao,
+      valor: valorNum,
+      valor_total: valorNum
+    })
+    replaceOrder(row)
+    notifyPainelRefresh('order-updated')
+    renderAll()
+    notifySuccess('Pedido atualizado!')
+  } catch (e) {
+    console.error(e)
+    notifyError('Erro ao editar pedido: ' + e.message)
+  }
+}
+
 async function adicionarPedidoNaVaga(blocoId) {
   try {
     const clienteVal = await ui().prompt({
@@ -2652,6 +2712,7 @@ async function adicionarPedidoNaVaga(blocoId) {
   }
 }
 
+window.editarPedido = editarPedido
 window.adicionarBloco = adicionarBloco
 window.editarDatasBloco = editarDatasBloco
 window.adicionarVagaAoBloco = adicionarVagaAoBloco
