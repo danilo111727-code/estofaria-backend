@@ -2649,9 +2649,11 @@ async function editarPedido(ordem) {
       valor: valorNum,
       valor_total: valorNum
     })
-    replaceOrder(row)
+    // Mescla valores do usuário sobre a resposta do servidor,
+    // pois o backend pode não retornar os campos atualizados
+    replaceOrder({ ...row, cliente, descricao, valor: valorNum, valor_total: valorNum })
     notifyPainelRefresh('order-updated')
-    renderAll()
+    renderBlocos()
     notifySuccess('Pedido atualizado!')
   } catch (e) {
     console.error(e)
