@@ -384,21 +384,37 @@ function sumCurrentMonthRevenueCents(orders) {
   const now = new Date()
   const year = now.getFullYear()
   const month = now.getMonth()
-  return getActiveAgendaOrders(orders).filter(order => {
+  return getAllBillableOrders(orders).filter(order => {
     const d = orderCreationDate(order)
     return d && d.getFullYear() === year && d.getMonth() === month
   }).reduce((sum, order) => sum + Math.max(0, getAgendaOrderRevenueCents(order)), 0)
 }
 function sumCurrentYearRevenueCents(orders) {
   const year = new Date().getFullYear()
-  return getActiveAgendaOrders(orders).filter(order => {
+  return getAllBillableOrders(orders).filter(order => {
     const d = orderCreationDate(order)
     return d && d.getFullYear() === year
   }).reduce((sum, order) => sum + Math.max(0, getAgendaOrderRevenueCents(order)), 0)
 }
+// Todos pedidos não-cancelados (ativos + entregues) — para contagem e faturamento acumulado
+function getAllBillableOrders(orders) {
+  const seen = new Set()
+  return (Array.isArray(orders) ? orders : []).filter((order, index) => {
+    const status = normalizeStatus(order?.status)
+    if (['cancelado', 'indisponivel'].includes(status)) return false
+    if (isIgnoredAgendaPlaceholder(order)) return false
+    const cliente = normalizeLooseText(order?.cliente)
+    const descricao = normalizeLooseText(order?.descricao)
+    if (!cliente && !descricao) return false
+    const key = buildAgendaOrderKey(order, index)
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
 function countCurrentYearOrders(orders) {
   const year = new Date().getFullYear()
-  return getActiveAgendaOrders(orders).filter(order => {
+  return getAllBillableOrders(orders).filter(order => {
     const d = orderCreationDate(order)
     return d && d.getFullYear() === year
   }).length
