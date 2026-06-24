@@ -76,8 +76,27 @@ setInterval(updateTime,1000);
 
 <div class="card agenda">
 <h3>Agenda</h3>
-<div class="line"><span>Feriados</span><b id="feriados">Nenhum</b></div>
-<div class="line"><span>Próxima vaga disponível</span><b id="agenda">-</b></div>
+<div class="agenda-section">
+  <div class="agenda-label">Feriado</div>
+  <div class="agenda-row">
+    <span class="agenda-date" id="feriado-data">—</span>
+    <div class="agenda-detail">
+      <b id="feriado-nome">Nenhum</b>
+      <span id="feriado-dia"></span>
+    </div>
+  </div>
+</div>
+<hr class="agenda-divider">
+<div class="agenda-section">
+  <div class="agenda-label">Próxima Vaga</div>
+  <div class="agenda-row">
+    <span class="agenda-date" id="agenda-data">—</span>
+    <div class="agenda-detail">
+      <b id="agenda-dia">—</b>
+      <span id="agenda-vagas"></span>
+    </div>
+  </div>
+</div>
 </div>
 
 <div class="card resumo">
@@ -115,7 +134,7 @@ setInterval(updateTime,1000);
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="script.js?v=20260624j"></script>
+<script src="script.js?v=20260624k"></script>
 
 <script src="../keyboard-dismiss.js"></script>
 </body>
