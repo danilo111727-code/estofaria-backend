@@ -2330,10 +2330,16 @@ async function limparBlocosVazios() {
   if (!vazios.length) return
   for (const b of vazios) {
     try {
+      // Deleta as orders associadas (canceladas/entregues) antes do bloco
+      const ordersDoBloco = state.orders.filter(o => String(o.bloco_id) === String(b.id))
+      for (const o of ordersDoBloco) {
+        try { await apiDelete('/agenda/orders/' + o.id) } catch (_) {}
+      }
       await apiDelete('/agenda/blocos/' + b.id)
       state.blocos = state.blocos.filter(x => String(x.id) !== String(b.id))
       state.orders = state.orders.filter(o => String(o.bloco_id) !== String(b.id))
     } catch (e) {
+      // Se a API falhar, pelo menos o bloco não é renderizado (filtro no renderBlocos)
       console.error('limparBlocosVazios', b.id, e)
     }
   }
@@ -2369,6 +2375,9 @@ function renderBlocos() {
     const ocupadas = ordens.length
     const totalVagas = bloco.qtd_vagas
     const livres = Math.max(0, totalVagas - ocupadas)
+
+    // Não renderiza blocos sem vagas e sem pedidos ativos
+    if (totalVagas <= 0 && ocupadas === 0) return
 
     const card = document.createElement('div')
     card.className = 'bloco-card'
