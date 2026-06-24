@@ -375,9 +375,10 @@ function sumCurrentMonthRevenueCents(orders) {
   const year = now.getFullYear()
   const month = now.getMonth()
   return getActiveAgendaOrders(orders).filter(order => {
-    const ds = order?.ent_date || order?.delivery_date || order?.data_entrega || order?.prod_date
+    // Usa a data de criação do pedido (quando foi lançado na agenda)
+    const ds = order?.created_at || order?.inserted_at || order?.updated_at
     if (!ds) return false
-    const d = new Date(String(ds) + 'T00:00:00')
+    const d = new Date(String(ds))
     return !isNaN(d) && d.getFullYear() === year && d.getMonth() === month
   }).reduce((sum, order) => sum + Math.max(0, getAgendaOrderRevenueCents(order)), 0)
 }
