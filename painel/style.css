@@ -103,7 +103,7 @@ min-height:240px;
 display:flex;
 justify-content:space-between;
 align-items:center;
-padding:14px 0;
+padding:8px 0;
 border-bottom:1px solid #e8eaee;
 }
 .card.resumo .resumo-row--last{
@@ -117,7 +117,7 @@ text-transform:uppercase;
 letter-spacing:0.6px;
 }
 .card.resumo .resumo-val{
-font-size:28px;
+font-size:20px;
 font-weight:700;
 color:#111;
 line-height:1;
