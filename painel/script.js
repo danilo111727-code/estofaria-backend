@@ -280,13 +280,10 @@ function buildDisplaySummary(summary, orders, quotes) {
   const base = summary && typeof summary === 'object' ? summary : {}
   const pedidos = latestOrdersLoaded ? countActiveAgendaOrders(orders) : 0
   const faturamentoCents = latestOrdersLoaded ? sumActiveAgendaRevenueCents(orders) : 0
-  const ticketCents = pedidos > 0 ? Math.round(faturamentoCents / pedidos) : 0
-
   return {
     ...base,
     pedidos,
-    faturamento_cents: faturamentoCents,
-    ticket_medio_cents: ticketCents
+    faturamento_cents: faturamentoCents
   }
 }
 function updateSummaryWithAgenda(summary = latestSummaryData, orders = latestOrdersData, quotes = latestQuotesData) {
@@ -570,15 +567,12 @@ function renderDefaults() {
   setText('agenda', '-')
   setText('pedidos', '0')
   setText('faturamento', brlCompactFromCents(0))
-  setText('ticket', brlCompactFromCents(0))
 }
 function updateSummary(summary) {
   const pedidos = safeNumber(summary?.pedidos, 0)
   const faturamentoCents = safeNumber(summary?.faturamento_cents, 0)
-  const ticketCents = Number.isFinite(Number(summary?.ticket_medio_cents)) ? Number(summary.ticket_medio_cents) : (pedidos > 0 ? Math.round(faturamentoCents / pedidos) : 0)
   setText('pedidos', String(pedidos))
   setText('faturamento', brlCompactFromCents(faturamentoCents))
-  setText('ticket', brlCompactFromCents(ticketCents))
 }
 function getNextFreeSlotProdDate(orders, config) {
   const vagasSemana = Number((config && config.vagas_semana) || 0)
@@ -652,7 +646,7 @@ async function loadSummaryFirst() {
     return true
   } catch {
     if (!cached) {
-      latestSummaryData = { pedidos: 0, faturamento_cents: 0, ticket_medio_cents: 0 }
+      latestSummaryData = { pedidos: 0, faturamento_cents: 0 }
       updateSummaryWithAgenda(latestSummaryData, latestOrdersData)
     }
     return false
