@@ -98,21 +98,15 @@ width:100%;
 min-height:240px;
 }
 
-.line-block{
-display:block;
-margin-top:12px;
+/* Linha empilhada: label em cima, valor embaixo — mesma fonte/espaçamento do .line */
+.line.col{
+flex-direction:column;
+align-items:flex-start;
+gap:0;
 }
-.line-block span{
-display:block;
-font-size:13px;
-color:#555;
-margin-bottom:2px;
-}
-.line-block b{
-display:block;
-font-size:22px;
-color:#1a2a4a;
-font-weight:700;
+.line.col b{
+text-align:left;
+flex:none;
 }
 
 @media (max-width: 640px){
