@@ -98,6 +98,23 @@ width:100%;
 min-height:240px;
 }
 
+.line-block{
+display:block;
+margin-top:12px;
+}
+.line-block span{
+display:block;
+font-size:13px;
+color:#555;
+margin-bottom:2px;
+}
+.line-block b{
+display:block;
+font-size:22px;
+color:#1a2a4a;
+font-weight:700;
+}
+
 @media (max-width: 640px){
   .line{
     font-size:13px;
