@@ -580,7 +580,7 @@ function buildBarChart(canvasId, currentInstance, labels, values, color, dataset
 }
 function setFaturamentoLabel() {
   const el = document.getElementById('faturamento-label')
-  if (el) el.textContent = 'Faturamento ' + getCurrentMonthName()
+  if (el) el.textContent = 'Faturamento ' + getCurrentMonthName() + ':'
 }
 function renderDefaults() {
   setText('feriados', 'Nenhum')
