@@ -127,6 +127,16 @@ color:#1a7a3a;
 }
 
 @media (max-width: 640px){
+  .row{
+    flex-direction:column;
+  }
+
+  .card{
+    flex:none;
+    width:100%;
+    box-sizing:border-box;
+  }
+
   .line{
     font-size:13px;
   }
