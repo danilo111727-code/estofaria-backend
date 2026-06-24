@@ -279,7 +279,7 @@ function countPedidoQuotes(quotes) {
 function buildDisplaySummary(summary, orders, quotes) {
   const base = summary && typeof summary === 'object' ? summary : {}
   const pedidos = latestOrdersLoaded ? countActiveAgendaOrders(orders) : 0
-  const faturamentoCents = latestOrdersLoaded ? sumActiveAgendaRevenueCents(orders) : 0
+  const faturamentoCents = latestOrdersLoaded ? sumCurrentMonthRevenueCents(orders) : 0
   return {
     ...base,
     pedidos,
@@ -365,6 +365,21 @@ function countActiveAgendaOrders(orders) {
 }
 function sumActiveAgendaRevenueCents(orders) {
   return getActiveAgendaOrders(orders).reduce((sum, order) => sum + Math.max(0, getAgendaOrderRevenueCents(order)), 0)
+}
+const MONTHS_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
+function getCurrentMonthName() {
+  return MONTHS_PT[new Date().getMonth()]
+}
+function sumCurrentMonthRevenueCents(orders) {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = now.getMonth()
+  return getActiveAgendaOrders(orders).filter(order => {
+    const ds = order?.ent_date || order?.delivery_date || order?.data_entrega || order?.prod_date
+    if (!ds) return false
+    const d = new Date(String(ds) + 'T00:00:00')
+    return !isNaN(d) && d.getFullYear() === year && d.getMonth() === month
+  }).reduce((sum, order) => sum + Math.max(0, getAgendaOrderRevenueCents(order)), 0)
 }
 function getClientName(order, index) {
   const name = order?.cliente || order?.client_name || order?.nome_cliente || order?.nome || order?.customer || order?.customer_name
@@ -562,17 +577,23 @@ function buildBarChart(canvasId, currentInstance, labels, values, color, dataset
     }
   })
 }
+function setFaturamentoLabel() {
+  const el = document.getElementById('faturamento-label')
+  if (el) el.textContent = 'Faturamento ' + getCurrentMonthName()
+}
 function renderDefaults() {
   setText('feriados', 'Nenhum')
   setText('agenda', '-')
   setText('pedidos', '0')
   setText('faturamento', brlCompactFromCents(0))
+  setFaturamentoLabel()
 }
 function updateSummary(summary) {
   const pedidos = safeNumber(summary?.pedidos, 0)
   const faturamentoCents = safeNumber(summary?.faturamento_cents, 0)
   setText('pedidos', String(pedidos))
   setText('faturamento', brlCompactFromCents(faturamentoCents))
+  setFaturamentoLabel()
 }
 function getNextFreeSlotProdDate(orders, config) {
   const vagasSemana = Number((config && config.vagas_semana) || 0)
