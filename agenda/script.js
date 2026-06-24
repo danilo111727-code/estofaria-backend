@@ -2172,6 +2172,7 @@ function renderAll() {
 
 async function load() {
   await Promise.all([loadConfig(), loadOrders(), loadBlocos()])
+  await limparBlocosVazios()
   await loadHolidays()
   renderAll()
   populateEstadoSelect()
@@ -2319,6 +2320,24 @@ async function loadBlocos() {
     console.error('loadBlocos', e)
     state.blocos = []
   }
+}
+
+async function limparBlocosVazios() {
+  const vazios = state.blocos.filter(b =>
+    (b.qtd_vagas || 0) <= 0 &&
+    getActiveBlocoOrders(b.id).length === 0
+  )
+  if (!vazios.length) return
+  for (const b of vazios) {
+    try {
+      await apiDelete('/agenda/blocos/' + b.id)
+      state.blocos = state.blocos.filter(x => String(x.id) !== String(b.id))
+      state.orders = state.orders.filter(o => String(o.bloco_id) !== String(b.id))
+    } catch (e) {
+      console.error('limparBlocosVazios', b.id, e)
+    }
+  }
+  notifyPainelRefresh('bloco-deleted')
 }
 
 function getActiveBlocoOrders(blocoId) {
