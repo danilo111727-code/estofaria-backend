@@ -280,10 +280,14 @@ function buildDisplaySummary(summary, orders, quotes) {
   const base = summary && typeof summary === 'object' ? summary : {}
   const pedidos = latestOrdersLoaded ? countActiveAgendaOrders(orders) : 0
   const faturamentoCents = latestOrdersLoaded ? sumCurrentMonthRevenueCents(orders) : 0
+  const pedidosAno = latestOrdersLoaded ? countCurrentYearOrders(orders) : 0
+  const faturamentoAnoCents = latestOrdersLoaded ? sumCurrentYearRevenueCents(orders) : 0
   return {
     ...base,
     pedidos,
-    faturamento_cents: faturamentoCents
+    faturamento_cents: faturamentoCents,
+    pedidos_ano: pedidosAno,
+    faturamento_ano_cents: faturamentoAnoCents
   }
 }
 function updateSummaryWithAgenda(summary = latestSummaryData, orders = latestOrdersData, quotes = latestQuotesData) {
@@ -370,17 +374,34 @@ const MONTHS_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho'
 function getCurrentMonthName() {
   return MONTHS_PT[new Date().getMonth()]
 }
+function orderCreationDate(order) {
+  const ds = order?.created_at || order?.inserted_at || order?.updated_at
+  if (!ds) return null
+  const d = new Date(String(ds))
+  return isNaN(d) ? null : d
+}
 function sumCurrentMonthRevenueCents(orders) {
   const now = new Date()
   const year = now.getFullYear()
   const month = now.getMonth()
   return getActiveAgendaOrders(orders).filter(order => {
-    // Usa a data de criação do pedido (quando foi lançado na agenda)
-    const ds = order?.created_at || order?.inserted_at || order?.updated_at
-    if (!ds) return false
-    const d = new Date(String(ds))
-    return !isNaN(d) && d.getFullYear() === year && d.getMonth() === month
+    const d = orderCreationDate(order)
+    return d && d.getFullYear() === year && d.getMonth() === month
   }).reduce((sum, order) => sum + Math.max(0, getAgendaOrderRevenueCents(order)), 0)
+}
+function sumCurrentYearRevenueCents(orders) {
+  const year = new Date().getFullYear()
+  return getActiveAgendaOrders(orders).filter(order => {
+    const d = orderCreationDate(order)
+    return d && d.getFullYear() === year
+  }).reduce((sum, order) => sum + Math.max(0, getAgendaOrderRevenueCents(order)), 0)
+}
+function countCurrentYearOrders(orders) {
+  const year = new Date().getFullYear()
+  return getActiveAgendaOrders(orders).filter(order => {
+    const d = orderCreationDate(order)
+    return d && d.getFullYear() === year
+  }).length
 }
 function getClientName(order, index) {
   const name = order?.cliente || order?.client_name || order?.nome_cliente || order?.nome || order?.customer || order?.customer_name
@@ -580,20 +601,26 @@ function buildBarChart(canvasId, currentInstance, labels, values, color, dataset
 }
 function setFaturamentoLabel() {
   const el = document.getElementById('faturamento-label')
-  if (el) el.textContent = 'Faturamento ' + getCurrentMonthName() + ':'
+  if (el) el.textContent = 'Faturamento (' + getCurrentMonthName() + ')'
 }
 function renderDefaults() {
   setText('feriados', 'Nenhum')
   setText('agenda', '-')
   setText('pedidos', '0')
+  setText('pedidos-ano', '0')
   setText('faturamento', brlCompactFromCents(0))
+  setText('faturamento-ano', brlCompactFromCents(0))
   setFaturamentoLabel()
 }
 function updateSummary(summary) {
   const pedidos = safeNumber(summary?.pedidos, 0)
   const faturamentoCents = safeNumber(summary?.faturamento_cents, 0)
+  const pedidosAno = safeNumber(summary?.pedidos_ano, 0)
+  const faturamentoAnoCents = safeNumber(summary?.faturamento_ano_cents, 0)
   setText('pedidos', String(pedidos))
+  setText('pedidos-ano', String(pedidosAno))
   setText('faturamento', brlCompactFromCents(faturamentoCents))
+  setText('faturamento-ano', brlCompactFromCents(faturamentoAnoCents))
   setFaturamentoLabel()
 }
 function getNextFreeSlotProdDate(orders, config) {
