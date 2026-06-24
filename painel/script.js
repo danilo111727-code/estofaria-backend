@@ -617,7 +617,7 @@ function updateSummary(summary) {
   const faturamentoCents = safeNumber(summary?.faturamento_cents, 0)
   const pedidosAno = safeNumber(summary?.pedidos_ano, 0)
   const faturamentoAnoCents = safeNumber(summary?.faturamento_ano_cents, 0)
-  setText('pedidos', String(pedidos))
+  setText('pedidos', String(pedidos).padStart(2, '0'))
   setText('pedidos-ano', String(pedidosAno))
   setText('faturamento', brlCompactFromCents(faturamentoCents))
   setText('faturamento-ano', brlCompactFromCents(faturamentoAnoCents))
