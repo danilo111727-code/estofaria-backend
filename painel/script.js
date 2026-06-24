@@ -338,14 +338,26 @@ function getHolidayYears() {
 function shortHolidayName(name) {
   return String(name || '').replace(/-feira/gi, '').replace(/\s+/g, ' ').trim()
 }
-function computeHolidaySummary(payload) {
+function getDiaSemana(dateISO) {
+  const d = safeDate(dateISO)
+  if (!d) return ''
+  const s = d.toLocaleDateString('pt-BR', { weekday: 'long' })
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+function updateFeriadoInfo(payload) {
   const holidays = Array.isArray(payload?.holidays) ? payload.holidays : (Array.isArray(payload) ? payload : [])
-  if (!holidays.length) return 'Nenhum'
+  if (!holidays.length) {
+    setText('feriado-data', '—'); setText('feriado-nome', 'Nenhum'); setText('feriado-dia', ''); return
+  }
   const todayKey = toISODate(new Date())
   const sorted = holidays.filter(h => h?.date).sort((a, b) => String(a.date).localeCompare(String(b.date)))
   const upcoming = sorted.find(h => String(h.date) >= todayKey) || sorted[0]
-  if (!upcoming) return 'Nenhum'
-  return `${formatShortDate(upcoming.date)} ${shortHolidayName(upcoming.name)}`
+  if (!upcoming) {
+    setText('feriado-data', '—'); setText('feriado-nome', 'Nenhum'); setText('feriado-dia', ''); return
+  }
+  setText('feriado-data', formatShortDate(upcoming.date))
+  setText('feriado-nome', shortHolidayName(upcoming.name))
+  setText('feriado-dia', getDiaSemana(upcoming.date))
 }
 function getActiveAgendaOrders(orders) {
   const seen = new Set()
@@ -620,8 +632,12 @@ function setFaturamentoLabel() {
   if (el) el.textContent = 'Faturamento (' + getCurrentMonthName() + ')'
 }
 function renderDefaults() {
-  setText('feriados', 'Nenhum')
-  setText('agenda', '-')
+  setText('feriado-data', '—')
+  setText('feriado-nome', 'Nenhum')
+  setText('feriado-dia', '')
+  setText('agenda-data', '—')
+  setText('agenda-dia', '—')
+  setText('agenda-vagas', '')
   setText('pedidos', '0')
   setText('pedidos-ano', '0')
   setText('faturamento', brlCompactFromCents(0))
@@ -667,17 +683,33 @@ function getNextFreeSlotProdDate(orders, config) {
 }
 function updateAgendaInfo(orders, config) {
   const vagasSemana = Number(config?.vagas_semana || 0)
-  const prazoDias   = Number(config?.prazo_dias   || 0)
-  const tipoDias    = String(config?.tipo_dias || 'corrido').toLowerCase()
-  if (!vagasSemana) { setText('agenda', '-'); return }
-
-  // Lê direto da agenda — sem calcular
-  // A agenda grava 'esd_proxima_vaga' no localStorage ao carregar
+  if (!vagasSemana) {
+    setText('agenda-data', '—'); setText('agenda-dia', '—'); setText('agenda-vagas', ''); return
+  }
   try {
     const vaga = localStorage.getItem('esd_proxima_vaga')
-    setText('agenda', vaga ? formatShortDate(vaga) : '-')
+    if (!vaga) { setText('agenda-data', '—'); setText('agenda-dia', '—'); setText('agenda-vagas', ''); return }
+    setText('agenda-data', formatShortDate(vaga))
+    setText('agenda-dia', getDiaSemana(vaga))
+    // Calcula vagas disponíveis na semana da próxima vaga
+    const ativos = getActiveAgendaOrders(orders)
+    const weekCounts = {}
+    ativos.forEach(function(o) {
+      const dateISO = o.prod_date || o.ent_date || o.delivery_date
+      if (!dateISO) return
+      const d = new Date(String(dateISO) + 'T00:00:00')
+      const key = toISODate(startOfWeek(d))
+      weekCounts[key] = (weekCounts[key] || 0) + 1
+    })
+    let bloqueios = {}
+    try { bloqueios = JSON.parse(localStorage.getItem('esd_bloqueios_count') || '{}') } catch(e) {}
+    const vagaDate = safeDate(vaga)
+    const vagaWeekKey = vagaDate ? toISODate(startOfWeek(vagaDate)) : ''
+    const occupied = (weekCounts[vagaWeekKey] || 0) + (bloqueios[vagaWeekKey] || 0)
+    const available = Math.max(1, vagasSemana - occupied)
+    setText('agenda-vagas', available === 1 ? '1 vaga disponível' : `${available} vagas disponíveis`)
   } catch (_) {
-    setText('agenda', '-')
+    setText('agenda-data', '—'); setText('agenda-dia', '—'); setText('agenda-vagas', '')
   }
 }
 function renderRankings(quotes) {
@@ -735,7 +767,7 @@ async function loadSecondaryData() {
   latestQuotesLoaded = results[1].status === 'fulfilled'
   updateSummaryWithAgenda(latestSummaryData, latestOrdersData, latestQuotesData)
   updateAgendaInfo(orders, config)
-  setText('feriados', computeHolidaySummary(holidays))
+  updateFeriadoInfo(holidays)
   renderRankings(quotes)
   const status = buildOverdueStatus(results[0])
   setStatus(status.ok, status.text)
@@ -783,6 +815,7 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('storage', event => {
   if (event.key === AGENDA_SYNC_KEY) handleAgendaSync(event.newValue)
   if (event.key === 'esd_proxima_vaga') {
-    setText('agenda', event.newValue ? formatShortDate(event.newValue) : '-')
+    setText('agenda-data', event.newValue ? formatShortDate(event.newValue) : '—')
+    setText('agenda-dia', event.newValue ? getDiaSemana(event.newValue) : '—')
   }
 })
