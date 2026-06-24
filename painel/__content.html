@@ -82,8 +82,22 @@ setInterval(updateTime,1000);
 
 <div class="card resumo">
 <h3>Resumo</h3>
-<div class="line"><span>Número de pedidos</span><b id="pedidos">0</b></div>
-<div class="line col"><span id="faturamento-label">Faturamento</span><b id="faturamento">R$ 0</b></div>
+<div class="resumo-row">
+  <span class="resumo-label">Pedidos Ativos</span>
+  <b class="resumo-val" id="pedidos">0</b>
+</div>
+<div class="resumo-row">
+  <span class="resumo-label">Pedidos (Ano)</span>
+  <b class="resumo-val" id="pedidos-ano">0</b>
+</div>
+<div class="resumo-row">
+  <span class="resumo-label" id="faturamento-label">Faturamento</span>
+  <b class="resumo-val resumo-val--green" id="faturamento">R$ 0</b>
+</div>
+<div class="resumo-row resumo-row--last">
+  <span class="resumo-label">Faturamento (Ano)</span>
+  <b class="resumo-val resumo-val--green" id="faturamento-ano">R$ 0</b>
+</div>
 </div>
 
 </div>
@@ -101,7 +115,7 @@ setInterval(updateTime,1000);
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="script.js?v=20260624e"></script>
+<script src="script.js?v=20260624f"></script>
 
 <script src="../keyboard-dismiss.js"></script>
 </body>
