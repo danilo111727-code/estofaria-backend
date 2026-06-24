@@ -65,28 +65,52 @@ text-align:right;
 word-break:break-word;
 }
 
-/* Agenda card: label acima, valor abaixo */
-.card.agenda .line{
-flex-direction:column;
-align-items:flex-start;
-gap:2px;
+/* Agenda card: novo layout com data em destaque + detalhe */
+.agenda-section{
+margin-top:10px;
 }
-
-.card.agenda .line span{
-color:#555;
-font-size:12px;
-font-weight:normal;
+.agenda-label{
+font-size:11px;
+font-weight:600;
+color:#aaa;
 text-transform:uppercase;
-letter-spacing:0.3px;
+letter-spacing:0.6px;
+margin-bottom:4px;
 }
-
-.card.agenda .line b{
-text-align:left;
-font-size:14px;
-font-weight:bold;
-word-break:break-word;
-white-space:normal;
-letter-spacing:normal;
+.agenda-row{
+display:flex;
+align-items:flex-start;
+gap:10px;
+}
+.agenda-date{
+font-size:22px;
+font-weight:700;
+color:#2a52a0;
+line-height:1.1;
+flex:0 0 auto;
+min-width:46px;
+}
+.agenda-detail{
+display:flex;
+flex-direction:column;
+gap:1px;
+border-left:2px solid #e8eaee;
+padding-left:8px;
+}
+.agenda-detail b{
+font-size:13px;
+font-weight:600;
+color:#111;
+line-height:1.3;
+}
+.agenda-detail span{
+font-size:12px;
+color:#888;
+}
+.agenda-divider{
+border:none;
+border-top:1px solid #e8eaee;
+margin:10px 0 0 0;
 }
 
 canvas{
