@@ -2574,6 +2574,16 @@ async function removerVagaDoBloco(blocoId) {
     const updated = await apiDelete('/agenda/blocos/' + blocoId + '/vaga')
     const idx = state.blocos.findIndex(b => String(b.id) === String(blocoId))
     if (idx >= 0) state.blocos[idx] = updated
+
+    const semVagas = (updated.qtd_vagas || 0) <= 0
+    const semPedidos = getActiveBlocoOrders(blocoId).length === 0
+    if (semVagas && semPedidos) {
+      await apiDelete('/agenda/blocos/' + blocoId)
+      state.blocos = state.blocos.filter(b => String(b.id) !== String(blocoId))
+      state.orders = state.orders.filter(o => String(o.bloco_id) !== String(blocoId))
+      notifyPainelRefresh('bloco-deleted')
+    }
+
     renderBlocos()
   } catch (e) {
     if (e.message && e.message.includes('no_empty_slots')) {
