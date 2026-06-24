@@ -103,8 +103,8 @@ min-height:240px;
 display:flex;
 justify-content:space-between;
 align-items:center;
-padding:10px 0;
-border-bottom:1px solid #eef0f4;
+padding:14px 0;
+border-bottom:1px solid #e8eaee;
 }
 .card.resumo .resumo-row--last{
 border-bottom:none;
@@ -112,14 +112,15 @@ border-bottom:none;
 .card.resumo .resumo-label{
 font-size:11px;
 font-weight:600;
-color:#999;
+color:#aaa;
 text-transform:uppercase;
-letter-spacing:0.5px;
+letter-spacing:0.6px;
 }
 .card.resumo .resumo-val{
-font-size:20px;
+font-size:28px;
 font-weight:700;
-color:#1a2a4a;
+color:#111;
+line-height:1;
 }
 .card.resumo .resumo-val--green{
 color:#1a7a3a;
