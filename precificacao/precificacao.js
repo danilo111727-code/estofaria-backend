@@ -84,12 +84,8 @@ function bindCurrencyInputs(){
     const input = document.getElementById(id)
     if(!input || input.dataset.maskBound === '1') return
     input.dataset.maskBound = '1'
-    input.addEventListener('input', () => {
-      window.formatCurrency(input)
-    })
-    input.addEventListener('blur', () => {
-      window.formatCurrency(input)
-    })
+    input.addEventListener('input', () => { window.formatCurrency(input); updateResumo() })
+    input.addEventListener('blur',  () => { window.formatCurrency(input); updateResumo() })
   })
 }
 
@@ -98,10 +94,13 @@ function bindPhotoInput(){
   if(!input || input.dataset.photoBound === '1') return
   input.dataset.photoBound = '1'
   input.addEventListener('change', () => {
+    const nomeEl = document.getElementById('fotoNomeArquivo')
     if(input.files?.[0]){
+      if(nomeEl) nomeEl.textContent = input.files[0].name
       preloadModelImageFromInput().then(() => persistDraftState()).catch(error => console.error(error))
       return
     }
+    if(nomeEl) nomeEl.textContent = 'Nenhum arquivo selecionado'
     currentImageLoadPromise = null
     if(!modeloEditandoId) currentModelImageDataUrl = ''
     persistDraftState()
@@ -287,6 +286,11 @@ function parseNumber(v){
 
 function formatBRLFromCents(cents){
   return (Number(cents || 0) / 100).toLocaleString('pt-BR', { style:'currency', currency:'BRL' })
+}
+
+function getLucroPercent(){
+  const val = parseFloat(String(document.getElementById('lucroDesejado')?.value || '0').replace(',','.')) || 0
+  return Math.min(Math.max(val, 0), 99.9)
 }
 
 function getSpacingCm(){
@@ -528,7 +532,7 @@ function updateResumo(){
   if(vendaEl) vendaEl.innerText = formatBRLFromCents(venda)
   if(margemEl) margemEl.innerText = margemPct.toFixed(0) + '%'
 
-  if(venda > 0){
+  if(venda > 0 && margemPct > 0){
     const info = getMarginInfo(margemPct)
     const offset = GAUGE_CIRC - (Math.min(margemPct, 100) / 100) * GAUGE_CIRC
     if(gaugeFill){
@@ -907,10 +911,68 @@ function updateItensBlockMeta(){
   const badge = document.getElementById('itensModalCount')
   const marcados = lista ? lista.querySelectorAll('input[type=checkbox]:checked').length : 0
   const total = lista ? lista.querySelectorAll('input[type=checkbox]').length : 0
-  if(meta) meta.textContent = marcados === 0
-    ? 'Nenhum item marcado'
-    : `${marcados} de ${total} item${total !== 1 ? 's' : ''} marcado${marcados !== 1 ? 's' : ''}`
+  if(meta) meta.textContent = marcados
   if(badge) badge.textContent = marcados
+}
+
+let _copiarScrollY = 0
+
+function openCopiarModeloModal(){
+  const r = _openFullscreen('copiarModeloModal')
+  if(!r) return
+  _copiarScrollY = r.scrollY
+  renderCopiarModeloLista()
+  r.modal.scrollTop = 0
+}
+
+function closeCopiarModeloModal(){
+  _closeFullscreen('copiarModeloModal', _copiarScrollY)
+}
+
+function renderCopiarModeloLista(){
+  const container = document.getElementById('copiarModeloLista')
+  if(!container) return
+  if(!modelos.length){
+    container.innerHTML = '<p style="font-size:13px;color:#888;margin:0;">Nenhum modelo cadastrado ainda. Salve um modelo primeiro.</p>'
+    return
+  }
+  container.innerHTML = modelos.map(m => `
+    <div style="display:flex;align-items:center;gap:12px;padding:14px;background:#fff;border:1px solid #e2e7f0;border-radius:12px;">
+      ${m.image_data_url ? `<img src="${escapeHtml(m.image_data_url)}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;flex-shrink:0;border:1px solid #e2e7f0">` : `<div style="width:44px;height:44px;background:#f1f5f9;border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px;">🛋️</div>`}
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:700;font-size:14px;color:#1d2740;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(m.name)}</div>
+        <div style="font-size:12px;color:#7a8aaa;margin-top:2px;">Base: ${formatQty(m.base_meters)} m · Venda: ${formatBRLFromCents(m.sale_price_cents)}</div>
+      </div>
+      <button type="button" onclick="copiarDeModelo('${m.id}')" style="white-space:nowrap;font-size:13px;padding:9px 16px;flex-shrink:0;">Copiar</button>
+    </div>
+  `).join('')
+}
+
+function copiarDeModelo(id){
+  const modelo = modelos.find(m => String(m.id) === String(id))
+  if(!modelo){ ui().warning('Modelo não encontrado.'); return }
+
+  const descEl = document.getElementById('descricaoModelo')
+  if(descEl) descEl.value = modelo.descricao_modelo || ''
+
+  materiaisModelo = Array.isArray(modelo.materials) ? modelo.materials.map(m => ({ ...m })) : []
+  renderMateriais()
+
+  const lucroEl = document.getElementById('lucroDesejado')
+  if(lucroEl) lucroEl.value = formatBRLFromCents(modelo.target_profit_cents || 0)
+
+  renderItensIncluidos(Array.isArray(modelo.itens_incluidos) ? modelo.itens_incluidos : [])
+  updateItensBlockMeta()
+
+  if(modelo.spacing_cm) aplicarSpacing(modelo.spacing_cm)
+  const veEl = document.getElementById('valorEspacamento')
+  if(veEl) veEl.value = modelo.valor_por_espacamento_cents > 0 ? (modelo.valor_por_espacamento_cents / 100).toFixed(2) : ''
+
+  updateResumo()
+  persistDraftState()
+  closeCopiarModeloModal()
+  ui().success(`Dados copiados de "${modelo.name}".`)
+  window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 async function buildPrecificacaoPdfPayload(){
@@ -1281,6 +1343,9 @@ window.openModelosFullscreen = openModelosFullscreen
 window.closeModelosFullscreen = closeModelosFullscreen
 window.openItensFullscreen = openItensFullscreen
 window.closeItensFullscreen = closeItensFullscreen
+window.openCopiarModeloModal = openCopiarModeloModal
+window.closeCopiarModeloModal = closeCopiarModeloModal
+window.copiarDeModelo = copiarDeModelo
 window.gerarPDF = gerarPDF
 window.enviarPDF = enviarPDF
 window.formatCurrency = function(input){
