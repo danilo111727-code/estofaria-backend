@@ -837,6 +837,24 @@ function getItensIncluidos(){
     .filter(Boolean)
 }
 
+async function novoModelo(){
+  const temConteudo = (document.getElementById('modeloNome')?.value.trim() || '') ||
+    materiaisModelo.length > 0 || currentModelImageDataUrl
+
+  if(temConteudo){
+    const ok = await ui().confirm(
+      'Os dados atuais serão apagados. Deseja começar um novo modelo?',
+      { title: 'Novo modelo', confirmText: 'Sim, limpar', cancelText: 'Cancelar' }
+    )
+    if(!ok) return
+  }
+
+  limparFormulario()
+  clearDraftState()
+  const el = document.getElementById('modeloNome')
+  if(el) el.focus()
+}
+
 function limparFormulario(){
   modeloEditandoId = null
   currentImageLoadPromise = null
