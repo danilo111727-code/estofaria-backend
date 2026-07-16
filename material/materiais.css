@@ -80,6 +80,8 @@ button[disabled],button[aria-busy="true"]{cursor:not-allowed;opacity:.78;transfo
 .mat-card-header{display:flex;align-items:center;justify-content:space-between;padding:13px 14px;cursor:pointer;user-select:none;gap:10px;}
 .mat-card-name{font-size:14px;font-weight:600;color:#1e2d4e;flex:1;}
 .mat-card-unit-badge{font-size:11px;background:#eef1fb;color:#4a67a1;border-radius:20px;padding:3px 9px;white-space:nowrap;flex-shrink:0;}
+.mat-card-price{font-size:13px;font-weight:700;color:#1a6e3a;white-space:nowrap;flex-shrink:0;}
+.mat-card-price.no-price{color:#aab2c8;font-weight:400;}
 .mat-card-arrow{font-size:12px;color:#8899bb;transition:transform .2s;flex-shrink:0;}
 .mat-card.open .mat-card-arrow{transform:rotate(180deg);}
 .mat-card-body{display:none;padding:0 14px 14px;border-top:1px solid #f0f2f8;}
