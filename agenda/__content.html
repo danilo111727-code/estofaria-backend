@@ -28,61 +28,8 @@
   </nav>
 
   <main class="page-shell">
-    <section class="card summary-card official-card">
-      <div class="card-head section-head summary-head">
-        <div>
-          <div class="section-label">Resumo da semana</div>
-          <div id="resumoData" class="summary-date-title">--/--/----</div>
-          <p>Mostra a produção da semana, os pedidos que vencem na semana e, quando não houver nada no período, exibe os pedidos mais próximos.</p>
-        </div>
-      </div>
 
-      <div class="table-wrap summary-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Entrega</th>
-              <th>Cliente</th>
-              <th>Pedido</th>
-            </tr>
-          </thead>
-          <tbody id="pedidosSemana"></tbody>
-        </table>
-      </div>
-
-      <div class="stats-row summary-stats summary-stats-bottom">
-        <div class="mini-stat mini-stat-highlight">
-          <span>Próxima vaga disponível</span>
-          <strong id="nextEnt">--/--</strong>
-        </div>
-        <div class="mini-stat mini-stat-grow mini-stat-capacity">
-          <span>Vagas</span>
-          <div class="bar-track"><div id="barra" class="bar-fill"></div></div>
-          <small id="barraTexto">0 / 0 vagas</small>
-        </div>
-      </div>
-    </section>
-
-    <div class="big-card" role="button" tabindex="0" onclick="openAgendaFullscreen()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openAgendaFullscreen()}">
-      <div class="big-icon">🗓️</div>
-      <div class="big-info">
-        <div class="big-title">Agenda de Produção</div>
-        <div class="big-sub">Toque para gerenciar os blocos de produção</div>
-        <div class="big-pills">
-          <span class="pill"><strong id="agendaCardCount">0</strong> pedidos</span>
-          <span class="pill pill-late"><strong id="agendaCardLate">0</strong> atrasados</span>
-        </div>
-      </div>
-      <div class="big-arrow">›</div>
-    </div>
-
-    <div id="agendaFullscreen" class="fullscreen-modal fs-blue" hidden>
-      <div class="fs-topbar">
-        <button class="fs-back" type="button" onclick="closeAgendaFullscreen()" aria-label="Voltar">‹</button>
-        <div class="fs-title">📅 Agenda de Produção</div>
-        <div class="fs-spacer"></div>
-        <div class="fs-badge"><span id="agendaModalCount">0</span> pedidos</div>
-      </div>
+    <div id="agendaFullscreen" class="agenda-inline-view">
       <div class="fs-container">
         <p class="fs-help" style="padding:0 16px;margin:12px 0 4px">Organize os pedidos por períodos de produção.<br>Cada bloco representa uma produção com suas vagas.</p>
         <div id="blocosList" class="blocos-list"></div>
@@ -99,19 +46,6 @@
     </div>
 
 
-    <!-- ===== 2 small cards row ===== -->
-    <div class="small-cards-row">
-      <div class="small-card sc-red" role="button" tabindex="0" onclick="openFeriadosFullscreen()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openFeriadosFullscreen()}">
-        <div class="sc-icon">🏌🏼‍♂️</div>
-        <div class="sc-label">Feriados</div>
-        <div class="sc-arrow">›</div>
-      </div>
-      <div class="small-card sc-slate" role="button" tabindex="0" onclick="openHistoricoFullscreen()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openHistoricoFullscreen()}">
-        <div class="sc-icon">📜</div>
-        <div class="sc-label">Histórico</div>
-        <div class="sc-arrow">›</div>
-      </div>
-    </div>
 
     <!-- ===== Feriados fullscreen ===== -->
     <div id="feriadosFullscreen" class="fullscreen-modal fs-red" hidden>
@@ -222,10 +156,12 @@
   <aside id="actionSheet" class="action-sheet" aria-hidden="true">
     <div class="sheet-handle"></div>
     <div class="sheet-header">
-      <div>
-        <span class="eyebrow">Ações rápidas</span>
-        <h3 id="sheetTitle">Pedido</h3>
-        <p id="sheetSubtitle" class="muted">Escolha uma ação</p>
+      <div class="sheet-header-left">
+        <div class="sheet-header-icon">📅</div>
+        <div>
+          <div class="sheet-eyebrow" id="sheetSubtitle">Produção em</div>
+          <div class="sheet-client" id="sheetTitle">Pedido</div>
+        </div>
       </div>
       <button class="icon-btn" type="button" onclick="closeActionSheet()">✕</button>
     </div>

@@ -1,7 +1,6 @@
 const API = (window.API_BASE || '') + '/api'
 
 let chartVendidosInstance = null
-let chartLucroInstance = null
 
 const CACHE_PREFIX = 'estofaria_painel_cache:'
 const TTL_SUMMARY = 30 * 1000
@@ -292,6 +291,7 @@ function buildDisplaySummary(summary, orders, quotes) {
 }
 function updateSummaryWithAgenda(summary = latestSummaryData, orders = latestOrdersData, quotes = latestQuotesData) {
   updateSummary(buildDisplaySummary(summary, orders, quotes))
+  if (latestOrdersLoaded) buildDashboardCharts(orders)
 }
 function schedulePainelRefresh(delay = 120) {
   clearTimeout(painelRefreshTimer)
@@ -712,23 +712,172 @@ function updateAgendaInfo(orders, config) {
     setText('agenda-data', '—'); setText('agenda-dia', '—'); setText('agenda-vagas', '')
   }
 }
+/* ── Dashboard sparklines ── */
+const _dashCharts = {}
+function _destroyDashChart(id) {
+  if (_dashCharts[id]) { try { _dashCharts[id].destroy() } catch(_){} delete _dashCharts[id] }
+}
+function _getLast6Months(orders) {
+  const now = new Date()
+  const months = []
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    months.push({ y: d.getFullYear(), m: d.getMonth(), count: 0, rev: 0 })
+  }
+  getAllBillableOrders(orders).forEach(order => {
+    const d = orderCreationDate(order)
+    if (!d) return
+    const idx = months.findIndex(x => x.y === d.getFullYear() && x.m === d.getMonth())
+    if (idx < 0) return
+    months[idx].count++
+    months[idx].rev += Math.max(0, getAgendaOrderRevenueCents(order))
+  })
+  return months
+}
+function _getYearMonths(orders) {
+  const year = new Date().getFullYear()
+  const curMonth = new Date().getMonth()
+  const months = Array.from({ length: curMonth + 1 }, (_, i) => ({ m: i, count: 0, rev: 0 }))
+  getAllBillableOrders(orders).forEach(order => {
+    const d = orderCreationDate(order)
+    if (!d || d.getFullYear() !== year || d.getMonth() > curMonth) return
+    months[d.getMonth()].count++
+    months[d.getMonth()].rev += Math.max(0, getAgendaOrderRevenueCents(order))
+  })
+  return months
+}
+function _sparkBar(canvasId, values) {
+  const canvas = el(canvasId); if (!canvas || !window.Chart) return
+  _destroyDashChart(canvasId)
+  _dashCharts[canvasId] = new Chart(canvas.getContext('2d'), {
+    type: 'bar',
+    data: { labels: values.map(() => ''), datasets: [{ data: values, backgroundColor: '#3b5ec6', borderRadius: 3, borderSkipped: false }] },
+    options: { responsive: false, plugins: { legend: { display: false }, tooltip: { enabled: false } }, scales: { x: { display: false }, y: { display: false, beginAtZero: true } }, animation: false }
+  })
+}
+function _sparkLine(canvasId, values, fill) {
+  const canvas = el(canvasId); if (!canvas || !window.Chart) return
+  _destroyDashChart(canvasId)
+  const ctx = canvas.getContext('2d')
+  let bg = false
+  if (fill) {
+    const g = ctx.createLinearGradient(0, 0, 0, 64)
+    g.addColorStop(0, 'rgba(59,94,198,0.28)')
+    g.addColorStop(1, 'rgba(59,94,198,0)')
+    bg = { target: 'origin', above: g }
+  }
+  _dashCharts[canvasId] = new Chart(ctx, {
+    type: 'line',
+    data: { labels: values.map(() => ''), datasets: [{ data: values, borderColor: '#3b5ec6', borderWidth: 2, pointRadius: fill ? 0 : 3, pointBackgroundColor: '#3b5ec6', fill: bg, tension: 0.4 }] },
+    options: { responsive: false, plugins: { legend: { display: false }, tooltip: { enabled: false } }, scales: { x: { display: false }, y: { display: false, beginAtZero: true } }, animation: false }
+  })
+}
+function _sparkDonut(canvasId, value, total) {
+  const canvas = el(canvasId); if (!canvas || !window.Chart) return
+  _destroyDashChart(canvasId)
+  _dashCharts[canvasId] = new Chart(canvas.getContext('2d'), {
+    type: 'doughnut',
+    data: { datasets: [{ data: [Math.max(value, 0), Math.max(total - value, 0)], backgroundColor: ['#3b5ec6', '#e8ecf5'], borderWidth: 0 }] },
+    options: { responsive: false, cutout: '70%', plugins: { legend: { display: false }, tooltip: { enabled: false } }, animation: false }
+  })
+}
+function buildDashboardCharts(orders) {
+  const last6 = _getLast6Months(orders)
+  const yearMonths = _getYearMonths(orders)
+  const curRev = last6[last6.length - 1]?.rev || 0
+  const yearRev = yearMonths.reduce((s, m) => s + m.rev, 0)
+  const avgMonthRev = yearMonths.length ? yearRev / yearMonths.length : 1
+  _sparkBar('dashChartPedidos', last6.map(m => m.count))
+  _sparkLine('dashChartPedidosAno', yearMonths.map(m => m.count), false)
+  _sparkDonut('dashChartFatMes', curRev, Math.max(avgMonthRev * 1.5, curRev, 1))
+  _sparkLine('dashChartFatAno', yearMonths.map(m => m.rev), true)
+}
 function renderRankings(quotes) {
   const rankings = buildRankings(quotes)
   chartVendidosInstance = buildBarChart('chartVendidos', chartVendidosInstance, rankings.soldLabels, rankings.soldValues, 'rgba(144, 202, 249, 0.9)', 'Mais vendido', false)
-  chartLucroInstance = buildBarChart('chartLucro', chartLucroInstance, rankings.revenueLabels, rankings.revenueValues, 'rgba(144, 202, 249, 0.9)', 'Mais lucrativo', true)
 }
-function buildOverdueStatus(ordersResult) {
-  if (!ordersResult || ordersResult.status !== 'fulfilled') {
-    return { ok: false, text: '⚠️ Erro ao carregar pedidos' }
-  }
-  const orders = ordersResult.value?.data || []
+function getWeekDeliveries(orders) {
+  const now = new Date()
+  const wStart = startOfWeek(now)
+  const wEnd = new Date(wStart)
+  wEnd.setDate(wEnd.getDate() + 6)
+  wEnd.setHours(23, 59, 59, 999)
+  return (Array.isArray(orders) ? orders : []).map((order, index) => ({
+    raw: order,
+    cliente: getClientName(order, index),
+    descricao: String(order?.descricao || order?.modelo || order?.description || '').trim(),
+    entrega: safeDate(order?.ent_date) || safeDate(order?.delivery_date) || safeDate(order?.entrega) || safeDate(order?.data_entrega),
+    status: String(order?.status || '').toLowerCase()
+  })).filter(item => {
+    if (['entregue', 'cancelado', 'indisponivel'].includes(item.status)) return false
+    if (isIgnoredAgendaPlaceholder(item.raw)) return false
+    return item.entrega ? (item.entrega >= wStart && item.entrega <= wEnd) : false
+  })
+}
+function escHtml(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+}
+function updateResumoSemana(orders) {
   const atrasados = getOverdueOrders(orders)
-  if (atrasados.length) {
-    const nomes = atrasados.map(item => item.cliente).join(' • ')
-    return { ok: false, text: `🚨 Atrasados: ${nomes}` }
-  }
-  return { ok: true, text: '✅ Sem pedidos atrasados' }
+  const entregas = getWeekDeliveries(orders)
+  const setText2 = (id, val) => { const n = el(id); if (n) n.textContent = val }
+  setText2('rsAtrasadosCount', atrasados.length)
+  setText2('rsAtrasadosUnit', atrasados.length === 1 ? 'pedido' : 'pedidos')
+  setText2('rsEntregasCount', entregas.length)
+  setText2('rsEntregasUnit', entregas.length === 1 ? 'pedido' : 'pedidos')
+  window._rsAtrasados = atrasados
+  window._rsEntregas = entregas
+  const fmtD = d => d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+  const wStart = startOfWeek(new Date())
+  const wEnd = new Date(wStart); wEnd.setDate(wEnd.getDate() + 6)
+  setText2('rsPeriodo', `${fmtD(wStart)} – ${fmtD(wEnd)}`)
 }
+function _rsDoc() {
+  try {
+    if (window.parent && window.parent !== window && window.parent.document && window.parent.document.body) return window.parent.document
+  } catch (_) {}
+  return document
+}
+function _ensureRsStyles(doc) {
+  if (doc.getElementById('rs-modal-styles')) return
+  const s = doc.createElement('style')
+  s.id = 'rs-modal-styles'
+  s.textContent = `.rs-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:2000;display:flex;align-items:center;justify-content:center;padding:16px}.rs-modal{background:#fff;border-radius:16px;width:100%;max-width:560px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden}.rs-modal-header{display:flex;align-items:center;justify-content:space-between;padding:16px 18px 12px;border-bottom:1px solid #eee}.rs-modal-ttl{font-size:16px;font-weight:700;color:#111}.rs-modal-close{background:none;border:none;font-size:18px;color:#888;cursor:pointer;padding:4px 8px;border-radius:6px}.rs-modal-close:active{background:#f0f0f0}.rs-modal-body{overflow-y:auto;padding:8px 0 24px}.rs-modal-item{display:flex;align-items:flex-start;gap:12px;padding:12px 18px;border-bottom:1px solid #f0f0f0}.rs-modal-item:last-child{border-bottom:none}.rs-modal-item-icon{font-size:22px;flex-shrink:0;margin-top:1px}.rs-modal-item-info{flex:1;min-width:0}.rs-modal-item-name{font-size:14px;font-weight:700;color:#111;margin-bottom:2px}.rs-modal-item-desc{font-size:12px;color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rs-modal-item-date{font-size:12px;font-weight:600;flex-shrink:0;padding:3px 8px;border-radius:20px;align-self:center}.rs-modal-item-date--red{background:#fdeaea;color:#c0392b}.rs-modal-item-date--green{background:#e8f7ee;color:#1f8a4c}.rs-modal-empty{text-align:center;padding:32px 18px;color:#aaa;font-size:14px}`
+  doc.head.appendChild(s)
+}
+function openResumoModal(tipo) {
+  const isAtraso = tipo === 'atrasados'
+  const items = isAtraso ? (window._rsAtrasados || []) : (window._rsEntregas || [])
+  const icon = isAtraso ? '🗓️' : '🚚'
+  const colorClass = isAtraso ? 'red' : 'green'
+  const titleText = isAtraso ? 'Pedidos em atraso' : 'Pedidos com vencimento essa semana'
+  const bodyHtml = !items.length
+    ? `<div class="rs-modal-empty">${isAtraso ? 'Nenhum pedido em atraso' : 'Nenhuma entrega esta semana'}</div>`
+    : items.map(item => {
+        const dateStr = item.entrega ? item.entrega.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' }) : '—'
+        const desc = item.descricao || ''
+        return `<div class="rs-modal-item"><span class="rs-modal-item-icon">${icon}</span><div class="rs-modal-item-info"><div class="rs-modal-item-name">${escHtml(item.cliente)}</div>${desc ? `<div class="rs-modal-item-desc">${escHtml(desc)}</div>` : ''}</div><span class="rs-modal-item-date rs-modal-item-date--${colorClass}">${dateStr}</span></div>`
+      }).join('')
+  const doc = _rsDoc()
+  _ensureRsStyles(doc)
+  const old = doc.getElementById('rsModalOverlay')
+  if (old) old.remove()
+  const overlay = doc.createElement('div')
+  overlay.id = 'rsModalOverlay'
+  overlay.className = 'rs-modal-overlay'
+  overlay.innerHTML = `<div class="rs-modal"><div class="rs-modal-header"><span class="rs-modal-ttl">${escHtml(titleText)}</span><button class="rs-modal-close" id="rsModalCloseBtn" aria-label="Fechar">✕</button></div><div class="rs-modal-body">${bodyHtml}</div></div>`
+  doc.body.appendChild(overlay)
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeResumoModal() })
+  doc.getElementById('rsModalCloseBtn').addEventListener('click', closeResumoModal)
+  doc.addEventListener('keydown', _rsKeyClose)
+}
+function closeResumoModal() {
+  const doc = _rsDoc()
+  const overlay = doc.getElementById('rsModalOverlay')
+  if (overlay) overlay.remove()
+  doc.removeEventListener('keydown', _rsKeyClose)
+}
+function _rsKeyClose(e) { if (e.key === 'Escape') closeResumoModal() }
 async function loadSummaryFirst() {
   const cached = readCache('summary')
   if (cached) {
@@ -769,8 +918,7 @@ async function loadSecondaryData() {
   updateAgendaInfo(orders, config)
   updateFeriadoInfo(holidays)
   renderRankings(quotes)
-  const status = buildOverdueStatus(results[0])
-  setStatus(status.ok, status.text)
+  updateResumoSemana(latestOrdersData)
 }
 async function renderPainel() {
   syncAgendaStateOnBoot()

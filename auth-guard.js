@@ -21,6 +21,7 @@
     'itens-personalizacao': '/itens-personalizacao/',
     vendedor: '/vendedor/',
     agenda: '/agenda/',
+    configuracao: '/configuracao/',
     assinatura: '/assinatura/'
   }
 
@@ -42,6 +43,7 @@
     ['/itens-personalizacao/', 'itens-personalizacao'],
     ['/vendedor/', 'vendedor'],
     ['/agenda/', 'agenda'],
+    ['/configuracao/', 'configuracao'],
     ['/assinatura/', 'assinatura']
   ]
 
@@ -135,7 +137,8 @@
       agenda: 'agenda',
       subscription: 'assinatura',
       assinatura: 'assinatura',
-      billing: 'assinatura'
+      billing: 'assinatura',
+      configuracao: 'configuracao'
     }
     return aliases[raw] || raw
   }

@@ -304,26 +304,41 @@ input:focus,select:focus,textarea:focus{
 }
 .action-sheet.open{transform:translateY(0)}
 .sheet-handle{width:52px;height:6px;border-radius:999px;background:#d6deef;margin:0 auto 12px}
-.sheet-header{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;padding:0 0 8px}
+.sheet-header{display:flex;justify-content:space-between;align-items:center;padding:0 0 16px;gap:12px}
+.sheet-header-left{display:flex;align-items:center;gap:12px}
+.sheet-header-icon{width:48px;height:48px;border-radius:14px;background:#eef3ff;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0}
+.sheet-eyebrow{font-size:12px;color:#7a89a8;font-weight:600;margin-bottom:2px}
+.sheet-client{font-size:17px;font-weight:800;color:#1d2740;line-height:1.2}
 .sheet-actions{display:grid;gap:10px}
 .sheet-action-btn{
   width:100%;
   display:flex;
-  justify-content:space-between;
   align-items:center;
-  gap:12px;
-  padding:14px 16px;
+  gap:14px;
+  padding:12px 14px;
   border:none;
-  border-radius:12px;
+  border-radius:14px;
   cursor:pointer;
-  font-size:15px;
-  font-weight:700;
+  background:#f5f7fc;
+  color:#1d2740;
+  text-align:left;
+  -webkit-tap-highlight-color:transparent;
+  touch-action:manipulation;
+  box-sizing:border-box;
 }
-.sheet-action-btn small{display:block;font-size:12px;font-weight:700;opacity:.85;margin-top:4px}
-.sheet-action-btn.is-primary{background:#eef3ff;color:#27457c}
-.sheet-action-btn.is-warning{background:#fff4dc;color:#765100}
-.sheet-action-btn.is-danger{background:#ffe9ec;color:#ac3950}
-.sheet-action-btn.is-success{background:#eaf9f1;color:#1e7d59}
+.sheet-btn-icon{width:46px;height:46px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;line-height:1}
+.sheet-btn-label{flex:1;font-size:15px;font-weight:700;color:inherit}
+.sheet-btn-arrow{font-size:22px;font-weight:300;color:#b0bcd4;line-height:1}
+.sheet-action-btn.is-primary              {background:#eef3ff;color:#27457c}
+.sheet-action-btn.is-primary .sheet-btn-icon   {background:#d5e3ff}
+.sheet-action-btn.is-available             {background:#f0ecff;color:#4a27a0}
+.sheet-action-btn.is-available .sheet-btn-icon {background:#ddd5ff}
+.sheet-action-btn.is-success              {background:#eaf9f1;color:#1e7d59}
+.sheet-action-btn.is-success .sheet-btn-icon   {background:#c8f0dc}
+.sheet-action-btn.is-warning              {background:#fff8ec;color:#765100}
+.sheet-action-btn.is-warning .sheet-btn-icon   {background:#ffe8b0}
+.sheet-action-btn.is-danger               {background:#fff0f3;color:#ac3950}
+.sheet-action-btn.is-danger .sheet-btn-icon    {background:#ffd5dc}
 .sheet-action-btn[disabled]{opacity:.45;cursor:not-allowed}
 
 @media (max-width: 760px){
@@ -1014,3 +1029,24 @@ input:focus,select:focus,textarea:focus{
 }
 
 .bloco-add-producao-btn:active { opacity: .8; }
+
+
+/* === Agenda inline (sem modal fullscreen) === */
+.agenda-inline-view {
+  display: block;
+  position: static;
+  z-index: auto;
+  overflow-y: visible;
+  height: auto;
+  background: transparent;
+}
+.agenda-inline-view .fs-container {
+  padding: 8px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+.agenda-inline-view .fs-help {
+  font-size: 12px;
+  color: #5a6789;
+  margin: 0 0 10px;
+}

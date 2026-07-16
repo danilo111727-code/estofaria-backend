@@ -44,7 +44,7 @@ setInterval(updateTime,1000);
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Painel</title>
-<link rel="stylesheet" href="style.css?v=20260624a">
+<link rel="stylesheet" href="style.css?v=20260625g">
 <script src="../config.js"></script>
 <script src="../auth-guard.js"></script>
   <link rel="stylesheet" href="../mobile-fixes.css">
@@ -70,55 +70,90 @@ setInterval(updateTime,1000);
 
 <div class="container">
 
-<div id="statusPedidos" class="status"></div>
-
-<div class="row">
-
-<div class="card agenda">
-<h3>Agenda</h3>
-<div class="agenda-section">
-  <div class="agenda-label">Feriado</div>
-  <div class="agenda-row">
-    <span class="agenda-date" id="feriado-data">—</span>
-    <div class="agenda-detail">
-      <b id="feriado-nome">Nenhum</b>
-      <span id="feriado-dia"></span>
+<div class="card rs-card">
+  <div class="rs-card-header">
+    <h3 class="rs-card-title">Resumo da semana</h3>
+    <span class="rs-periodo" id="rsPeriodo"></span>
+  </div>
+  <div class="rs-row" id="rsAtrasadosRow" onclick="openResumoModal('atrasados')" role="button" tabindex="0">
+    <div class="rs-info">
+      <div class="rs-label rs-label--red">Pedidos em atraso</div>
+    </div>
+    <div class="rs-right">
+      <span class="rs-count rs-count--red" id="rsAtrasadosCount">—</span>
+      <span class="rs-unit" id="rsAtrasadosUnit">pedidos</span>
+      <span class="rs-arrow">›</span>
+    </div>
+  </div>
+  <hr class="rs-divider">
+  <div class="rs-row" id="rsEntregasRow" onclick="openResumoModal('entregas')" role="button" tabindex="0">
+    <div class="rs-info">
+      <div class="rs-label rs-label--green">Pedidos com vencimento essa semana</div>
+    </div>
+    <div class="rs-right">
+      <span class="rs-count rs-count--green" id="rsEntregasCount">—</span>
+      <span class="rs-unit" id="rsEntregasUnit">pedidos</span>
+      <span class="rs-arrow">›</span>
     </div>
   </div>
 </div>
-<hr class="agenda-divider">
-<div class="agenda-section">
-  <div class="agenda-label">Próxima Vaga</div>
-  <div class="agenda-row">
-    <span class="agenda-date" id="agenda-data">—</span>
-    <div class="agenda-detail">
-      <b id="agenda-dia">—</b>
-      <span id="agenda-vagas"></span>
+
+
+<div class="ag2-grid">
+  <div class="ag2-card">
+    <div class="ag2-header">
+      <span class="ag2-title">Feriado</span>
+      <svg class="ag2-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect x="3" y="4" width="18" height="18" rx="2.5" stroke="#3b5ec6" stroke-width="1.7"/>
+        <path d="M16 2v4M8 2v4M3 9h18" stroke="#3b5ec6" stroke-width="1.7" stroke-linecap="round"/>
+        <rect x="7" y="13" width="3" height="3" rx=".6" fill="#3b5ec6"/>
+        <rect x="11" y="13" width="3" height="3" rx=".6" fill="#3b5ec6"/>
+      </svg>
     </div>
+    <div class="ag2-date" id="feriado-data">—</div>
+    <div class="ag2-name" id="feriado-nome">Nenhum</div>
+    <div class="ag2-sub" id="feriado-dia"></div>
+  </div>
+  <div class="ag2-card">
+    <div class="ag2-header">
+      <span class="ag2-title">Próxima vaga</span>
+      <svg class="ag2-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect x="3" y="4" width="18" height="18" rx="2.5" stroke="#3b5ec6" stroke-width="1.7"/>
+        <path d="M16 2v4M8 2v4M3 9h18" stroke="#3b5ec6" stroke-width="1.7" stroke-linecap="round"/>
+        <rect x="7" y="13" width="3" height="3" rx=".6" fill="#3b5ec6"/>
+        <rect x="11" y="13" width="3" height="3" rx=".6" fill="#3b5ec6"/>
+      </svg>
+    </div>
+    <div class="ag2-date" id="agenda-data">—</div>
+    <div class="ag2-name" id="agenda-dia">—</div>
+    <div class="ag2-sub" id="agenda-vagas"></div>
   </div>
 </div>
-</div>
 
-<div class="card resumo">
-<h3>Resumo</h3>
-<div class="resumo-row">
-  <span class="resumo-label">Pedidos Ativos</span>
-  <b class="resumo-val" id="pedidos">0</b>
-</div>
-<div class="resumo-row">
-  <span class="resumo-label">Pedidos (Ano)</span>
-  <b class="resumo-val" id="pedidos-ano">0</b>
-</div>
-<div class="resumo-row">
-  <span class="resumo-label" id="faturamento-label">Faturamento</span>
-  <b class="resumo-val resumo-val--green" id="faturamento">R$ 0</b>
-</div>
-<div class="resumo-row resumo-row--last">
-  <span class="resumo-label">Faturamento (Ano)</span>
-  <b class="resumo-val resumo-val--green" id="faturamento-ano">R$ 0</b>
-</div>
-</div>
-
+<div class="dash-section">
+  <h3 class="dash-title">Dashboard</h3>
+  <div class="dash-grid">
+    <div class="dash-card">
+      <div class="dash-label">Pedidos ativos</div>
+      <div class="dash-value" id="pedidos">0</div>
+      <div class="dash-chart-wrap"><canvas id="dashChartPedidos"></canvas></div>
+    </div>
+    <div class="dash-card">
+      <div class="dash-label">Pedidos (ano)</div>
+      <div class="dash-value" id="pedidos-ano">0</div>
+      <div class="dash-chart-wrap"><canvas id="dashChartPedidosAno"></canvas></div>
+    </div>
+    <div class="dash-card">
+      <div class="dash-label" id="faturamento-label">Faturamento</div>
+      <div class="dash-value dash-value--blue" id="faturamento">R$ 0</div>
+      <div class="dash-chart-wrap dash-chart-wrap--donut"><canvas id="dashChartFatMes"></canvas></div>
+    </div>
+    <div class="dash-card">
+      <div class="dash-label">Faturamento (ano)</div>
+      <div class="dash-value dash-value--blue" id="faturamento-ano">R$ 0</div>
+      <div class="dash-chart-wrap"><canvas id="dashChartFatAno"></canvas></div>
+    </div>
+  </div>
 </div>
 
 <div class="card chart-card">
@@ -126,15 +161,11 @@ setInterval(updateTime,1000);
 <canvas id="chartVendidos" class="chart-canvas"></canvas>
 </div>
 
-<div class="card chart-card">
-<h3>Modelos mais lucrativos</h3>
-<canvas id="chartLucro" class="chart-canvas"></canvas>
-</div>
 
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="script.js?v=20260624l"></script>
+<script src="script.js?v=20260625h"></script>
 
 <script src="../keyboard-dismiss.js"></script>
 </body>

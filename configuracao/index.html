@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Estofaria Digital</title>
+</head>
+<body>
+  <p>Redirecionando...</p>
+  <script>
+    (function(){
+      try {
+        var token = localStorage.getItem('auth_token') || localStorage.getItem('token') || ''
+        window.location.replace(token ? '/painel/' : '/login/')
+      } catch (_) {
+        window.location.replace('/login/')
+      }
+    })()
+  </script>
+</body>
+</html>

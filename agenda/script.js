@@ -1399,55 +1399,56 @@ function buildActionContextKey(context) {
   return String(context.kind || '')
 }
 
-function buildSheetButton({ label, hint, className, disabled, action }, targetDocument = document) {
+function buildSheetButton({ label, icon, className, disabled, action }, targetDocument = document) {
+  const cls = className || ''
   const btn = targetDocument.createElement('button')
   btn.type = 'button'
-  btn.className = `sheet-action-btn ${className || ''}`.trim()
+  btn.className = `sheet-action-btn ${cls}`.trim()
   btn.disabled = !!disabled
 
+  // Inline styles needed when rendered inside cross-document iframes
   if (targetDocument !== document) {
-    btn.style.width = '100%'
-    btn.style.display = 'block'
-    btn.style.textAlign = 'left'
-    btn.style.padding = '14px 16px'
-    btn.style.border = 'none'
-    btn.style.borderRadius = '12px'
-    btn.style.cursor = disabled ? 'not-allowed' : 'pointer'
-    btn.style.fontSize = '15px'
-    btn.style.fontWeight = '700'
-    btn.style.marginBottom = '10px'
-    btn.style.boxSizing = 'border-box'
-    btn.style.webkitTapHighlightColor = 'transparent'
-    btn.style.touchAction = 'manipulation'
-    if ((className || '').includes('is-danger')) {
-      btn.style.background = '#ffe9ec'
-      btn.style.color = '#ac3950'
-    } else if ((className || '').includes('is-warning')) {
-      btn.style.background = '#fff4dc'
-      btn.style.color = '#765100'
-    } else if ((className || '').includes('is-success')) {
-      btn.style.background = '#eaf9f1'
-      btn.style.color = '#1e7d59'
-    } else {
-      btn.style.background = '#eef3ff'
-      btn.style.color = '#27457c'
-    }
-  }
-
-  const title = targetDocument.createElement('strong')
-  title.textContent = label
-  title.style.display = 'block'
-  btn.appendChild(title)
-
-  if (hint) {
-    const small = targetDocument.createElement('small')
-    small.textContent = hint
-    small.style.display = 'block'
-    small.style.fontSize = '12px'
-    small.style.fontWeight = '700'
-    small.style.opacity = '.85'
-    small.style.marginTop = '4px'
-    btn.appendChild(small)
+    let bg = '#eef3ff', color = '#27457c', iconBg = '#d5e3ff'
+    if (cls.includes('is-danger'))    { bg = '#fff0f3'; color = '#ac3950'; iconBg = '#ffd5dc' }
+    else if (cls.includes('is-warning'))   { bg = '#fff8ec'; color = '#765100'; iconBg = '#ffe8b0' }
+    else if (cls.includes('is-success'))   { bg = '#eaf9f1'; color = '#1e7d59'; iconBg = '#c8f0dc' }
+    else if (cls.includes('is-available')) { bg = '#f0ecff'; color = '#4a27a0'; iconBg = '#ddd5ff' }
+    Object.assign(btn.style, {
+      width: '100%', display: 'flex', alignItems: 'center', gap: '14px',
+      padding: '12px 14px', border: 'none', borderRadius: '14px',
+      cursor: disabled ? 'not-allowed' : 'pointer', textAlign: 'left',
+      webkitTapHighlightColor: 'transparent', touchAction: 'manipulation',
+      marginBottom: '10px', boxSizing: 'border-box', background: bg, color
+    })
+    const iconEl = targetDocument.createElement('span')
+    iconEl.textContent = icon || '•'
+    Object.assign(iconEl.style, {
+      width: '46px', height: '46px', borderRadius: '12px', background: iconBg,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: '22px', flexShrink: '0', lineHeight: '1'
+    })
+    btn.appendChild(iconEl)
+    const labelEl = targetDocument.createElement('span')
+    labelEl.textContent = label
+    Object.assign(labelEl.style, { flex: '1', fontSize: '15px', fontWeight: '700', color: 'inherit' })
+    btn.appendChild(labelEl)
+    const arrow = targetDocument.createElement('span')
+    arrow.textContent = '›'
+    Object.assign(arrow.style, { fontSize: '22px', fontWeight: '300', color: '#b0bcd4', lineHeight: '1' })
+    btn.appendChild(arrow)
+  } else {
+    const iconEl = targetDocument.createElement('span')
+    iconEl.className = 'sheet-btn-icon'
+    iconEl.textContent = icon || '•'
+    btn.appendChild(iconEl)
+    const labelEl = targetDocument.createElement('span')
+    labelEl.className = 'sheet-btn-label'
+    labelEl.textContent = label
+    btn.appendChild(labelEl)
+    const arrow = targetDocument.createElement('span')
+    arrow.className = 'sheet-btn-arrow'
+    arrow.textContent = '›'
+    btn.appendChild(arrow)
   }
 
   if (action) {
@@ -1599,64 +1600,51 @@ function renderActionSheetButtons(context, actions, targetDocument) {
   actions.innerHTML = ''
 
   if (context.kind === 'order') {
-    if (context.row.status !== 'producao') {
-      actions.appendChild(
-        buildSheetButton({
-          label: 'Marcar como em produção',
-          hint: 'Atualiza o pedido para a etapa de produção.',
-          action: async () => {
-            await mudarStatus(context.row.id, 'producao')
-            closeActionSheet()
-          }
-        }, targetDocument)
-      )
+    const st = context.row.status
+
+    actions.appendChild(buildSheetButton({
+      label: 'Em produção',
+      icon: '📋',
+      className: 'is-primary',
+      action: async () => { await mudarStatus(context.row.id, 'producao'); closeActionSheet() }
+    }, targetDocument))
+
+    if (st !== 'disponivel' && st !== 'entregue') {
+      actions.appendChild(buildSheetButton({
+        label: 'Disponível para entrega',
+        icon: '📦',
+        className: 'is-available',
+        action: async () => { await mudarStatus(context.row.id, 'disponivel'); closeActionSheet() }
+      }, targetDocument))
     }
 
-    if (context.row.status !== 'entregue') {
-      actions.appendChild(
-        buildSheetButton({
-          label: 'Marcar como entregue',
-          hint: 'Move o pedido para o histórico como entregue.',
-          action: async () => {
-            await mudarStatus(context.row.id, 'entregue')
-            closeActionSheet()
-          }
-        }, targetDocument)
-      )
+    if (st !== 'entregue') {
+      actions.appendChild(buildSheetButton({
+        label: 'Entregue',
+        icon: '🚚',
+        className: 'is-success',
+        action: async () => { await mudarStatus(context.row.id, 'entregue'); closeActionSheet() }
+      }, targetDocument))
     }
 
+    actions.appendChild(buildSheetButton({
+      label: 'Cancelar pedido',
+      icon: '🚫',
+      className: 'is-warning',
+      action: async () => { await mudarStatus(context.row.id, 'cancelado'); closeActionSheet() }
+    }, targetDocument))
 
-
-    actions.appendChild(
-      buildSheetButton({
-        label: 'Cancelar pedido',
-        hint: 'Mantém o registro no histórico como cancelado.',
-        className: 'is-warning',
-        action: async () => {
-          await mudarStatus(context.row.id, 'cancelado')
-          closeActionSheet()
-        }
-      }, targetDocument)
-    )
-
-    actions.appendChild(
-      buildSheetButton({
-        label: 'Excluir pedido',
-        hint: 'Remove definitivamente este pedido da agenda.',
-        className: 'is-danger',
-        action: async () => {
-          const confirmed = await ui().confirm('Excluir este pedido definitivamente?', {
-            title: 'Excluir pedido',
-            confirmText: 'Excluir',
-            type: 'danger'
-          })
-          if (confirmed) {
-            await excluir(context.row.id)
-            closeActionSheet()
-          }
-        }
-      }, targetDocument)
-    )
+    actions.appendChild(buildSheetButton({
+      label: 'Excluir pedido',
+      icon: '🗑️',
+      className: 'is-danger',
+      action: async () => {
+        const confirmed = await ui().confirm('Excluir este pedido definitivamente?', {
+          title: 'Excluir pedido', confirmText: 'Excluir', type: 'danger'
+        })
+        if (confirmed) { await excluir(context.row.id); closeActionSheet() }
+      }
+    }, targetDocument))
     return
   }
 
@@ -1666,31 +1654,24 @@ function renderActionSheetButtons(context, actions, targetDocument) {
     const vagasAtuais = getVagasSemana(weekKey)
 
     if (context.isBlocked) {
-      // Linha bloqueada: só mostra "Desbloquear"
-      actions.appendChild(
-        buildSheetButton({
-          label: '🔓 Desbloquear vaga',
-          hint: `Restaura 1 vaga nesta semana (${vagasAtuais}/${padrao}).`,
-          action: () => { desbloquearVaga(weekKey); closeActionSheet() }
-        }, targetDocument)
-      )
+      actions.appendChild(buildSheetButton({
+        label: 'Desbloquear vaga',
+        icon: '🔓',
+        action: () => { desbloquearVaga(weekKey); closeActionSheet() }
+      }, targetDocument))
     } else {
-      // Linha disponível: "Reprogramar data" + "Bloquear"
-      actions.appendChild(
-        buildSheetButton({
-          label: '📅 Reprogramar data',
-          hint: 'Altera as datas de produção e entrega desta vaga.',
-          action: () => reprogramarVaga(weekKey, context.ent_date, context.prod_date)
-        }, targetDocument)
-      )
-      actions.appendChild(
-        buildSheetButton({
-          label: '🚫 Bloquear vaga',
-          hint: `Reduz 1 vaga nesta semana.`,
-          className: 'is-warning',
-          action: () => { bloquearVaga(weekKey); closeActionSheet() }
-        }, targetDocument)
-      )
+      actions.appendChild(buildSheetButton({
+        label: 'Reprogramar data',
+        icon: '📅',
+        className: 'is-primary',
+        action: () => reprogramarVaga(weekKey, context.ent_date, context.prod_date)
+      }, targetDocument))
+      actions.appendChild(buildSheetButton({
+        label: 'Bloquear vaga',
+        icon: '🚫',
+        className: 'is-warning',
+        action: () => { bloquearVaga(weekKey); closeActionSheet() }
+      }, targetDocument))
     }
   }
 }
@@ -1793,7 +1774,7 @@ function menuPedido(payload) {
       kind: 'order',
       row: payload.row,
       title: payload.row.cliente || 'Pedido',
-      subtitle: `${payload.row.descricao || 'Sem descrição'} • produção em ${formatFullDate(payload.row.prod_date)}`
+      subtitle: `Produção em ${formatFullDate(payload.row.prod_date)}`
     })
     return
   }
@@ -2186,7 +2167,18 @@ function initAgenda() {
 
   agendaBootstrapped = true
 
-  load().catch(err => {
+  load().then(() => {
+    const autoOpen = sessionStorage.getItem('agenda_auto_open')
+    if (autoOpen) {
+      sessionStorage.removeItem('agenda_auto_open')
+      setTimeout(() => {
+        if (autoOpen === 'feriados') openFeriadosFullscreen()
+        if (autoOpen === 'historico') openHistoricoFullscreen()
+      }, 300)
+    } else {
+      if (typeof renderBlocos === 'function') { try { renderBlocos() } catch (_) {} }
+    }
+  }).catch(err => {
     console.error(err)
     notifyError('Não consegui carregar a agenda.')
   })
@@ -2853,25 +2845,9 @@ function applyShellFullscreen(on) {
 }
 
 function openAgendaFullscreen() {
-  const m = document.getElementById('agendaFullscreen')
-  if (!m) return
-  m.hidden = false
-  document.body.style.overflow = 'hidden'
-  applyShellFullscreen(true)
   if (typeof renderBlocos === 'function') { try { renderBlocos() } catch (_) {} }
-  requestAnimationFrame(function(){
-    m.scrollTop = 0
-    var wrap = m.querySelector('.fs-table-wrap')
-    if(wrap) wrap.scrollTop = 0
-  })
 }
-function closeAgendaFullscreen() {
-  const m = document.getElementById('agendaFullscreen')
-  if (!m) return
-  m.hidden = true
-  document.body.style.overflow = ''
-  applyShellFullscreen(false)
-}
+function closeAgendaFullscreen() {}
 function openPedidoFullscreen() {
   const m = document.getElementById('pedidoFullscreen')
   if (!m) return

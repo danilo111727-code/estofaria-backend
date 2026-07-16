@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Configuração — Estofaria Digital</title>
+<script src="../config.js"></script>
+<script src="../auth-guard.js"></script>
+<link rel="stylesheet" href="../mobile-fixes.css">
+<link rel="stylesheet" href="../agenda/style.css?v=20260424i">
+<style>
+.cfg-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  padding: 24px 16px 8px;
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="brand">Estofaria Digital</div>
+  <div id="time"></div>
+</header>
+
+<nav class="nav">
+  <a class="nav-btn" href="../painel/">📊 Painel</a>
+  <a class="nav-btn" href="../material/">🧵 Materiais</a>
+  <a class="nav-btn" href="../precificacao/">💰 Precificação</a>
+  <a class="nav-btn" href="../catalogo/">🛋️ Catálogo</a>
+  <a class="nav-btn" href="../itens-personalizacao/">🎨 Itens para personalização</a>
+  <a class="nav-btn" href="../vendedor/">🤝 Vendedor</a>
+  <a class="nav-btn" href="../agenda/">📅 Agenda</a>
+  <a class="nav-btn active" href="../configuracao/">⚙️ Configuração</a>
+  <a class="nav-btn" href="../assinatura/">💳 Assinatura</a>
+</nav>
+
+<main class="page-shell">
+
+  <div class="cfg-section-label">Agenda</div>
+
+  <div class="small-cards-row">
+    <div class="small-card sc-red" role="button" tabindex="0"
+      onclick="abrirFeriadosViaAgenda()"
+      onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();abrirFeriadosViaAgenda()}">
+      <div class="sc-icon">🏌🏼‍♂️</div>
+      <div class="sc-label">Feriados</div>
+      <div class="sc-arrow">›</div>
+    </div>
+    <div class="small-card sc-slate" role="button" tabindex="0"
+      onclick="abrirHistoricoViaAgenda()"
+      onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();abrirHistoricoViaAgenda()}">
+      <div class="sc-icon">📜</div>
+      <div class="sc-label">Histórico</div>
+      <div class="sc-arrow">›</div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+function abrirFeriadosViaAgenda() {
+  sessionStorage.setItem('agenda_auto_open', 'feriados')
+  window.parent.postMessage({ type: 'estofaria-navigate', module: 'agenda' }, '*')
+}
+function abrirHistoricoViaAgenda() {
+  sessionStorage.setItem('agenda_auto_open', 'historico')
+  window.parent.postMessage({ type: 'estofaria-navigate', module: 'agenda' }, '*')
+}
+</script>
+
+<script src="../keyboard-dismiss.js"></script>
+</body>
+</html>
