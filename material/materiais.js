@@ -105,20 +105,8 @@ function updateModalBadge(total){
 
 // ── fullscreen ────────────────────────────────────────────────
 
-function openMateriaisFullscreen(){
-  const modal = document.getElementById('materiaisFullscreen')
-  if(!modal) return
-  modal.hidden = false
-  document.body.style.overflow = 'hidden'
-  renderMaterials()
-}
-
-function closeMateriaisFullscreen(){
-  const modal = document.getElementById('materiaisFullscreen')
-  if(!modal) return
-  modal.hidden = true
-  document.body.style.overflow = ''
-}
+function openMateriaisFullscreen(){ renderMaterials() }
+function closeMateriaisFullscreen(){}
 
 // ── unidades ─────────────────────────────────────────────────
 
@@ -375,8 +363,8 @@ async function seedMateriaisPadrao(){
 refreshUnits()
 
 function _initMateriaisData(){
-  loadBlockMeta()
-  seedMateriaisPadrao().then(()=>loadBlockMeta())
+  renderMaterials()
+  seedMateriaisPadrao().then(()=>renderMaterials())
 }
 
 // Se auth-guard já concluiu (shell estava no cache), inicializar agora.
