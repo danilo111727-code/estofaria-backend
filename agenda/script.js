@@ -524,10 +524,6 @@ async function loadConfig() {
     console.error('loadConfig', e)
   }
 
-  if ($('prazo')) $('prazo').value = state.config.prazo_dias
-  if ($('vagas')) $('vagas').value = state.config.vagas_semana
-  if ($('tipoDias')) $('tipoDias').value = state.config.tipo_dias
-  renderDiasUteisCheckboxes()
   const sel = $('cidadeSelecionada')
   if (sel && state.config.city_code) {
     const opt = sel.querySelector(`option[value="${state.config.city_code}"]`)
@@ -873,32 +869,6 @@ function renderActionSheetButtons(context, actions, targetDocument) {
     return
   }
 
-  if (context.kind === 'empty-slot') {
-    const padrao  = Math.max(1, Number(state.config.vagas_semana) || 1)
-    const weekKey = context.weekKey || getSemanaKey(context.ent_date || context.prod_date)
-    const vagasAtuais = getVagasSemana(weekKey)
-
-    if (context.isBlocked) {
-      actions.appendChild(buildSheetButton({
-        label: 'Desbloquear vaga',
-        icon: '🔓',
-        action: () => { desbloquearVaga(weekKey); closeActionSheet() }
-      }, targetDocument))
-    } else {
-      actions.appendChild(buildSheetButton({
-        label: 'Reprogramar data',
-        icon: '📅',
-        className: 'is-primary',
-        action: () => reprogramarVaga(weekKey, context.ent_date, context.prod_date)
-      }, targetDocument))
-      actions.appendChild(buildSheetButton({
-        label: 'Bloquear vaga',
-        icon: '🚫',
-        className: 'is-warning',
-        action: () => { bloquearVaga(weekKey); closeActionSheet() }
-      }, targetDocument))
-    }
-  }
 }
 
 function openActionSheet(context) {
@@ -1003,16 +973,6 @@ function menuPedido(payload) {
     return
   }
 
-  const weekKey = payload.weekKey || getSemanaKey(payload.ent_date || payload.prod_date)
-  openActionSheet({
-    kind: 'empty-slot',
-    isBlocked: !!payload.isBlocked,
-    title: payload.isBlocked ? 'Vaga bloqueada' : 'Vaga disponível',
-    subtitle: `Entrega prevista: ${formatFullDate(payload.ent_date)}`,
-    prod_date: payload.prod_date,
-    ent_date: payload.ent_date,
-    weekKey
-  })
 }
 
 function makeActionButton(onClick) {
