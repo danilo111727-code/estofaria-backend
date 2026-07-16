@@ -52,11 +52,14 @@ setInterval(updateTime,1000);
 
 <div id="app">
 
-  <!-- Cadastrar material -->
-  <div class="card">
-    <h3>Cadastrar material</h3>
+  <!-- Formulário colapsável -->
+  <div class="card mat-cadastro-card" id="cadastroMaterialCard" hidden>
+    <div class="mat-cadastro-header">
+      <h3>Novo material</h3>
+      <button class="mat-cadastro-close" onclick="toggleCadastroMaterial()" aria-label="Fechar">✕</button>
+    </div>
     <div class="row">
-      <input id="materialNome" placeholder="Material">
+      <input id="materialNome" placeholder="Nome do material">
       <select id="materialUnidade"></select>
     </div>
     <div class="row">
@@ -69,7 +72,10 @@ setInterval(updateTime,1000);
   <div class="card">
     <div class="mat-list-header">
       <h3>🧵 Materiais cadastrados</h3>
-      <span class="mat-count-badge"><span id="materiaisModalCount">0</span> materiais</span>
+      <div class="mat-list-header-actions">
+        <span class="mat-count-badge"><span id="materiaisModalCount">0</span> materiais</span>
+        <button class="mat-new-btn" id="matNovoBtn" onclick="toggleCadastroMaterial()">+ Novo material</button>
+      </div>
     </div>
     <div class="list-controls">
       <input id="search" placeholder="🔎 Pesquisar material" oninput="filterTable()">
@@ -93,7 +99,7 @@ setInterval(updateTime,1000);
 
 </div>
 
-<script src="materiais.js?v=20260716g"></script>
+<script src="materiais.js?v=20260716h"></script>
 <script src="../keyboard-dismiss.js"></script>
 </body>
 </html>
