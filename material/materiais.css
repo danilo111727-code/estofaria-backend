@@ -99,3 +99,8 @@ button[disabled],button[aria-busy="true"]{cursor:not-allowed;opacity:.78;transfo
 
 .materials-empty{text-align:center;color:#6a7894;padding:24px 12px;background:#fafbff;border-radius:10px;font-size:14px;}
 .helper-note{margin-top:10px;font-size:13px;line-height:1.45;color:#60708f;}
+
+/* ── Cabeçalho inline da lista ──────────────────────────── */
+.mat-list-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;}
+.mat-list-header h3{margin:0;font-size:16px;color:#1d2740;}
+.mat-count-badge{background:#eef1fb;color:#3f5fa3;border-radius:20px;padding:5px 13px;font-size:13px;font-weight:600;white-space:nowrap;}
