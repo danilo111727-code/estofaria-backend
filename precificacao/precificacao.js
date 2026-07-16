@@ -89,20 +89,40 @@ function bindCurrencyInputs(){
   })
 }
 
+function atualizarFotoPreview(dataUrl){
+  const preview = document.getElementById('fotoPreview')
+  const placeholder = document.getElementById('fotoPlaceholder')
+  const editBtn = document.getElementById('fotoEditBtn')
+  if(dataUrl){
+    if(preview){ preview.src = dataUrl; preview.style.display = 'block' }
+    if(placeholder) placeholder.style.display = 'none'
+    if(editBtn) editBtn.style.display = 'flex'
+  } else {
+    if(preview){ preview.src = ''; preview.style.display = 'none' }
+    if(placeholder) placeholder.style.display = 'flex'
+    if(editBtn) editBtn.style.display = 'none'
+  }
+}
+
+function atualizarContadorDescricao(el){
+  const count = document.getElementById('descricaoCount')
+  if(count && el) count.textContent = `${el.value.length}/300`
+}
+
 function bindPhotoInput(){
   const input = document.getElementById('fotoModelo')
   if(!input || input.dataset.photoBound === '1') return
   input.dataset.photoBound = '1'
   input.addEventListener('change', () => {
-    const nomeEl = document.getElementById('fotoNomeArquivo')
     if(input.files?.[0]){
-      if(nomeEl) nomeEl.textContent = input.files[0].name
-      preloadModelImageFromInput().then(() => persistDraftState()).catch(error => console.error(error))
+      preloadModelImageFromInput()
+        .then(dataUrl => { atualizarFotoPreview(dataUrl); persistDraftState() })
+        .catch(error => console.error(error))
       return
     }
-    if(nomeEl) nomeEl.textContent = 'Nenhum arquivo selecionado'
     currentImageLoadPromise = null
     if(!modeloEditandoId) currentModelImageDataUrl = ''
+    atualizarFotoPreview('')
     persistDraftState()
   })
 }
@@ -466,7 +486,7 @@ function renderMateriais(){
       <td>${formatQty(m.quantity)}</td>
       <td>${formatBRLFromCents(m.unit_price_cents)}</td>
       <td>${formatBRLFromCents(m.total_cents)}</td>
-      <td class="delete" onclick="deleteMaterial(${i})">×</td>
+      <td class="delete" onclick="deleteMaterial(${i})" title="Remover"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></td>
     `
     table.appendChild(tr)
   })
@@ -736,15 +756,17 @@ function editarModelo(id){
   document.getElementById('baseMedida').value = formatQty(modelo.base_meters)
   document.getElementById('lucroDesejado').value = formatBRLFromCents(modelo.target_profit_cents || 0)
   const veEl = document.getElementById('valorEspacamento')
-  if (veEl) veEl.value = (modelo.valor_por_espacamento_cents > 0) ? (modelo.valor_por_espacamento_cents / 100).toFixed(2) : ''
+  if(veEl) veEl.value = (modelo.valor_por_espacamento_cents > 0) ? (modelo.valor_por_espacamento_cents / 100).toFixed(2) : ''
   const descEl = document.getElementById('descricaoModelo')
-  if (descEl) descEl.value = modelo.descricao_modelo || ''
+  if(descEl){ descEl.value = modelo.descricao_modelo || ''; atualizarContadorDescricao(descEl) }
   aplicarSpacing(modelo.spacing_cm)
   const fotoInput = document.getElementById('fotoModelo')
   if(fotoInput) fotoInput.value = ''
+  atualizarFotoPreview(currentModelImageDataUrl)
   materiaisModelo = Array.isArray(modelo.materials) ? modelo.materials.map(m=>({ ...m })) : []
   renderMateriais()
   renderItensIncluidos(Array.isArray(modelo.itens_incluidos) ? modelo.itens_incluidos : [])
+  updateItensBlockMeta()
   renderModelos()
   persistDraftState()
   closeModelosFullscreen()
@@ -825,9 +847,13 @@ function limparFormulario(){
     const el = document.getElementById(id)
     if(el && id !== 'searchModelo') el.value = ''
   })
+  atualizarFotoPreview('')
+  const descEl = document.getElementById('descricaoModelo')
+  if(descEl) atualizarContadorDescricao(descEl)
   aplicarSpacing(10)
   renderMateriais()
   renderItensIncluidos([])
+  updateItensBlockMeta()
   renderModelos()
   clearDraftState()
 }
@@ -840,12 +866,10 @@ function updateModelosBlockMeta(){
   const meta = document.getElementById('modelosBlockMeta')
   const badge = document.getElementById('modelosModalCount')
   const count = modelos.length
-  const editando = modeloEditandoId ? modelos.find(m => m.id === modeloEditandoId) : null
+  const ultimo = modelos.length ? modelos[0] : null
   const txt = count === 0
     ? 'Nenhum modelo salvo ainda'
-    : editando
-      ? `${count} modelo${count !== 1 ? 's' : ''} · Editando: ${editando.name}`
-      : `${count} modelo${count !== 1 ? 's' : ''} cadastrado${count !== 1 ? 's' : ''}`
+    : `${count} modelo${count !== 1 ? 's' : ''} cadastrado${count !== 1 ? 's' : ''}${ultimo ? ` · Último: ${ultimo.name}` : ''}`
   if(meta) meta.textContent = txt
   if(badge) badge.textContent = count
 }
@@ -910,8 +934,7 @@ function updateItensBlockMeta(){
   const meta = document.getElementById('itensBlockMeta')
   const badge = document.getElementById('itensModalCount')
   const marcados = lista ? lista.querySelectorAll('input[type=checkbox]:checked').length : 0
-  const total = lista ? lista.querySelectorAll('input[type=checkbox]').length : 0
-  if(meta) meta.textContent = marcados
+  if(meta) meta.textContent = marcados === 0 ? 'Selecionar itens' : `${marcados} ${marcados === 1 ? 'item selecionado' : 'itens selecionados'}`
   if(badge) badge.textContent = marcados
 }
 
