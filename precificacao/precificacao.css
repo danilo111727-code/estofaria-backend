@@ -19,7 +19,13 @@ body{ font-family:Arial,sans-serif; background:#f4f4f4; margin:0; padding:20px; 
 .card-section-header{
   display:flex; align-items:center; gap:10px; margin-bottom:14px;
 }
-.card-section-header h3{ margin:0; font-size:15px; font-weight:800; color:#1d2740; }
+.card-section-header h3{ margin:0; font-size:15px; font-weight:800; color:#1d2740; flex:1; }
+.card-clear-btn{
+  margin-left:auto; display:flex; align-items:center; justify-content:center;
+  width:28px; height:28px; border-radius:50%; border:none; background:transparent;
+  color:#94a3b8; cursor:pointer; transition:background .15s, color .15s; flex-shrink:0;
+}
+.card-clear-btn:hover{ background:#fee2e2; color:#dc2626; }
 .card-section-icon{
   width:34px; height:34px; border-radius:10px;
   display:flex; align-items:center; justify-content:center; flex-shrink:0;
@@ -220,8 +226,6 @@ select{ flex:1; min-width:0; }
 }
 .acao-btn:hover{ transform:translateY(-1px); }
 .acao-btn[disabled], .acao-btn[aria-busy="true"]{ cursor:not-allowed; opacity:.7; transform:none; box-shadow:none; }
-.acao-novo{ background:#fff; color:#3f5fa3; border:2px solid #d1d9ef; }
-.acao-novo:hover{ background:#f0f4ff; border-color:#3f5fa3; }
 .acao-salvar{ background:#16a34a; color:#fff; box-shadow:0 2px 8px rgba(22,163,74,.25); }
 .acao-salvar:hover{ background:#15803d; box-shadow:0 5px 16px rgba(22,163,74,.35); }
 .acao-pdf{ background:#fff; color:#3f5fa3; border:2px solid #d1d9ef; }
