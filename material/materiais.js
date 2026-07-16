@@ -110,6 +110,19 @@ function updateModalBadge(total){
 function openMateriaisFullscreen(){ renderMaterials() }
 function closeMateriaisFullscreen(){}
 
+window.toggleCadastroMaterial = function(){
+  const card = document.getElementById('cadastroMaterialCard')
+  const btn  = document.getElementById('matNovoBtn')
+  if(!card) return
+  const opening = card.hidden
+  card.hidden = !opening
+  if(btn) btn.classList.toggle('active', opening)
+  if(opening){
+    const nomeInput = document.getElementById('materialNome')
+    if(nomeInput) setTimeout(()=>nomeInput.focus(), 50)
+  }
+}
+
 window.setSortMateria = function(sort){
   currentSort = sort
   document.querySelectorAll('.mat-sort-btn').forEach(b => b.classList.remove('active'))
@@ -217,7 +230,11 @@ async function addMaterial(){
       document.getElementById('materialNome').value=''
       document.getElementById('materialValor').value=''
       saveLastUpdate()
-      await loadBlockMeta()
+      const card=document.getElementById('cadastroMaterialCard')
+      if(card) card.hidden=true
+      const btn=document.getElementById('matNovoBtn')
+      if(btn) btn.classList.remove('active')
+      await renderMaterials()
     }catch(e){ ui().error('Erro ao adicionar: '+e.message) }
   },{loadingText:'Adicionando...'})
 }
