@@ -265,9 +265,12 @@ async function renderMaterials(){
 
     const header=document.createElement('div')
     header.className='mat-card-header'
+    const priceDisplay = m.price_cents > 0 ? centsToDisplay(m.price_cents) : '—'
+    const priceClass = m.price_cents > 0 ? 'mat-card-price' : 'mat-card-price no-price'
     header.innerHTML=`
       <span class="mat-card-name">${m.name}</span>
       <span class="mat-card-unit-badge">${m.unit}</span>
+      <span class="${priceClass}">${priceDisplay}</span>
       <span class="mat-card-arrow">▼</span>`
     header.addEventListener('click',()=>card.classList.toggle('open'))
 
