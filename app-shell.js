@@ -7,6 +7,7 @@
     'itens-personalizacao': { path:'/itens-personalizacao/', content:'/itens-personalizacao/__content.html', title:'Itens para personalização' },
     'vendedor':             { path:'/vendedor/',             content:'/vendedor/__content.html',             title:'Vendedor' },
     'agenda':               { path:'/agenda/',               content:'/agenda/__content.html',               title:'Agenda' },
+    'configuracao':         { path:'/configuracao/',         content:'/configuracao/__content.html',         title:'Configuração' },
     'assinatura':           { path:'/assinatura/',           content:'/assinatura/__content.html',           title:'Assinatura' },
     'master':               { path:'/master/',               content:'/master/__content.html',               title:'Master' }
   };
