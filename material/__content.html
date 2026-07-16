@@ -73,6 +73,10 @@ setInterval(updateTime,1000);
     </div>
     <div class="list-controls">
       <input id="search" placeholder="🔎 Pesquisar material" oninput="filterTable()">
+      <div class="mat-sort-btns">
+        <button class="mat-sort-btn active" id="sortAZ" onclick="setSortMateria('az')">A-Z</button>
+        <button class="mat-sort-btn" id="sortPrice" onclick="setSortMateria('price')">R$↑</button>
+      </div>
     </div>
     <div id="materialsContainer"></div>
   </div>
@@ -89,7 +93,7 @@ setInterval(updateTime,1000);
 
 </div>
 
-<script src="materiais.js?v=20260716f"></script>
+<script src="materiais.js?v=20260716g"></script>
 <script src="../keyboard-dismiss.js"></script>
 </body>
 </html>
