@@ -1,15 +1,16 @@
 (function(){
+  var CV = '20260716f';
   var ROUTES = {
-    'painel':               { path:'/painel/',               content:'/painel/__content.html',               title:'Painel' },
-    'material':             { path:'/material/',             content:'/material/__content.html',             title:'Materiais' },
-    'precificacao':         { path:'/precificacao/',         content:'/precificacao/__content.html',         title:'Precificação' },
-    'catalogo':             { path:'/catalogo/',             content:'/catalogo/__content.html',             title:'Catálogo' },
-    'itens-personalizacao': { path:'/itens-personalizacao/', content:'/itens-personalizacao/__content.html', title:'Itens para personalização' },
-    'vendedor':             { path:'/vendedor/',             content:'/vendedor/__content.html',             title:'Vendedor' },
-    'agenda':               { path:'/agenda/',               content:'/agenda/__content.html',               title:'Agenda' },
-    'configuracao':         { path:'/configuracao/',         content:'/configuracao/__content.html',         title:'Configuração' },
-    'assinatura':           { path:'/assinatura/',           content:'/assinatura/__content.html',           title:'Assinatura' },
-    'master':               { path:'/master/',               content:'/master/__content.html',               title:'Master' }
+    'painel':               { path:'/painel/',               content:'/painel/__content.html?v='+CV,               title:'Painel' },
+    'material':             { path:'/material/',             content:'/material/__content.html?v='+CV,             title:'Materiais' },
+    'precificacao':         { path:'/precificacao/',         content:'/precificacao/__content.html?v='+CV,         title:'Precificação' },
+    'catalogo':             { path:'/catalogo/',             content:'/catalogo/__content.html?v='+CV,             title:'Catálogo' },
+    'itens-personalizacao': { path:'/itens-personalizacao/', content:'/itens-personalizacao/__content.html?v='+CV, title:'Itens para personalização' },
+    'vendedor':             { path:'/vendedor/',             content:'/vendedor/__content.html?v='+CV,             title:'Vendedor' },
+    'agenda':               { path:'/agenda/',               content:'/agenda/__content.html?v='+CV,               title:'Agenda' },
+    'configuracao':         { path:'/configuracao/',         content:'/configuracao/__content.html?v='+CV,         title:'Configuração' },
+    'assinatura':           { path:'/assinatura/',           content:'/assinatura/__content.html?v='+CV,           title:'Assinatura' },
+    'master':               { path:'/master/',               content:'/master/__content.html?v='+CV,               title:'Master' }
   };
 
   var wrap    = document.querySelector('.content-frame-wrap');
