@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Configuração — Estofaria Digital</title>
 <script src="../config.js"></script>
 <script src="../auth-guard.js"></script>
@@ -16,6 +16,9 @@
   text-transform: uppercase;
   color: #94a3b8;
   padding: 24px 16px 8px;
+}
+.cfg-section-label:first-of-type {
+  padding-top: 16px;
 }
 </style>
 </head>
@@ -40,38 +43,104 @@
 
 <main class="page-shell">
 
-  <div class="cfg-section-label">Agenda</div>
+  <div class="cfg-section-label">Localização e Feriados</div>
 
-  <div class="small-cards-row">
-    <div class="small-card sc-red" role="button" tabindex="0"
-      onclick="abrirFeriadosViaAgenda()"
-      onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();abrirFeriadosViaAgenda()}">
-      <div class="sc-icon">🏌🏼‍♂️</div>
-      <div class="sc-label">Feriados</div>
-      <div class="sc-arrow">›</div>
+  <div class="fs-container" style="padding:0">
+
+    <div class="fs-card" style="margin-bottom:14px">
+      <h3 class="fs-section-head">Localização</h3>
+      <p class="fs-help">Selecione seu estado e cidade para que a Agenda considere os feriados estaduais e municipais oficiais.</p>
+      <div class="form-grid compact-grid">
+        <label>
+          <span>Estado</span>
+          <select id="estadoSelecionado" onchange="updateCidadesSelect()">
+            <option value="">Selecione o estado</option>
+          </select>
+        </label>
+        <label>
+          <span>Cidade</span>
+          <select id="cidadeSelecionada" onchange="handleCityChange()">
+            <option value="">Selecione a cidade</option>
+          </select>
+        </label>
+      </div>
     </div>
-    <div class="small-card sc-slate" role="button" tabindex="0"
-      onclick="abrirHistoricoViaAgenda()"
-      onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();abrirHistoricoViaAgenda()}">
-      <div class="sc-icon">📜</div>
-      <div class="sc-label">Histórico</div>
-      <div class="sc-arrow">›</div>
+
+    <div class="fs-card" style="margin-bottom:14px">
+      <h3 class="fs-section-head">Feriados oficiais (nacionais e estaduais)</h3>
+      <p class="fs-help">A agenda ignora estas datas quando o tipo estiver configurado como dias úteis.</p>
+      <div class="fs-table-wrap">
+        <table class="fs-gen-table">
+          <thead>
+            <tr>
+              <th class="col-data">Data</th>
+              <th>Feriado</th>
+              <th class="col-tipo">Tipo</th>
+            </tr>
+          </thead>
+          <tbody id="feriadosTabela"><tr><td colspan="3">Carregando…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="fs-card" style="margin-bottom:14px">
+      <h3 class="fs-section-head">Feriados municipais</h3>
+      <p class="fs-help">Adicione os feriados do seu município. A agenda também irá ignorá-los nos dias úteis.</p>
+      <div class="form-grid compact-grid">
+        <label>
+          <span>Data</span>
+          <input id="feriadoData" type="date">
+        </label>
+        <label>
+          <span>Nome do feriado</span>
+          <input id="feriadoNome" placeholder="Ex.: Aniversário da cidade">
+        </label>
+      </div>
+      <button class="fs-secondary-btn" onclick="addManualHoliday()" style="margin-bottom:14px;">+ Adicionar feriado</button>
+      <div class="fs-table-wrap">
+        <table class="fs-gen-table">
+          <thead>
+            <tr>
+              <th class="col-data">Data</th>
+              <th>Feriado</th>
+              <th class="col-tipo">Ação</th>
+            </tr>
+          </thead>
+          <tbody id="feriadosManuaisTabela"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="cfg-section-label">Histórico de Pedidos</div>
+
+  <div class="fs-container" style="padding:0">
+    <div class="fs-card">
+      <p class="fs-help">Pedidos finalizados (entregues). Role a tabela para ver mais.</p>
+      <div class="fs-table-wrap" style="max-height:400px">
+        <table class="fs-gen-table">
+          <thead>
+            <tr>
+              <th>Cliente</th>
+              <th>Descrição</th>
+              <th class="col-data">Entrega</th>
+              <th class="col-tipo">Status</th>
+            </tr>
+          </thead>
+          <tbody id="historicoTabela"><tr><td colspan="4">Carregando…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="fs-footer-bar">
+        <span class="fs-count" id="historicoCounter"></span>
+        <button class="fs-clear" type="button" onclick="limparHistorico()">Limpar histórico</button>
+      </div>
     </div>
   </div>
 
 </main>
 
-<script>
-function abrirFeriadosViaAgenda() {
-  sessionStorage.setItem('agenda_auto_open', 'feriados')
-  window.parent.postMessage({ type: 'estofaria-navigate', module: 'agenda' }, '*')
-}
-function abrirHistoricoViaAgenda() {
-  sessionStorage.setItem('agenda_auto_open', 'historico')
-  window.parent.postMessage({ type: 'estofaria-navigate', module: 'agenda' }, '*')
-}
-</script>
-
+<script src="script.js?v=20260716b"></script>
 <script src="../keyboard-dismiss.js"></script>
 </body>
 </html>
