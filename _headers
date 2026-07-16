@@ -1,27 +1,60 @@
-/*/__content.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-  Pragma: no-cache
+# HTML de entrada — sempre buscar versão mais recente
+/painel/
+  Cache-Control: no-cache, must-revalidate
 
-/*/index.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-  Pragma: no-cache
+/painel/index.html
+  Cache-Control: no-cache, must-revalidate
 
-/app-shell.css
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-  Pragma: no-cache
+/precificacao/
+  Cache-Control: no-cache, must-revalidate
 
-/app-shell.js
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-  Pragma: no-cache
+/precificacao/__content.html
+  Cache-Control: no-cache, must-revalidate
 
-/auth-guard.js
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-  Pragma: no-cache
+/material/
+  Cache-Control: no-cache, must-revalidate
 
-/config.js
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-  Pragma: no-cache
+/material/__content.html
+  Cache-Control: no-cache, must-revalidate
 
-/sw.js
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-  Pragma: no-cache
+/catalogo/
+  Cache-Control: no-cache, must-revalidate
+
+/catalogo/__content.html
+  Cache-Control: no-cache, must-revalidate
+
+/agenda/
+  Cache-Control: no-cache, must-revalidate
+
+/agenda/__content.html
+  Cache-Control: no-cache, must-revalidate
+
+/vendedor/
+  Cache-Control: no-cache, must-revalidate
+
+/vendedor/__content.html
+  Cache-Control: no-cache, must-revalidate
+
+/itens-personalizacao/
+  Cache-Control: no-cache, must-revalidate
+
+/itens-personalizacao/__content.html
+  Cache-Control: no-cache, must-revalidate
+
+/configuracao/
+  Cache-Control: no-cache, must-revalidate
+
+/configuracao/__content.html
+  Cache-Control: no-cache, must-revalidate
+
+/assinatura/
+  Cache-Control: no-cache, must-revalidate
+
+/assinatura/__content.html
+  Cache-Control: no-cache, must-revalidate
+
+/master/
+  Cache-Control: no-cache, must-revalidate
+
+/master/__content.html
+  Cache-Control: no-cache, must-revalidate
