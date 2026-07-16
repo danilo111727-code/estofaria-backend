@@ -1,178 +1,255 @@
 
-
 <h1 class="title">Precificação</h1>
 
+<!-- ══════════════════════════════════════════════════════
+     CARD 1 — Dados do modelo
+═══════════════════════════════════════════════════════ -->
 <div class="card">
-<div class="card-section-header">
-  <div class="card-section-icon card-section-icon--blue">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M20 9V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v2"/>
-      <path d="M2 11a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5H2v-5z"/>
-      <path d="M4 16v2a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-2"/>
-      <path d="M17 16v2a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-2"/>
-    </svg>
+  <div class="card-section-header">
+    <div class="card-section-icon card-section-icon--blue">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="3"/>
+        <path d="M3 9h18M9 21V9"/>
+      </svg>
+    </div>
+    <h3>Dados do modelo</h3>
   </div>
-  <h3>Cadastre o modelo</h3>
+
+  <div class="row">
+    <input id="modeloNome" placeholder="Nome do modelo">
+  </div>
+
+  <div class="row">
+    <div class="input-suffix-wrap">
+      <input id="baseMedida" type="number" min="0" step="0.01" placeholder="Medida base (ex: 2.00)">
+      <span class="input-suffix">m</span>
+    </div>
+    <input id="lucroDesejado" placeholder="Lucro desejado (R$)" oninput="formatCurrency(this);updateResumo()" inputmode="numeric">
+  </div>
+
+  <div class="row" style="margin-top:10px">
+    <label class="foto-label">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+      Foto do modelo
+      <input type="file" id="fotoModelo" accept="image/*" style="display:none">
+    </label>
+    <span id="fotoNomeArquivo" class="foto-nome">Nenhum arquivo selecionado</span>
+  </div>
+
+  <div style="margin-top:10px">
+    <textarea id="descricaoModelo" maxlength="300" placeholder="Descrição do modelo (ex: Sofá retrátil com espuma D33 e estrutura reforçada)"
+      style="width:100%;min-height:72px;border-radius:8px;padding:10px;font-size:14px;box-sizing:border-box;border:1px solid #ccc;font-family:inherit;resize:vertical;"></textarea>
+  </div>
+
+  <div class="card-btn-row">
+    <button type="button" class="btn-secondary" onclick="openItensFullscreen()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      Itens inclusos
+      <span id="itensBlockMeta" class="btn-badge">0</span>
+    </button>
+    <button type="button" class="btn-secondary" onclick="openCopiarModeloModal()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      Copiar modelo
+    </button>
+  </div>
 </div>
 
-<div class="row">
-<input id="modeloNome" placeholder="Nome do modelo">
-<input id="baseMedida" placeholder="Medida base (ex: 2.00)">
-</div>
-
-<div class="row">
-<input id="lucroDesejado" placeholder="Lucro desejado (R$)" oninput="formatCurrency(this)">
-<input type="file" id="fotoModelo">
-</div>
-</div>
-
+<!-- ══════════════════════════════════════════════════════
+     CARD 2 — Materiais utilizados + Resumo financeiro
+═══════════════════════════════════════════════════════ -->
 <div class="card">
-<div class="card-section-header">
-  <div class="card-section-icon card-section-icon--green">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <polygon points="12 2 2 7 12 12 22 7 12 2"/>
-      <polyline points="2 17 12 22 22 17"/>
-      <polyline points="2 12 12 17 22 12"/>
-    </svg>
-  </div>
-  <h3>Selecione os materiais</h3>
-</div>
-
-<div class="row">
-<select id="materialSelect">
-<option>Espuma</option>
-<option>Cola</option>
-<option>Percinta</option>
-<option>Madeira</option>
-</select>
-
-<input id="materialQtd" placeholder="Quantidade">
-<button id="precificacaoAddMaterialBtn" onclick="addMaterial()">Confirmar</button>
-</div>
-<p class="helper-note">Adicione somente os materiais que compõem o custo real do modelo para manter a margem confiável.</p>
-
-<div class="table-scroll">
-<table class="materiais-table">
-<thead>
-<tr>
-<th>Material</th>
-<th>Unidade</th>
-<th>Qtd</th>
-<th>Custo unitário</th>
-<th>Total</th>
-<th></th>
-</tr>
-</thead>
-<tbody id="materiaisTabela"></tbody>
-</table>
-</div>
-</div>
-
-<div class="resumo-card">
-  <div class="resumo-header">
-    <div class="resumo-header-icon">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+  <div class="card-section-header">
+    <div class="card-section-icon card-section-icon--green">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+        <polyline points="2 17 12 22 22 17"/>
+        <polyline points="2 12 12 17 22 12"/>
+      </svg>
     </div>
-    <div>
-      <p class="resumo-header-title">Total geral</p>
-      <p class="resumo-header-sub">Análise do seu orçamento</p>
-    </div>
+    <h3>Materiais utilizados</h3>
   </div>
 
-  <div class="resumo-metrics">
-    <div class="resumo-metric">
-      <span class="resumo-label">Custo total</span>
-      <div class="resumo-metric-row">
-        <strong class="resumo-value" id="custoTotal">R$ 0,00</strong>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="15" y2="16"/></svg>
-      </div>
-    </div>
-    <div class="resumo-metric-divider"></div>
-    <div class="resumo-metric">
-      <span class="resumo-label">Valor de venda</span>
-      <div class="resumo-metric-row">
-        <strong class="resumo-value resumo-value--blue" id="valorVenda">R$ 0,00</strong>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
-      </div>
-    </div>
-    <div class="resumo-metric-divider"></div>
-    <div class="resumo-metric">
-      <span class="resumo-label">Lucro bruto</span>
-      <div class="resumo-metric-row">
-        <strong class="resumo-value" id="lucroTotal">R$ 0,00</strong>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
-      </div>
-    </div>
+  <div class="row">
+    <select id="materialSelect">
+      <option>Espuma</option>
+      <option>Cola</option>
+    </select>
+    <input id="materialQtd" type="number" min="0" step="0.01" placeholder="Quantidade">
+    <button type="button" id="precificacaoAddMaterialBtn" onclick="addMaterial()" style="white-space:nowrap">+ Adicionar</button>
+  </div>
+  <p class="helper-note">Adicione apenas materiais que compõem o custo real do modelo.</p>
+
+  <div class="table-scroll" style="margin-top:10px">
+    <table class="materiais-table">
+      <thead>
+        <tr>
+          <th>Material</th>
+          <th>Unid.</th>
+          <th>Qtd</th>
+          <th>Unit.</th>
+          <th>Total</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="materiaisTabela"></tbody>
+    </table>
   </div>
 
-  <div class="resumo-bottom">
-    <div class="resumo-gauge-wrap">
-      <div class="resumo-gauge-container">
-        <svg class="resumo-gauge-svg" viewBox="0 0 100 100">
-          <circle class="resumo-gauge-bg" cx="50" cy="50" r="38" fill="none" stroke="#e2e8f0" stroke-width="8"/>
-          <circle class="resumo-gauge-fill" id="resumoGaugeFill" cx="50" cy="50" r="38" fill="none" stroke="#e2e8f0" stroke-width="8" stroke-dasharray="238.76" stroke-dashoffset="238.76" stroke-linecap="round" transform="rotate(-90 50 50)"/>
-        </svg>
-        <div class="resumo-gauge-center">
-          <span class="resumo-gauge-pct" id="resumoMargem">0%</span>
+  <!-- Resumo financeiro (dentro do card de materiais) -->
+  <div class="resumo-card" style="margin-top:18px;margin-bottom:0">
+    <div class="resumo-header">
+      <div class="resumo-header-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      </div>
+      <div>
+        <p class="resumo-header-title">Resumo financeiro</p>
+        <p class="resumo-header-sub">Atualizado automaticamente</p>
+      </div>
+    </div>
+
+    <div class="resumo-metrics">
+      <div class="resumo-metric">
+        <span class="resumo-label">Custo total</span>
+        <div class="resumo-metric-row">
+          <strong class="resumo-value" id="custoTotal">R$ 0,00</strong>
         </div>
       </div>
-      <p class="resumo-gauge-label">Margem de lucro</p>
-      <span class="resumo-badge" id="resumoBadge" style="display:none">—</span>
+      <div class="resumo-metric-divider"></div>
+      <div class="resumo-metric">
+        <span class="resumo-label">Valor de venda</span>
+        <div class="resumo-metric-row">
+          <strong class="resumo-value resumo-value--blue" id="valorVenda">R$ 0,00</strong>
+        </div>
+      </div>
+      <div class="resumo-metric-divider"></div>
+      <div class="resumo-metric">
+        <span class="resumo-label">Lucro bruto</span>
+        <div class="resumo-metric-row">
+          <strong class="resumo-value" id="lucroTotal">R$ 0,00</strong>
+        </div>
+      </div>
     </div>
-    <div class="resumo-infobox" id="resumoInfoBox">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-      <div>
-        <p class="resumo-infobox-title">Entenda sua margem</p>
-        <p class="resumo-infobox-msg" id="resumoMsg">Preencha os campos acima para ver a análise da margem.</p>
+
+    <div class="resumo-bottom">
+      <div class="resumo-gauge-wrap">
+        <div class="resumo-gauge-container">
+          <svg class="resumo-gauge-svg" viewBox="0 0 100 100">
+            <circle class="resumo-gauge-bg" cx="50" cy="50" r="38" fill="none" stroke="#e2e8f0" stroke-width="8"/>
+            <circle class="resumo-gauge-fill" id="resumoGaugeFill" cx="50" cy="50" r="38" fill="none" stroke="#e2e8f0" stroke-width="8" stroke-dasharray="238.76" stroke-dashoffset="238.76" stroke-linecap="round" transform="rotate(-90 50 50)"/>
+          </svg>
+          <div class="resumo-gauge-center">
+            <span class="resumo-gauge-pct" id="resumoMargem">0%</span>
+          </div>
+        </div>
+        <p class="resumo-gauge-label">Margem de lucro</p>
+        <span class="resumo-badge" id="resumoBadge" style="display:none">—</span>
+      </div>
+      <div class="resumo-infobox" id="resumoInfoBox">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <div>
+          <p class="resumo-infobox-title">Entenda sua margem</p>
+          <p class="resumo-infobox-msg" id="resumoMsg">Preencha o lucro desejado e adicione materiais para ver a análise.</p>
+        </div>
       </div>
     </div>
   </div>
 </div>
 
+<!-- ══════════════════════════════════════════════════════
+     CARD 3 — Ajuste por medida
+═══════════════════════════════════════════════════════ -->
 <div class="card">
-<div class="card-section-header">
-  <div class="card-section-icon card-section-icon--purple">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
-      <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
-    </svg>
+  <div class="card-section-header">
+    <div class="card-section-icon card-section-icon--purple">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 6H3"/><path d="M21 12H3"/><path d="M21 18H3"/>
+        <path d="M3 6l2 2-2 2"/><path d="M3 12l2 2-2 2"/>
+      </svg>
+    </div>
+    <h3>Ajuste por medida</h3>
   </div>
-  <h3>Defina o valor por degrau</h3>
+  <p class="helper-note" style="margin-top:0;margin-bottom:12px">Define quanto cobrar a mais para cada intervalo de medida acima da base.</p>
+
+  <div class="row">
+    <div style="flex:1;min-width:0">
+      <label class="field-label">A cada</label>
+      <select id="espacamento" style="width:100%">
+        <option>10 cm</option>
+        <option>20 cm</option>
+        <option>30 cm</option>
+        <option>40 cm</option>
+        <option>50 cm</option>
+        <option>60 cm</option>
+        <option>70 cm</option>
+        <option>80 cm</option>
+        <option>90 cm</option>
+        <option>1 m</option>
+      </select>
+    </div>
+    <div style="flex:1;min-width:0">
+      <label class="field-label">Valor adicional (R$)</label>
+      <input id="valorEspacamento" type="number" min="0" step="0.01" placeholder="Ex: 50.00" style="width:100%">
+    </div>
+  </div>
 </div>
 
-<div class="row">
-<select id="espacamento">
-<option>10 cm</option>
-<option>20 cm</option>
-<option>30 cm</option>
-<option>40 cm</option>
-<option>50 cm</option>
-<option>60 cm</option>
-<option>70 cm</option>
-<option>80 cm</option>
-<option>90 cm</option>
-<option>1 m</option>
-</select>
-<input id="valorEspacamento" type="number" min="0" step="0.01" placeholder="R$ por degrau">
-</div>
-</div>
-
+<!-- ══════════════════════════════════════════════════════
+     CARD 4 — Ações
+═══════════════════════════════════════════════════════ -->
 <div class="card">
-<h3>Adicione descrição</h3>
-<textarea id="descricaoModelo" maxlength="300" placeholder="Ex: Sofá retrátil com espuma D33 e estrutura reforçada" style="width:100%;min-height:80px;border-radius:8px;padding:10px;font-size:14px;box-sizing:border-box;border:1px solid #ddd;font-family:inherit;resize:vertical;"></textarea>
-</div>
-
-<div class="big-card" role="button" tabindex="0"
-  onclick="openItensFullscreen()"
-  onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openItensFullscreen()}">
-  <div class="big-icon itens-icon">✅</div>
-  <div class="big-info">
-    <div class="big-title">Selecione o que está incluso no orçamento</div>
-    <div class="big-sub" id="itensBlockMeta">Nenhum item marcado</div>
+  <div class="card-section-header">
+    <div class="card-section-icon" style="background:#fff3e0">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f97316" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+      </svg>
+    </div>
+    <h3>Ações</h3>
   </div>
-  <div class="big-arrow">›</div>
+  <div class="pdf-actions-row">
+    <button id="precificacaoSaveBtn" class="pdf-action-btn pdf-save-btn" onclick="salvarModelo()" data-loading-text="Salvando...">💾 Salvar</button>
+    <button id="precificacaoPdfBtn" class="pdf-action-btn pdf-generate-btn" onclick="gerarPDF()" data-loading-text="Gerando PDF...">📄 PDF</button>
+    <button id="precificacaoSendBtn" class="pdf-action-btn pdf-send-btn" onclick="enviarPDF()" data-loading-text="Preparando...">📤 Enviar</button>
+  </div>
+  <p class="helper-note">Salve o modelo primeiro. Gere ou envie o PDF após revisar os valores.</p>
 </div>
 
+<!-- ══════════════════════════════════════════════════════
+     CARD 5 — Editar modelos (inline)
+═══════════════════════════════════════════════════════ -->
+<div class="card" style="margin-bottom:32px">
+  <div class="card-section-header">
+    <div class="card-section-icon card-section-icon--blue">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+      </svg>
+    </div>
+    <h3>Editar modelos</h3>
+    <span id="modelosBlockMeta" style="margin-left:auto;font-size:12px;color:#7a8aaa;font-weight:500"></span>
+  </div>
+
+  <input id="searchModelo" placeholder="🔎 Pesquisar modelo" oninput="filtrarModelos()"
+    style="width:100%;margin-bottom:12px;box-sizing:border-box">
+
+  <div class="table-scroll">
+    <table class="modelos-table">
+      <thead>
+        <tr>
+          <th>Modelo</th>
+          <th>Base</th>
+          <th>Venda</th>
+          <th>Data</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="listaModelos"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     FULLSCREEN — Itens incluídos no orçamento
+═══════════════════════════════════════════════════════ -->
 <div id="itensFullscreen" class="prec-fullscreen" hidden>
   <div class="prec-fs-topbar">
     <button class="prec-fs-back" type="button" onclick="closeItensFullscreen()">‹</button>
@@ -188,50 +265,27 @@
   </div>
 </div>
 
-<div class="card">
-<div class="pdf-actions-row pdf-actions-row-single">
-<button id="precificacaoSaveBtn" class="pdf-action-btn pdf-save-btn" onclick="salvarModelo()" data-loading-text="Salvando...">Salvar modelo</button>
-<button id="precificacaoPdfBtn" class="pdf-action-btn pdf-generate-btn" onclick="gerarPDF()" data-loading-text="Visualizando PDF...">Visualizar PDF</button>
-<button id="precificacaoSendBtn" class="pdf-action-btn pdf-send-btn" onclick="enviarPDF()" data-loading-text="Preparando envio...">Enviar PDF</button>
-</div>
-<p class="helper-note">Salve primeiro o modelo. Depois gere ou compartilhe o PDF somente quando os valores estiverem revisados.</p>
-</div>
-
-<div class="big-card" role="button" tabindex="0"
-  onclick="openModelosFullscreen()"
-  onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openModelosFullscreen()}">
-  <div class="big-icon modelos-icon">📋</div>
-  <div class="big-info">
-    <div class="big-title">Editar modelos</div>
-    <div class="big-sub" id="modelosBlockMeta">Carregando...</div>
-  </div>
-  <div class="big-arrow">›</div>
-</div>
-
-<div id="modelosFullscreen" class="prec-fullscreen" hidden>
+<!-- ══════════════════════════════════════════════════════
+     FULLSCREEN — Copiar de modelo existente
+═══════════════════════════════════════════════════════ -->
+<div id="copiarModeloModal" class="prec-fullscreen" hidden>
   <div class="prec-fs-topbar">
-    <button class="prec-fs-back" type="button" onclick="closeModelosFullscreen()">‹</button>
-    <div class="prec-fs-title">📋 Editar modelos</div>
+    <button class="prec-fs-back" type="button" onclick="closeCopiarModeloModal()">‹</button>
+    <div class="prec-fs-title">📋 Copiar de modelo existente</div>
     <div class="prec-fs-spacer"></div>
-    <div class="prec-fs-badge"><span id="modelosModalCount">0</span> modelos</div>
   </div>
   <div class="prec-fs-container">
     <div class="prec-fs-card">
-      <input id="searchModelo" placeholder="🔎 Pesquisar modelo" oninput="filtrarModelos()" style="width:100%;margin-bottom:12px;">
-      <div class="table-scroll">
-        <table class="modelos-table">
-          <thead>
-            <tr>
-              <th>Modelo</th>
-              <th>Base</th>
-              <th>Valor</th>
-              <th>Atualização</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="listaModelos"></tbody>
-        </table>
-      </div>
+      <p class="helper-note" style="margin-top:0;">Selecione um modelo para copiar os materiais, descrição, lucro desejado, itens inclusos e valor por degrau.</p>
+      <div id="copiarModeloLista" style="display:flex;flex-direction:column;gap:10px;margin-top:14px;"></div>
     </div>
+  </div>
+</div>
+
+<!-- Manter fullscreen de modelos oculto (compatibilidade JS) -->
+<div id="modelosFullscreen" class="prec-fullscreen" hidden>
+  <div class="prec-fs-topbar">
+    <button class="prec-fs-back" type="button" onclick="closeModelosFullscreen()">‹</button>
+    <div class="prec-fs-title">📋 Modelos</div>
   </div>
 </div>
