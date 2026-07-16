@@ -443,7 +443,7 @@ function getOverdueOrders(orders) {
     entrega: safeDate(order?.ent_date) || safeDate(order?.delivery_date) || safeDate(order?.entrega) || safeDate(order?.data_entrega),
     status: String(order?.status || '').toLowerCase()
   })).filter(item => {
-    if (['entregue', 'cancelado', 'indisponivel'].includes(item.status)) return false
+    if (['entregue', 'cancelado', 'indisponivel', 'disponivel'].includes(item.status)) return false
     return item.entrega ? item.entrega < now : false
   })
 }

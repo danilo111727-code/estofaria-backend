@@ -2,20 +2,7 @@ const API = (window.API_BASE || '') + '/api'
 
 const PAINEL_SYNC_KEY = 'estofaria_sync:agenda'
 const PAINEL_CACHE_PREFIX = 'estofaria_painel_cache:'
-const SEMANA_BLOQUEIOS_KEY  = 'esd_semana_bloqueios'
-const SEMANA_BLOQ_COUNT_KEY = 'esd_bloqueios_count'
 const DIAS_UTEIS_KEY = 'esd_dias_uteis'
-const SEMANAS_MANUAIS_KEY = 'esd_semanas_manuais'
-
-const DIAS_SEMANA = [
-  { label: 'Dom', value: 0 },
-  { label: 'Seg', value: 1 },
-  { label: 'Ter', value: 2 },
-  { label: 'Qua', value: 3 },
-  { label: 'Qui', value: 4 },
-  { label: 'Sex', value: 5 },
-  { label: 'Sáb', value: 6 }
-]
 
 const state = {
   config: { prazo_dias: 0, vagas_semana: 0, tipo_dias: '', city_code: '', data_inicio_entrega: '' },
@@ -133,19 +120,6 @@ function formatFullDate(dateStr) {
   })
 }
 
-function formatWeekRange() {
-  const { iniISO, fimISO } = getWeekWindow()
-  const ini = new Date(iniISO + 'T00:00:00')
-  const fim = new Date(fimISO + 'T00:00:00')
-  const fmtDay = d => String(d.getDate()).padStart(2, '0')
-  const fmtMon = d => String(d.getMonth() + 1).padStart(2, '0')
-  const fmtYear = d => d.getFullYear()
-  if (ini.getMonth() === fim.getMonth()) {
-    return fmtDay(ini) + '/' + fmtMon(ini) + ' a ' + fmtDay(fim) + '/' + fmtMon(fim) + '/' + fmtYear(fim)
-  }
-  return fmtDay(ini) + '/' + fmtMon(ini) + ' a ' + fmtDay(fim) + '/' + fmtMon(fim) + '/' + fmtYear(fim)
-}
-
 function toISODate(d) {
   const year = d.getFullYear()
   const month = String(d.getMonth() + 1).padStart(2, '0')
@@ -224,138 +198,12 @@ function saveManualHolidays(list) {
   localStorage.setItem(getManualHolidayKey(), JSON.stringify(list))
 }
 
-function getSemanaKey(dateISO) {
-  if (!dateISO) return ''
-  const d = new Date(dateISO + 'T00:00:00')
-  return toISODate(startOfWeek(d))
-}
-
-function getSemanaAjustes() {
-  try { return JSON.parse(localStorage.getItem(SEMANA_BLOQUEIOS_KEY) || '{}') } catch { return {} }
-}
-
-function saveSemanaAjustes(obj) {
-  try { localStorage.setItem(SEMANA_BLOQUEIOS_KEY, JSON.stringify(obj)) } catch {}
-}
-
-function getSemanaBloqueios() {
-  try { return JSON.parse(localStorage.getItem(SEMANA_BLOQ_COUNT_KEY) || '{}') } catch { return {} }
-}
-function saveSemanaBloqueios(obj) {
-  try { localStorage.setItem(SEMANA_BLOQ_COUNT_KEY, JSON.stringify(obj)) } catch {}
-}
-function getBloqueiosSemana(weekStartISO) {
-  return getSemanaBloqueios()[weekStartISO] || 0
-}
-
-function getSemanaManuais() {
-  try { return JSON.parse(localStorage.getItem(SEMANAS_MANUAIS_KEY) || '[]') } catch { return [] }
-}
-
-function saveSemanaManuais(arr) {
-  try { localStorage.setItem(SEMANAS_MANUAIS_KEY, JSON.stringify(arr)) } catch {}
-}
-
-function adicionarSemana() {
-  const input = $('dataSemana')
-  if (!input || !input.value) {
-    notifyError('Selecione uma data de entrega para a nova semana.')
-    return
-  }
-  const entDate = input.value
-  const weekKey = getSemanaKey(entDate)
-
-  const manuais = getSemanaManuais()
-  if (manuais.some(s => s.weekKey === weekKey)) {
-    notifyError('Essa semana já foi adicionada manualmente.')
-    return
-  }
-  const temPedido = getActiveOrders().some(o =>
-    getSemanaKey(o.ent_date || o.prod_date) === weekKey
-  )
-  if (temPedido) {
-    notifyError('Essa semana já existe na agenda (possui pedidos).')
-    return
-  }
-
-  const prodDate = calcProdDate(entDate)
-  manuais.push({ weekKey, entDate, prodDate })
-  saveSemanaManuais(manuais)
-  input.value = ''
-  renderAgendaTabela()
-}
-
 function getDiasUteis() {
   try {
     const stored = localStorage.getItem(DIAS_UTEIS_KEY)
     if (stored) return JSON.parse(stored)
   } catch {}
   return [1, 2, 3, 4, 5]
-}
-
-function saveDiasUteis(arr) {
-  try { localStorage.setItem(DIAS_UTEIS_KEY, JSON.stringify(arr)) } catch {}
-}
-
-function toggleDiaUtil(dia) {
-  const current = getDiasUteis()
-  const updated = current.includes(dia)
-    ? current.filter(d => d !== dia)
-    : [...current, dia].sort((a, b) => a - b)
-  saveDiasUteis(updated)
-  renderDiasUteisCheckboxes()
-}
-
-function renderDiasUteisCheckboxes() {
-  const container = $('diasUteisCheckboxes')
-  const wrapper = $('diasUteisWrapper')
-  if (!container) return
-
-  const tipoDias = $('tipoDias')?.value || state.config.tipo_dias || 'corrido'
-  if (wrapper) wrapper.style.display = tipoDias === 'uteis' ? 'block' : 'none'
-  if (tipoDias !== 'uteis') return
-
-  const selected = getDiasUteis()
-  container.innerHTML = ''
-  DIAS_SEMANA.forEach(({ label, value }) => {
-    const lbl = document.createElement('label')
-    lbl.style.cssText = 'display:inline-flex;align-items:center;gap:5px;cursor:pointer;font-size:14px'
-    const cb = document.createElement('input')
-    cb.type = 'checkbox'
-    cb.checked = selected.includes(value)
-    cb.onchange = () => toggleDiaUtil(value)
-    lbl.appendChild(cb)
-    lbl.appendChild(document.createTextNode(label))
-    container.appendChild(lbl)
-  })
-}
-
-function getVagasSemana(weekStartISO) {
-  const padrao = Math.max(0, Number(state.config.vagas_semana) || 0)
-  const ajustes = getSemanaAjustes()
-  const adj = ajustes[weekStartISO]
-  // Aplica apenas ajustes para cima (extras abertas); ignora dados antigos de bloqueio
-  return (adj !== undefined && adj > padrao) ? adj : padrao
-}
-
-function bloquearVaga(weekStartISO) {
-  const bloqueios = getSemanaBloqueios()
-  const bloqueiosAtual = bloqueios[weekStartISO] || 0
-  bloqueios[weekStartISO] = bloqueiosAtual + 1
-  saveSemanaBloqueios(bloqueios)
-  renderAll()
-  closeActionSheet()
-}
-
-function desbloquearVaga(weekStartISO) {
-  const bloqueios = getSemanaBloqueios()
-  const bloqueiosAtual = bloqueios[weekStartISO] || 0
-  if (bloqueiosAtual > 0) {
-    bloqueios[weekStartISO] = bloqueiosAtual - 1
-    saveSemanaBloqueios(bloqueios)
-  }
-  renderAll()
-  closeActionSheet()
 }
 
 function promptDuasDatas({ title, prodValue, entValue }) {
@@ -465,44 +313,6 @@ function promptDuasDatas({ title, prodValue, entValue }) {
   })
 }
 
-async function reprogramarVaga(weekKey, currentEntDate, currentProdDate) {
-  try {
-    const prodCalculadaInicial = currentProdDate || calcProdDate(currentEntDate)
-    const result = await promptDuasDatas({
-      title: 'Reprogramar vaga',
-      prodValue: formatEditableDateInput(prodCalculadaInicial),
-      entValue:  formatEditableDateInput(currentEntDate)
-    })
-    if (result === null) return
-
-    const novaEnt  = normalizeEditableDateInput(result.ent)
-    const novaProd = normalizeEditableDateInput(result.prod)
-
-    if (!novaEnt) {
-      await ui().alert('Data de entrega inválida. Use o padrão DD/MM/AAAA.', { title: 'Data inválida' })
-      return
-    }
-    if (!novaProd) {
-      await ui().alert('Data de produção inválida. Use o padrão DD/MM/AAAA.', { title: 'Data inválida' })
-      return
-    }
-
-    const novoWeek = getSemanaKey(novaEnt)
-
-    // Remove entrada antiga e insere com novo weekKey/datas
-    const manuais = getSemanaManuais().filter(s => s.weekKey !== weekKey && s.weekKey !== novoWeek)
-    manuais.push({ weekKey: novoWeek, entDate: novaEnt, prodDate: novaProd })
-    saveSemanaManuais(manuais)
-
-    notifyPainelRefresh('slot-rescheduled')
-    renderAll()
-    closeActionSheet()
-  } catch (e) {
-    console.error(e)
-    notifyError('Erro ao reprogramar vaga: ' + e.message)
-  }
-}
-
 function isHolidayDate(value) {
   const iso = typeof value === 'string' ? value : toISODate(value)
   if (state.holidayMap[iso]) return true
@@ -562,22 +372,6 @@ async function handleCityChange() {
   }
 }
 
-function getBaseDate() {
-  if (state.config.data_inicio_entrega) {
-    return new Date(state.config.data_inicio_entrega + 'T00:00:00')
-  }
-  return new Date()
-}
-
-function startOfWeek(base = new Date()) {
-  const d = new Date(base.getFullYear(), base.getMonth(), base.getDate())
-  const day = d.getDay()
-  const diff = day === 0 ? -6 : 1 - day
-  d.setDate(d.getDate() + diff)
-  d.setHours(0, 0, 0, 0)
-  return d
-}
-
 function moveToNextWorkingDay(date) {
   const d = new Date(date)
   while (!isWorkingDay(d)) {
@@ -595,13 +389,6 @@ function addBusinessDays(date, days) {
     d.setDate(d.getDate() + 1)
     if (isWorkingDay(d)) added++
   }
-  return d
-}
-
-function addScheduleDays(date, days, tipo) {
-  if (tipo === 'uteis') return addBusinessDays(date, days)
-  const d = new Date(date)
-  d.setDate(d.getDate() + days)
   return d
 }
 
@@ -696,10 +483,6 @@ function getActiveOrders() {
     .sort((a, b) => String(a.prod_date).localeCompare(String(b.prod_date)) || Number(a.id || 0) - Number(b.id || 0))
 }
 
-function getAgendaRows() {
-  return getActiveOrders()
-}
-
 function getHistoricOrders() {
   const seen = new Set()
   return state.orders
@@ -714,208 +497,6 @@ function getHistoricOrders() {
       String(b.updated_at || b.created_at || '').localeCompare(String(a.updated_at || a.created_at || '')) ||
       Number(b.id || 0) - Number(a.id || 0)
     )
-}
-
-function getWeekCandidates(weekStart, tipo) {
-  const dates = []
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(weekStart)
-    d.setDate(d.getDate() + i)
-    if (tipo === 'uteis') {
-      if (isWorkingDay(d)) dates.push(new Date(d))
-    } else {
-      dates.push(new Date(d))
-    }
-  }
-  return dates
-}
-
-function getSlotDatesByIndex(index) {
-  const vagas = Math.max(1, Number(state.config.vagas_semana) || 1)
-  const tipo = state.config.tipo_dias || 'corrido'
-  const prazo = Math.max(0, Number(state.config.prazo_dias) || 0)
-
-  const weekIndex = Math.floor(index / vagas)
-  const slotIndex = index % vagas
-
-  const weekStart = startOfWeek(getBaseDate())
-  weekStart.setDate(weekStart.getDate() + weekIndex * 7)
-
-  const candidates = getWeekCandidates(weekStart, tipo)
-  const fallbackDate = tipo === 'uteis' ? moveToNextWorkingDay(weekStart) : new Date(weekStart)
-
-  let prodDate = fallbackDate
-  if (candidates.length) {
-    if (vagas <= 1) {
-      prodDate = new Date(candidates[0])
-    } else if (vagas <= candidates.length) {
-      const mappedIndex = Math.round((slotIndex * (candidates.length - 1)) / (vagas - 1))
-      prodDate = new Date(candidates[mappedIndex])
-    } else {
-      const mappedIndex = Math.min(candidates.length - 1, Math.floor((slotIndex * candidates.length) / vagas))
-      prodDate = new Date(candidates[mappedIndex])
-    }
-  }
-
-  const entDate = addScheduleDays(prodDate, prazo, tipo)
-
-  return {
-    prod: toISODate(prodDate),
-    ent: toISODate(entDate)
-  }
-}
-
-function getWeekWindow() {
-  const inicio = startOfWeek(new Date())
-  const fim = new Date(inicio)
-  fim.setDate(fim.getDate() + 6)
-
-  return {
-    inicio,
-    fim,
-    iniISO: toISODate(inicio),
-    fimISO: toISODate(fim)
-  }
-}
-
-function isWithinWeek(dateStr, iniISO, fimISO) {
-  return !!dateStr && dateStr >= iniISO && dateStr <= fimISO
-}
-
-function getUpcomingOrders(limit = 6) {
-  const today = toISODate(new Date())
-
-  return getAgendaRows()
-    .filter(row => (row.ent_date || row.prod_date) >= today)
-    .sort((a, b) =>
-      String(a.ent_date || a.prod_date).localeCompare(String(b.ent_date || b.prod_date)) ||
-      String(a.prod_date || '').localeCompare(String(b.prod_date || '')) ||
-      a.id - b.id
-    )
-    .slice(0, limit)
-}
-
-function getNextAvailableSlot() {
-  return findNextFreeSlot()
-}
-
-function getNextFreeSlot() {
-  const ativos = getActiveOrders()
-  const padrao = Math.max(1, Number(state.config.vagas_semana) || 1)
-  const maxSearch = ativos.length + 52 * padrao
-  for (let i = ativos.length; i < maxSearch; i++) {
-    const slot = getSlotDatesByIndex(i)
-    const weekKey = getSemanaKey(slot.ent)
-    const vagasSemana = getVagasSemana(weekKey)
-    const ordersInWeek = ativos.filter(o =>
-      getSemanaKey(o.ent_date || o.prod_date) === weekKey
-    ).length
-    const bloqueios = getBloqueiosSemana(weekKey)
-    if (ordersInWeek + bloqueios < vagasSemana) return slot
-  }
-  return getSlotDatesByIndex(ativos.length)
-}
-
-function getNextFreeSlots() {
-  const vagas = Number(state.config.vagas_semana || 0)
-  const prazo = Number(state.config.prazo_dias   || 0)
-  if (!vagas || !prazo) return []
-
-  const ativos    = getActiveOrders()
-  const weekMap   = buildWeekMap()
-
-  // Usa a mesma lógica do card de resumo: percorre semanas reais em ordem cronológica
-  if (weekMap.size) {
-    const sorted = Array.from(weekMap.keys()).sort()
-    for (const weekKey of sorted) {
-      const vagasSemana  = getVagasSemana(weekKey)
-      const ordersInWeek = ativos.filter(o =>
-        getSemanaKey(o.ent_date || o.prod_date) === weekKey
-      ).length
-      const bloqueios = getBloqueiosSemana(weekKey)
-      if (ordersInWeek + bloqueios < vagasSemana) {
-        const slotDates = weekMap.get(weekKey)
-        const freeCount = vagasSemana - ordersInWeek - bloqueios
-        return Array.from({ length: freeCount }, () => ({ prod: slotDates.prod, ent: slotDates.ent }))
-      }
-    }
-    // Todas as semanas conhecidas estão cheias — avança pelas próximas até achar uma livre
-    let lastKey = sorted[sorted.length - 1]
-    for (let i = 0; i < 52; i++) {
-      const nextSlot    = calcNextWeekSlot(lastKey)
-      const nextWeekKey = getSemanaKey(nextSlot.ent)
-      const nextBloq    = getBloqueiosSemana(nextWeekKey)
-      const nextFree    = vagas - nextBloq
-      if (nextFree > 0) {
-        return Array.from({ length: nextFree }, () => ({ prod: nextSlot.prod, ent: nextSlot.ent }))
-      }
-      lastKey = nextWeekKey
-    }
-    return []
-  }
-
-  // Fallback: sem pedidos nem semanas manuais — usa cálculo por índice
-  const slot      = getSlotDatesByIndex(ativos.length)
-  const weekKey   = getSemanaKey(slot.ent)
-  const vagasSem  = getVagasSemana(weekKey)
-  const ordersWk  = ativos.filter(o => getSemanaKey(o.ent_date || o.prod_date) === weekKey).length
-  const bloqWk    = getBloqueiosSemana(weekKey)
-  const freeCount = vagasSem - ordersWk - bloqWk
-  if (freeCount <= 0) {
-    const nextSlot = calcNextWeekSlot(weekKey)
-    return Array.from({ length: vagasSem }, () => ({ prod: nextSlot.prod, ent: nextSlot.ent }))
-  }
-  return Array.from({ length: freeCount }, () => ({ prod: slot.prod, ent: slot.ent }))
-}
-
-function buildWeekMap() {
-  const ativos  = getActiveOrders()
-  const manuais = getSemanaManuais()
-  const map     = new Map()
-
-  manuais.forEach(({ weekKey, entDate, prodDate }) => {
-    if (!map.has(weekKey)) map.set(weekKey, { prod: prodDate, ent: entDate })
-  })
-
-  ativos.forEach(o => {
-    const wk = getSemanaKey(o.ent_date || o.prod_date)
-    if (wk && !map.has(wk)) map.set(wk, { prod: o.prod_date, ent: o.ent_date })
-  })
-
-  return map
-}
-
-function calcNextWeekSlot(weekStartISO) {
-  const prazo = Math.max(0, Number(state.config.prazo_dias) || 0)
-  const tipo  = state.config.tipo_dias || 'corrido'
-  const next  = new Date(weekStartISO + 'T00:00:00')
-  next.setDate(next.getDate() + 7)
-  const prod  = tipo === 'uteis' ? moveToNextWorkingDay(next) : new Date(next)
-  const ent   = addScheduleDays(prod, prazo, tipo)
-  return { prod: toISODate(prod), ent: toISODate(ent) }
-}
-
-function findNextFreeSlot() {
-  const vagas = Number(state.config.vagas_semana || 0)
-  const prazo = Number(state.config.prazo_dias   || 0)
-  if (!vagas || !prazo) return null
-
-  const ativos  = getActiveOrders()
-  const weekMap = buildWeekMap()
-  if (!weekMap.size) return null
-
-  const sorted = Array.from(weekMap.keys()).sort()
-  for (const weekKey of sorted) {
-    const vagasSemana  = getVagasSemana(weekKey)
-    const ordersInWeek = ativos.filter(o =>
-      getSemanaKey(o.ent_date || o.prod_date) === weekKey
-    ).length
-    const bloqueios = getBloqueiosSemana(weekKey)
-    if (ordersInWeek + bloqueios < vagasSemana) return weekMap.get(weekKey)
-  }
-
-  // Todas as semanas conhecidas estão cheias — avança para a semana seguinte
-  return calcNextWeekSlot(sorted[sorted.length - 1])
 }
 
 function calcProdDate(entISO) {
@@ -933,15 +514,6 @@ function calcProdDate(entISO) {
     prod.setDate(prod.getDate() - prazo)
   }
   return toISODate(prod)
-}
-
-function abrirVagaExtra(weekStartISO) {
-  const padrao = Math.max(1, Number(state.config.vagas_semana) || 1)
-  const ajustes = getSemanaAjustes()
-  // Garante base mínima de padrão (ignora dados antigos de bloqueio abaixo do padrão)
-  const atual = Math.max(padrao, ajustes[weekStartISO] !== undefined ? ajustes[weekStartISO] : padrao)
-  ajustes[weekStartISO] = atual + 1
-  saveSemanaAjustes(ajustes)
 }
 
 async function loadConfig() {
@@ -967,96 +539,6 @@ async function loadOrders() {
   const rows = await apiGet('/agenda/orders')
   state.orders = Array.isArray(rows) ? rows.map(normalizeOrder) : []
 }
-
-function calcularProducao(dataEntrega) {
-    const prazo = Number(state.config.prazo_dias || 0)
-    const tipo = state.config.tipo_dias || 'corrido'
-    const base = new Date(dataEntrega + 'T00:00:00')
-    if (tipo === 'uteis') {
-      return toISODate(addBusinessDays(base, -prazo))
-    }
-    const d = new Date(base)
-    d.setDate(d.getDate() - prazo)
-    return toISODate(d)
-  }
-
-async function criarSemanaAutomatica(dataEntrega) {
-    const prazo = Number(state.config.prazo_dias || 0)
-    const tipo = state.config.tipo_dias || 'corrido'
-    const vagas = Math.max(1, Number(state.config.vagas_semana) || 1)
-
-    let prodDate = new Date(dataEntrega + 'T00:00:00')
-    let diasSubtraidos = 0
-    while (diasSubtraidos < prazo) {
-      prodDate.setDate(prodDate.getDate() - 1)
-      if (tipo === 'uteis') {
-        const dia = prodDate.getDay()
-        if (dia !== 0 && dia !== 6) diasSubtraidos++
-      } else {
-        diasSubtraidos++
-      }
-    }
-
-    const baseProd = new Date(prodDate)
-
-    for (let i = 0; i < vagas; i++) {
-      let d = new Date(baseProd)
-      if (tipo === 'uteis') {
-        while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1)
-      }
-      const prodISO = toISODate(d)
-
-      let ent = new Date(d)
-      let added = 0
-      while (added < prazo) {
-        ent.setDate(ent.getDate() + 1)
-        if (tipo === 'uteis') {
-          const dia = ent.getDay()
-          if (dia !== 0 && dia !== 6) added++
-        } else {
-          added++
-        }
-      }
-      const entISO = toISODate(ent)
-
-      await apiPost('/agenda/orders', {
-        prod_date: prodISO,
-        ent_date: entISO,
-        cliente: '',
-        descricao: 'Vaga disponível',
-        qtd: 1,
-        status: 'pendente'
-      })
-    }
-  }
-
-  async function salvarConfig() {
-  return ui().runButtonAction('agendaConfigBtn', async () => {
-    try {
-      const updated = await apiPatch('/agenda/config', {
-        prazo_dias: Number($('prazo')?.value || 0),
-        vagas_semana: Number($('vagas')?.value || 0),
-        tipo_dias: $('tipoDias')?.value || 'corrido'
-      })
-
-      state.config = { ...state.config, ...updated }
-
-      if ($('dataSemana')?.value) {
-        adicionarSemana()
-      }
-
-      notifyPainelRefresh('agenda-config')
-      renderAll()
-      notifySuccess('Configuração salva com sucesso.')
-
-    } catch (e) {
-      console.error(e)
-      notifyError('Erro ao salvar configuração: ' + e.message)
-    }
-  }, { loadingText: 'Salvando...' })
-}
-
-  
 
 async function limparAgenda() {
   const confirmed = await ui().confirm(
@@ -1087,71 +569,6 @@ async function limparAgenda() {
   }
 }
 
-  function limparFormulario() {
-  if ($('cliente')) $('cliente').value = ''
-  if ($('descricao')) $('descricao').value = ''
-  if ($('qtd')) $('qtd').value = '1'
-  if ($('valor')) $('valor').value = ''
-}
-
-async function novoPedido() {
-  const vagas = Number(state.config.vagas_semana || 0)
-  const prazo = Number(state.config.prazo_dias   || 0)
-
-  if (!vagas || !prazo) {
-    await ui().alert('Configure a agenda antes de registrar pedidos.', { title: 'Agenda não configurada' })
-    return
-  }
-
-  const slot = findNextFreeSlot()
-  if (!slot) {
-    await ui().alert('Sem vagas disponíveis na agenda.', { title: 'Sem vagas' })
-    return
-  }
-
-  const cliente = $('cliente')?.value.trim() || ''
-  const descricao = $('descricao')?.value.trim() || ''
-  const qtd = Math.max(1, Number($('qtd')?.value) || 1)
-  const valor = Number($('valor')?.value) || 0
-
-  if (!cliente || !descricao) {
-    await ui().alert('Preencha cliente e descrição.', { title: 'Dados obrigatórios' })
-    return
-  }
-
-  return ui().runButtonAction('agendaAddBtn', async () => {
-    try {
-      for (let i = 0; i < qtd; i++) {
-        const s = findNextFreeSlot()
-        if (!s) {
-          notifyError('Sem vagas disponíveis para mais pedidos.')
-          break
-        }
-        const row = await apiPost('/agenda/orders', {
-          prod_date: s.prod,
-          ent_date:  s.ent,
-          cliente,
-          descricao,
-          valor,
-          tecido: '',
-          qtd: 1,
-          tecido_comprado: false,
-          status: 'pendente'
-        })
-        state.orders.push(normalizeOrder(row))
-      }
-
-      limparFormulario()
-      notifyPainelRefresh('order-created')
-      renderAll()
-      notifySuccess('Pedido adicionado à agenda.')
-    } catch (e) {
-      console.error(e)
-      notifyError('Erro ao registrar pedido: ' + e.message)
-    }
-  }, { loadingText: 'Registrando...' })
-}
-
 async function mudarStatus(id, status) {
   try {
     const row = await apiPatch('/agenda/orders/' + id, { status })
@@ -1161,17 +578,6 @@ async function mudarStatus(id, status) {
   } catch (e) {
     console.error(e)
     notifyError('Erro ao atualizar status: ' + e.message)
-  }
-}
-
-async function toggleTecido(id, current) {
-  try {
-    const row = await apiPatch('/agenda/orders/' + id, { tecido_comprado: !current })
-    replaceOrder(row)
-    renderAll()
-  } catch (e) {
-    console.error(e)
-    notifyError('Erro ao atualizar tecido: ' + e.message)
   }
 }
 
@@ -1198,187 +604,6 @@ function replaceOrder(row) {
   const idx = state.orders.findIndex(o => o.id === row.id)
   if (idx >= 0) state.orders[idx] = normalizeOrder(row)
   else state.orders.push(normalizeOrder(row))
-}
-
-async function excluirData(prodDate, entDate) {
-  try {
-    const row = await apiPost('/agenda/orders', {
-      prod_date: prodDate,
-      ent_date: entDate,
-      cliente: 'Data excluída',
-      descricao: 'Data removida manualmente da agenda',
-      tecido: '-',
-      qtd: 1,
-      tecido_comprado: false,
-      status: 'indisponivel'
-    })
-
-    state.orders.push(normalizeOrder(row))
-    notifyPainelRefresh('slot-blocked')
-    renderAll()
-    closeActionSheet()
-    notifySuccess('Data excluída da agenda.')
-  } catch (e) {
-    console.error(e)
-    notifyError('Erro ao excluir a data: ' + e.message)
-  }
-}
-
-async function recuperarData(id) {
-  try {
-    await apiDelete('/agenda/orders/' + id)
-    state.orders = state.orders.filter(o => o.id !== id)
-    notifyPainelRefresh('slot-restored')
-    renderAll()
-    notifySuccess('Data recuperada.')
-  } catch (e) {
-    console.error(e)
-    notifyError('Erro ao recuperar a data: ' + e.message)
-  }
-}
-
-async function recuperarPedido(id) {
-  try {
-    const current = state.orders.find(o => o.id === id) || {}
-    const descricao = stripDeletedOrderMarker(current.descricao || '')
-    const row = await apiPatch('/agenda/orders/' + id, {
-      status: 'pendente',
-      descricao: descricao || 'Pedido recuperado'
-    })
-    replaceOrder(row)
-    notifyPainelRefresh('order-restored')
-    renderAll()
-    notifySuccess('Pedido recuperado.')
-  } catch (e) {
-    console.error(e)
-    notifyError('Erro ao recuperar o pedido: ' + e.message)
-  }
-}
-
-async function reprogramarEntrega(id) {
-  try {
-    const current = state.orders.find(o => o.id === id) || {}
-    const entAtual = formatEditableDateInput(current.ent_date)
-    const isAdiar = entDate => entDate > (current.ent_date || '')
-
-    const novaEntInput = await ui().prompt({
-      title: 'Reprogramar entrega',
-      message: 'Informe a nova data de entrega. A data de produção será calculada automaticamente.',
-      label: 'Nova data de entrega (DD/MM/AAAA)',
-      value: entAtual,
-      placeholder: 'Ex.: 14/04/2026',
-      confirmText: 'Continuar'
-    })
-    if (novaEntInput === null) return false
-    const novaEnt = normalizeEditableDateInput(novaEntInput)
-    if (!novaEnt) {
-      await ui().alert('Data de entrega inválida. Use o padrão DD/MM/AAAA.', { title: 'Data inválida' })
-      return false
-    }
-
-    const weekKey = getSemanaKey(novaEnt)
-    const vagasSemana = getVagasSemana(weekKey)
-    const ordersInWeek = getActiveOrders().filter(o =>
-      o.id !== id && getSemanaKey(o.ent_date || o.prod_date) === weekKey
-    ).length
-    const bloqueiosSemana = getBloqueiosSemana(weekKey)
-    const semanaCheia = ordersInWeek + bloqueiosSemana >= vagasSemana
-
-    if (semanaCheia) {
-      if (isAdiar(novaEnt)) {
-        await ui().alert(
-          'Esta semana está cheia. Para adiar, escolha uma semana com vaga disponível.',
-          { title: 'Semana cheia' }
-        )
-        return false
-      }
-      const confirmar = await ui().confirm(
-        'Essa semana está cheia.\nDeseja abrir uma nova vaga para incluir este pedido?',
-        { title: 'Semana cheia', confirmText: 'Abrir vaga', type: 'warning' }
-      )
-      if (!confirmar) return false
-      abrirVagaExtra(weekKey)
-    }
-
-    const novaProd = calcProdDate(novaEnt)
-    const row = await apiPatch('/agenda/orders/' + id, {
-      prod_date: novaProd,
-      ent_date: novaEnt
-    })
-    replaceOrder(row)
-    notifyPainelRefresh('order-rescheduled')
-    renderAll()
-    await ui().alert(
-      `Entrega reprogramada.\nProdução: ${formatFullDate(novaProd)}\nEntrega: ${formatFullDate(novaEnt)}`,
-      { title: 'Datas atualizadas' }
-    )
-    return true
-  } catch (e) {
-    console.error(e)
-    notifyError('Erro ao reprogramar a entrega: ' + e.message)
-    return false
-  }
-}
-
-async function reprogramarProducao(id) {
-  try {
-    const current = state.orders.find(o => o.id === id) || {}
-    const prodAtual = formatEditableDateInput(current.prod_date || calcProdDate(current.ent_date))
-    const entAtual  = formatEditableDateInput(current.ent_date)
-
-    const result = await promptDuasDatas({
-      title: 'Reprogramar produção e entrega',
-      prodValue: prodAtual,
-      entValue:  entAtual
-    })
-    if (result === null) return false
-
-    const novaEnt  = normalizeEditableDateInput(result.ent)
-    const novaProd = normalizeEditableDateInput(result.prod)
-
-    if (!novaEnt) {
-      await ui().alert('Data de entrega inválida. Use o padrão DD/MM/AAAA.', { title: 'Data inválida' })
-      return false
-    }
-    if (!novaProd) {
-      await ui().alert('Data de produção inválida. Use o padrão DD/MM/AAAA.', { title: 'Data inválida' })
-      return false
-    }
-
-    const weekKey = getSemanaKey(novaEnt)
-    const vagasSemana = getVagasSemana(weekKey)
-    const ordersInWeek = getActiveOrders().filter(o =>
-      o.id !== id && getSemanaKey(o.ent_date || o.prod_date) === weekKey
-    ).length
-    const bloqueiosSemana = getBloqueiosSemana(weekKey)
-    const semanaCheia = ordersInWeek + bloqueiosSemana >= vagasSemana
-
-    if (semanaCheia) {
-      const confirmar = await ui().confirm(
-        'Essa semana está cheia.\nDeseja abrir uma nova vaga para incluir este pedido?',
-        { title: 'Semana cheia', confirmText: 'Abrir vaga', type: 'warning' }
-      )
-      if (!confirmar) return false
-      abrirVagaExtra(weekKey)
-    }
-
-    const row = await apiPatch('/agenda/orders/' + id, {
-      prod_date: novaProd,
-      ent_date:  novaEnt
-    })
-    replaceOrder(row)
-    notifyPainelRefresh('order-rescheduled')
-    renderAll()
-    await ui().alert(
-      `Datas atualizadas.\nProdução: ${formatFullDate(novaProd)}\nEntrega: ${formatFullDate(novaEnt)}`,
-      { title: 'Reprogramado' }
-    )
-    return true
-  } catch (e) {
-    console.error(e)
-    notifyError('Erro ao reprogramar produção: ' + e.message)
-    return false
-  }
 }
 
 function buildActionContextKey(context) {
@@ -1722,7 +947,6 @@ function openActionSheet(context) {
   scheduleRenderSync(20)
 }
 
-
 function closeActionSheet(ev, options = {}) {
   const ui = ensureActionSheetHost()
   const force = options === true || options.force === true
@@ -1828,147 +1052,6 @@ function statusLabel(row) {
   return row.status
 }
 
-function renderAgendaTabela() {
-  const tbody = $('agendaTabela')
-  if (!tbody) return
-
-  tbody.innerHTML = ''
-  const ativos = getActiveOrders()
-  const agendaRows = getAgendaRows()
-
-  agendaRows.forEach(row => {
-    const tr = document.createElement('tr')
-    tr.className = 'status-' + row.status
-
-    tr.innerHTML = `
-      <td class="col-datas">
-        <div class="cell-datas">
-          <div class="dt-block dt-prod"><span class="lbl">Produção</span><span class="val">${formatShortDate(row.prod_date)}</span></div>
-          <div class="dt-block dt-ent"><span class="lbl">Entrega</span><span class="val">${formatShortDate(row.ent_date)}</span></div>
-        </div>
-      </td>
-      <td class="col-cli">
-        <div class="cell-cli">
-          <div class="nome">${row.cliente || '-'}</div>
-          <div class="pedido">${row.descricao || '-'}</div>
-        </div>
-      </td>
-      <td class="col-status"><button type="button" class="status-pill">${statusLabel(row)}</button></td>
-    `
-
-    const pillBtn = tr.querySelector('.status-pill')
-    if (pillBtn) {
-      pillBtn.addEventListener('click', () => menuPedido({ kind: 'order', row }))
-    }
-
-    tbody.appendChild(tr)
-  })
-
-  const padrao = Math.max(0, Number(state.config.vagas_semana) || 0)
-  const prazo  = Math.max(0, Number(state.config.prazo_dias)   || 0)
-
-  // Estado inicial: sem configuração
-  if (!padrao && !prazo && ativos.length === 0) {
-    const tr = document.createElement('tr')
-    tr.innerHTML = `<td colspan="3" style="text-align:center;padding:40px 16px;color:var(--muted,#6b7280);font-size:14px;line-height:1.7">
-      <strong style="display:block;font-size:15px;color:#374151;margin-bottom:4px">Agenda não configurada</strong>
-      Defina prazo e vagas para começar
-    </td>`
-    tbody.appendChild(tr)
-    return
-  }
-
-  // Helper: renderiza uma linha de slot extra (disponível ou bloqueado)
-  function renderExtraSlot(entDate, prodDate, weekKey, isBloqueado) {
-    const tr = document.createElement('tr')
-    tr.className = isBloqueado ? 'slot-blocked' : 'slot-empty'
-    tr.innerHTML = `
-      <td class="col-datas">
-        <div class="cell-datas">
-          <div class="dt-block dt-prod"><span class="lbl">Produção</span><span class="val">${formatShortDate(prodDate)}</span></div>
-          <div class="dt-block dt-ent"><span class="lbl">Entrega</span><span class="val">${formatShortDate(entDate)}</span></div>
-        </div>
-      </td>
-      <td class="col-cli"><div class="cell-cli"><div class="nome">—</div><div class="pedido">${isBloqueado ? 'Vaga bloqueada' : 'Vaga disponível'}</div></div></td>
-      <td class="col-status"><button type="button" class="status-pill${isBloqueado ? ' pill-blocked' : ''}">${isBloqueado ? 'Bloqueado' : 'Disponível'}</button></td>
-    `
-    const pillBtn = tr.querySelector('.status-pill')
-    if (pillBtn) {
-      pillBtn.addEventListener('click', () => menuPedido({ kind: 'empty-slot', isBlocked: isBloqueado, prod_date: prodDate, ent_date: entDate, weekKey }))
-    }
-    tbody.appendChild(tr)
-  }
-
-  // Para cada semana com pedidos, mostra também vagas disponíveis e bloqueadas restantes
-  const coveredWeeks = new Set()
-  ativos.forEach(o => coveredWeeks.add(getSemanaKey(o.ent_date || o.prod_date)))
-
-  const weekDates = new Map() // weekKey -> { ent, prod }
-  agendaRows.forEach(row => {
-    const wk = getSemanaKey(row.ent_date || row.prod_date)
-    if (wk && !weekDates.has(wk)) weekDates.set(wk, { ent: row.ent_date, prod: row.prod_date })
-  })
-
-  let hasExtraSlots   = false
-  let totalDisponiveis = 0
-
-  weekDates.forEach((dates, weekKey) => {
-    const vagasSemana  = getVagasSemana(weekKey)
-    const ordersInWeek = ativos.filter(o => getSemanaKey(o.ent_date || o.prod_date) === weekKey).length
-    const bloqueadas   = getBloqueiosSemana(weekKey)
-    const disponiveis  = Math.max(0, vagasSemana - ordersInWeek - bloqueadas)
-
-    totalDisponiveis += disponiveis
-
-    for (let i = 0; i < disponiveis; i++) {
-      renderExtraSlot(dates.ent, dates.prod, weekKey, false)
-      hasExtraSlots = true
-    }
-    for (let i = 0; i < bloqueadas; i++) {
-      renderExtraSlot(dates.ent, dates.prod, weekKey, true)
-      hasExtraSlots = true
-    }
-  })
-
-  // Semanas manuais sem pedidos: mostra vagas disponíveis e bloqueadas
-  getSemanaManuais().forEach(({ weekKey, entDate, prodDate }) => {
-    if (coveredWeeks.has(weekKey)) return
-    const vagasSemana   = getVagasSemana(weekKey)
-    const bloqueadasSem = getBloqueiosSemana(weekKey)
-    const disponivelSem = Math.max(0, vagasSemana - bloqueadasSem)
-
-    totalDisponiveis += disponivelSem
-
-    for (let s = 0; s < disponivelSem; s++) {
-      renderExtraSlot(entDate, prodDate, weekKey, false)
-      hasExtraSlots = true
-    }
-    for (let s = 0; s < bloqueadasSem; s++) {
-      renderExtraSlot(entDate, prodDate, weekKey, true)
-      hasExtraSlots = true
-    }
-  })
-
-  // Exibe próxima semana livre SOMENTE quando não há vagas disponíveis visíveis
-  // (semana cheia por pedidos + bloqueios, ou agenda ainda sem nenhuma linha)
-  if (totalDisponiveis === 0 && padrao && prazo) {
-    const freeSlots = getNextFreeSlots()
-    freeSlots.forEach(slot => {
-      const weekKey = getSemanaKey(slot.ent)
-      renderExtraSlot(slot.ent, slot.prod, weekKey, false)
-    })
-  }
-
-  // Se configurado mas nenhuma linha ainda (nenhum pedido, nenhuma semana manual)
-  if (!tbody.querySelector('tr')) {
-    const tr = document.createElement('tr')
-    tr.innerHTML = `<td colspan="3" style="text-align:center;padding:32px 16px;color:var(--muted,#6b7280);font-size:14px">
-      Nenhum pedido na agenda. Use <strong>+ Adicionar semana</strong> para abrir vagas ou registre um pedido.
-    </td>`
-    tbody.appendChild(tr)
-  }
-}
-
 async function limparHistorico() {
   const historico = getHistoricOrders()
   if (!historico.length) {
@@ -2021,42 +1104,6 @@ function renderHistoricoTabela() {
   })
 }
 
-function renderSemana() {
-  const tbody = $('pedidosSemana')
-  if (!tbody) return
-
-  tbody.innerHTML = ''
-
-  const { iniISO, fimISO } = getWeekWindow()
-  const ativos = getAgendaRows()
-
-  const semana = ativos
-    .filter(row => isWithinWeek(row.ent_date, iniISO, fimISO))
-    .sort((a, b) =>
-      String(a.ent_date || '').localeCompare(String(b.ent_date || '')) ||
-      a.id - b.id
-    )
-
-  if (!semana.length) {
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="3">Nenhuma entrega nesta semana</td>
-      </tr>
-    `
-    return
-  }
-
-  semana.forEach(row => {
-    const tr = document.createElement('tr')
-    tr.innerHTML = `
-      <td>${formatShortDate(row.ent_date)}</td>
-      <td>${row.cliente || '-'}</td>
-      <td>${row.descricao || '-'}</td>
-    `
-    tbody.appendChild(tr)
-  })
-}
-
 function getVisibleHolidays(limit = 12) {
   const preferredYear = String(getPreferredHolidayYear())
   const sameYear = state.holidays.filter(item => String(item.date || '').startsWith(preferredYear + '-'))
@@ -2099,51 +1146,7 @@ function renderHolidayTable() {
   })
 }
 
-function renderSummary() {
-  const barra = $('barra')
-  const barraTexto = $('barraTexto')
-  const nextEntEl = $('nextEnt')
-  const resumoDataEl = $('resumoData')
-
-  if (resumoDataEl) resumoDataEl.innerText = formatWeekRange()
-
-  const today = toISODate(new Date())
-  const blocosFuturos = state.blocos.filter(b => (b.data_entrega || '') >= today)
-  const sorted = [...blocosFuturos].sort((a, b) =>
-    String(a.data_entrega).localeCompare(String(b.data_entrega))
-  )
-
-  if (!sorted.length) {
-    if (barra) barra.style.width = '0%'
-    if (barraTexto) barraTexto.innerText = '-'
-    if (nextEntEl) nextEntEl.innerText = '-'
-    return
-  }
-
-  let totalVagas = 0
-  let totalLivres = 0
-  let proximaData = null
-
-  for (const bloco of sorted) {
-    const ocupadas = getActiveBlocoOrders(bloco.id).length
-    const livres = Math.max(0, (bloco.qtd_vagas || 0) - ocupadas)
-    totalVagas += (bloco.qtd_vagas || 0)
-    totalLivres += livres
-    if (proximaData === null && livres > 0) {
-      proximaData = bloco.data_entrega
-    }
-  }
-
-  const percent = totalVagas === 0 ? 0 : Math.min(100, Math.round(((totalVagas - totalLivres) / totalVagas) * 100))
-  if (barra) barra.style.width = percent + '%'
-  if (barraTexto) barraTexto.innerText = `${totalLivres} vagas`
-  if (nextEntEl) nextEntEl.innerText = proximaData ? formatShortDate(proximaData) : '-'
-  try { localStorage.setItem('esd_proxima_vaga', proximaData || '') } catch (_) {}
-}
-
 function renderAll() {
-  renderSummary()
-  renderSemana()
   renderBlocos()
   renderHistoricoTabela()
   renderHolidayTable()
@@ -2299,8 +1302,6 @@ function renderManualHolidayTable() {
     tbody.appendChild(tr)
   })
 }
-
-
 
 // ===== BLOCOS DE PRODUÇÃO =====
 
@@ -2752,26 +1753,14 @@ window.removerVagaDoBloco = removerVagaDoBloco
 window.excluirBloco = excluirBloco
 window.adicionarPedidoNaVaga = adicionarPedidoNaVaga
 
-window.salvarConfig = salvarConfig
 window.mudarStatus = mudarStatus
-window.toggleTecido = toggleTecido
 window.menuPedido = menuPedido
 window.closeActionSheet = closeActionSheet
 window.excluir = excluir
-window.recuperarData = recuperarData
-window.recuperarPedido = recuperarPedido
-window.reprogramarEntrega = reprogramarEntrega
-window.reprogramarProducao = reprogramarProducao
 window.addManualHoliday = addManualHoliday
 window.deleteManualHoliday = deleteManualHoliday
 window.updateCidadesSelect = updateCidadesSelect
 window.handleCityChange = handleCityChange
-window.bloquearVaga = bloquearVaga
-window.desbloquearVaga = desbloquearVaga
-window.reprogramarVaga = reprogramarVaga
-window.toggleDiaUtil = toggleDiaUtil
-window.renderDiasUteisCheckboxes = renderDiasUteisCheckboxes
-window.adicionarSemana = adicionarSemana
 window.limparHistorico = limparHistorico
 window.limparAgenda = limparAgenda
 window.initAgenda = initAgenda
@@ -2848,25 +1837,8 @@ function openAgendaFullscreen() {
   if (typeof renderBlocos === 'function') { try { renderBlocos() } catch (_) {} }
 }
 function closeAgendaFullscreen() {}
-function openPedidoFullscreen() {
-  const m = document.getElementById('pedidoFullscreen')
-  if (!m) return
-  m.hidden = false
-  document.body.style.overflow = 'hidden'
-  applyShellFullscreen(true)
-  requestAnimationFrame(function(){ m.scrollTop = 0 })
-}
-function closePedidoFullscreen() {
-  const m = document.getElementById('pedidoFullscreen')
-  if (!m) return
-  m.hidden = true
-  document.body.style.overflow = ''
-  applyShellFullscreen(false)
-}
 window.openAgendaFullscreen = openAgendaFullscreen
 window.closeAgendaFullscreen = closeAgendaFullscreen
-window.openPedidoFullscreen = openPedidoFullscreen
-window.closePedidoFullscreen = closePedidoFullscreen
 
 // Update teaser counts on dashboard cards + modal header badges
 function updateAgendaCardTeaser() {
@@ -2931,8 +1903,6 @@ function _closeModal(id){
 }
 
 /* ===== Configurações fullscreen ===== */
-function openConfigFullscreen(){ _openModal('configFullscreen'); }
-function closeConfigFullscreen(){ _closeModal('configFullscreen'); }
 
 /* ===== Feriados fullscreen ===== */
 function openFeriadosFullscreen(){ _openModal('feriadosFullscreen'); }
