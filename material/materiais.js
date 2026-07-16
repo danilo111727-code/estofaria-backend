@@ -6,6 +6,8 @@ const API = (window.API_BASE || '') + '/api'
 const STORAGE_MATERIAL_UNITS = 'estofaria_material_units_v3'
 const STORAGE_LAST_UPDATE    = 'estofaria_materiais_last_update'
 
+let currentSort = 'az'
+
 const UNIDADES_PADRAO = [
   'metro','metro quadrado','centímetro','quilograma','grama',
   'unidade','par','litro','mililitro','rolo','peça','caixa','placa','fardo'
@@ -107,6 +109,14 @@ function updateModalBadge(total){
 
 function openMateriaisFullscreen(){ renderMaterials() }
 function closeMateriaisFullscreen(){}
+
+window.setSortMateria = function(sort){
+  currentSort = sort
+  document.querySelectorAll('.mat-sort-btn').forEach(b => b.classList.remove('active'))
+  const btn = document.getElementById(sort === 'az' ? 'sortAZ' : 'sortPrice')
+  if(btn) btn.classList.add('active')
+  renderMaterials()
+}
 
 // ── unidades ─────────────────────────────────────────────────
 
@@ -249,6 +259,10 @@ async function renderMaterials(){
 
   const term=(document.getElementById('search')||{}).value?.toLowerCase()||''
   const visible=materials.filter(m=>!term||String(m.name||'').toLowerCase().includes(term))
+  visible.sort((a,b)=>{
+    if(currentSort==='price') return (a.price_cents||0)-(b.price_cents||0)
+    return String(a.name||'').localeCompare(String(b.name||''),'pt-BR')
+  })
 
   updateBlockMeta(materials.length)
   updateModalBadge(materials.length)
@@ -265,11 +279,14 @@ async function renderMaterials(){
 
     const header=document.createElement('div')
     header.className='mat-card-header'
-    const priceDisplay = m.price_cents > 0 ? centsToDisplay(m.price_cents) : '—'
-    const priceClass = m.price_cents > 0 ? 'mat-card-price' : 'mat-card-price no-price'
+    const hasPrice = m.price_cents > 0
+    const priceDisplay = hasPrice ? centsToDisplay(m.price_cents) : '—'
+    const priceClass = hasPrice ? 'mat-card-price' : 'mat-card-price no-price'
+    const noPriceBadge = hasPrice ? '' : '<span class="mat-no-price-badge">Sem preço</span>'
     header.innerHTML=`
       <span class="mat-card-name">${m.name}</span>
       <span class="mat-card-unit-badge">${m.unit}</span>
+      ${noPriceBadge}
       <span class="${priceClass}">${priceDisplay}</span>
       <span class="mat-card-arrow">▼</span>`
     header.addEventListener('click',()=>card.classList.toggle('open'))
