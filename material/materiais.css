@@ -107,6 +107,19 @@ button[disabled],button[aria-busy="true"]{cursor:not-allowed;opacity:.78;transfo
 .mat-list-header h3{margin:0;font-size:16px;color:#1d2740;}
 .mat-count-badge{background:#eef1fb;color:#3f5fa3;border-radius:20px;padding:5px 13px;font-size:13px;font-weight:600;white-space:nowrap;}
 
+/* ── Botão novo material + header actions ───────────────── */
+.mat-list-header-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.mat-new-btn{background:#3f5fa3;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s,transform .1s;white-space:nowrap;}
+.mat-new-btn:hover{background:#2f4f8f;transform:translateY(-1px);}
+.mat-new-btn.active{background:#c62828;}
+
+/* ── Card colapsável de cadastro ────────────────────────── */
+.mat-cadastro-card{border-left:4px solid #3f5fa3;}
+.mat-cadastro-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
+.mat-cadastro-header h3{margin:0;font-size:16px;color:#1d2740;}
+.mat-cadastro-close{background:none;border:none;font-size:18px;color:#8899bb;cursor:pointer;padding:4px 8px;border-radius:6px;line-height:1;}
+.mat-cadastro-close:hover{background:#f0f2f8;color:#c62828;}
+
 /* ── Botões de ordenação ─────────────────────────────────── */
 .mat-sort-btns{display:flex;gap:6px;flex-shrink:0;}
 .mat-sort-btn{background:#f0f3fa;color:#4a67a1;border:1px solid #d0d8ee;padding:7px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s,color .15s;}
