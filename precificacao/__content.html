@@ -68,15 +68,20 @@ setInterval(updateTime,1000);
 </div>
 
 
-<div id="app"></div>
+<div id="app" style="opacity:0;transition:opacity .18s ease"></div>
 
 <script>
-fetch("precificacao.html?v=20260716e")
-.then(r=>r.text())
-.then(html=>{
-document.getElementById("app").innerHTML = html
-if(window.initPrecificacao) window.initPrecificacao()
-})
+(function(){
+  var app = document.getElementById("app")
+  fetch("precificacao.html?v=20260716e")
+  .then(function(r){ return r.text() })
+  .then(function(html){
+    app.innerHTML = html
+    if(window.initPrecificacao) window.initPrecificacao()
+    requestAnimationFrame(function(){ app.style.opacity = "1" })
+  })
+  .catch(function(){ app.style.opacity = "1" })
+})()
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
