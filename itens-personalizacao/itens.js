@@ -662,16 +662,22 @@ function renderAlbums(){
   `).join('')
 }
 
+function autoAdicionarAlbumNaTabela(album){
+  if(!album) return
+  if(itens.some(i => i.name.toLowerCase() === album.nome.toLowerCase())) return
+  itens.push({name:album.nome, unit:album.unidade||'álbum', price_cents:Math.round(Number(album.custo||0)*100), consumos:{}, category:'tecido'})
+  saveGlobalCols(itens.map(({id,name,unit,price_cents,category}) => ({id,name,unit,price_cents,category})))
+  renderItensLista()
+  renderTabela()
+}
+
 function adicionarAlbumNaTabela(albumId){
   const album = loadAlbums().find(a => a.id === albumId)
   if(!album){ alert('Álbum não encontrado.'); return }
   if(itens.some(i => i.name.toLowerCase() === album.nome.toLowerCase())){
     alert(`"${album.nome}" já está na tabela de consumo.`); return
   }
-  itens.push({name:album.nome, unit:album.unidade||'álbum', price_cents:Math.round(Number(album.custo||0)*100), consumos:{}, category:'tecido'})
-  saveGlobalCols(itens.map(({id,name,unit,price_cents,category}) => ({id,name,unit,price_cents,category})))
-  renderItensLista()
-  renderTabela()
+  autoAdicionarAlbumNaTabela(album)
   alert(`"${album.nome}" adicionado à tabela de consumo.`)
 }
 
@@ -752,7 +758,13 @@ function salvarAlbumDoModal(){
     albums.push({id:gerarIdAlbum(), nome, custo, unidade, itens:tecidosSalvos, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString()})
   }
   saveAlbums(albums)
-  if(nomeAntigo !== null) sincronizarAlbumNasTabelas(nomeAntigo, nome, custo, unidade)
+  if(nomeAntigo !== null){
+    sincronizarAlbumNasTabelas(nomeAntigo, nome, custo, unidade)
+  } else {
+    // álbum novo → entra automaticamente na tabela
+    const novoAlbum = loadAlbums().find(a => a.nome === nome)
+    autoAdicionarAlbumNaTabela(novoAlbum)
+  }
   fecharModalAlbum()
   renderAlbums()
   renderAlbumSelectParaItem()
@@ -906,13 +918,29 @@ async function adicionarItem(){
   const price_cents = parseCurrencyToCents(el('valorItem')?.value||'')
 
   if(!nome){ alert('Digite o nome do item.'); el('nomeItem')?.focus(); return }
+
+  // Item com álbum → vai para o álbum, não para a tabela
+  if(albumId){
+    const albums = loadAlbums()
+    const idx = albums.findIndex(a => a.id === albumId)
+    if(idx < 0){ alert('Álbum não encontrado.'); return }
+    albums[idx].itens = albums[idx].itens || []
+    if(albums[idx].itens.some(t => t.nome.toLowerCase() === nome.toLowerCase())){
+      alert('Esse item já existe dentro do álbum.'); return
+    }
+    albums[idx].itens.push({nome, codigo:''})
+    saveAlbums(albums)
+    el('nomeItem').value = ''
+    el('valorItem').value = ''
+    el('albumItem').value = ''
+    renderAlbums()
+    return
+  }
+
+  // Item sem álbum → vai para a tabela
   if(itens.some(i => i.name.toLowerCase() === nome.toLowerCase())){ alert('Esse item já existe.'); return }
 
   let unit = 'unidade', category = 'outro'
-  if(albumId){
-    const album = loadAlbums().find(a => a.id === albumId)
-    if(album){ unit = album.unidade || 'metro'; category = 'tecido' }
-  }
 
   try{
     let item = {name:nome, unit, price_cents, consumos:{}, category}
