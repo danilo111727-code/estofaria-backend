@@ -562,7 +562,7 @@ function getCatCounts(){
 
 function renderCatTabs(){
   const counts = getCatCounts()
-  const labels = {todos:'Todos', tecido:'🧵 Tecidos', espuma:'🧽 Espumas', pe:'🦶 Pés', outro:'➕ Outros'}
+  const labels = {todos:'Todos', tecido:'Tecidos', espuma:'Espumas', pe:'Pés', outro:'Outros'}
   document.querySelectorAll('.cat-tab').forEach(btn => {
     const cat = btn.dataset.cat
     const n = counts[cat] ?? 0
