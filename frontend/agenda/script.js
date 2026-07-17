@@ -584,7 +584,16 @@ async function loadConfig() {
 async function loadOrders() {
   const rows = await apiGet('/agenda/orders')
   const normalized = Array.isArray(rows) ? rows.map(normalizeOrder) : []
-  state.orders = mergeValorCache(normalized)
+  const prevOrders = state.orders.slice()
+  const withCache = mergeValorCache(normalized)
+  state.orders = withCache.map(o => {
+    const apiValor = Number(o.valor_total || o.valor || 0)
+    if (apiValor > 0) return o
+    const prev = prevOrders.find(p => p.id && p.id === o.id)
+    const prevValor = prev ? Number(prev.valor_total || prev.valor || 0) : 0
+    if (prevValor > 0) return { ...o, valor: prevValor, valor_total: prevValor }
+    return o
+  })
 }
 
 async function limparAgenda() {
@@ -1687,15 +1696,16 @@ async function editarPedido(ordem) {
     const valorAtual = Number(ordem.valor_total || ordem.valor || 0)
     const valorVal = await ui().prompt({
       title: 'Editar pedido',
-      message: 'Valor da venda (deixe em branco se não souber)',
+      message: 'Valor da venda (Cancelar = manter valor atual)',
       label: 'Valor (R$)',
       placeholder: 'Ex.: 1500,00',
       value: valorAtual > 0 ? String(valorAtual).replace('.', ',') : ''
     })
-    if (valorVal === null) return
-    const valorNum = valorVal.trim() === ''
-      ? 0
-      : parseFloat(valorVal.trim().replace(/\./g, '').replace(',', '.')) || 0
+    const valorNum = valorVal === null
+      ? valorAtual
+      : valorVal.trim() === ''
+        ? 0
+        : parseFloat(valorVal.trim().replace(/\./g, '').replace(',', '.')) || 0
 
     const row = await apiPatch('/agenda/orders/' + ordem.id, {
       cliente,
@@ -1740,12 +1750,11 @@ async function adicionarPedidoNaVaga(blocoId) {
 
     const valorVal = await ui().prompt({
       title: 'Adicionar pedido',
-      message: 'Valor da venda (deixe em branco se não souber)',
+      message: 'Valor da venda (Cancelar = pular este campo)',
       label: 'Valor (R$)',
       placeholder: 'Ex.: 1500,00'
     })
-    if (valorVal === null) return
-    const valorNum = valorVal.trim() === ''
+    const valorNum = (valorVal === null || valorVal.trim() === '')
       ? 0
       : parseFloat(valorVal.trim().replace(/\./g, '').replace(',', '.')) || 0
 
