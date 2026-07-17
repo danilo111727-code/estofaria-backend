@@ -12,26 +12,18 @@
 <body>
 <div class="itens-page">
 
-  <!-- CARD 1 — Modelo -->
-  <div class="card">
-    <div class="card-section-header">
-      <div class="card-section-icon" style="background:#e8f0fe">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3f5fa3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h20M2 12c0-3 2-5 5-5h10c3 0 5 2 5 5M2 12c0 3 2 5 5 5h10c3 0 5-2 5-5M4 17v2M20 17v2"/></svg>
-      </div>
-      <h3>1. Modelo</h3>
-    </div>
-    <p class="card-hint">Selecione o modelo para configurar os itens e consumos de personalização.</p>
-    <div id="modelosContainer" class="modelos-grid"></div>
-  </div>
+  <!-- ── SEÇÃO GLOBAL ─────────────────────────────────────────── -->
+  <div class="section-label">Configuração global (vale para todos os modelos)</div>
 
-  <!-- CARD 2 — Itens -->
+  <!-- CARD 1 — Itens -->
   <div class="card">
     <div class="card-section-header">
       <div class="card-section-icon" style="background:#fff3e0">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f97316" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
       </div>
-      <h3>2. Itens de personalização</h3>
+      <h3>1. Itens de personalização</h3>
     </div>
+    <p class="card-hint">Cadastre tudo que entra no custo de personalização: tecidos, espumas, pés, acabamentos. Esses itens viram colunas na tabela de consumo.</p>
 
     <div class="cat-tabs" id="catTabs">
       <button class="cat-tab active" data-cat="todos" onclick="filtrarCategoria('todos')">Todos</button>
@@ -60,17 +52,32 @@
     </div>
   </div>
 
-  <!-- CARD 3 — Álbuns -->
+  <!-- CARD 2 — Álbuns -->
   <div class="card">
     <div class="card-section-header">
       <div class="card-section-icon" style="background:#f0fdf4">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
       </div>
-      <h3>3. Álbuns de tecido</h3>
+      <h3>2. Álbuns de tecido</h3>
       <button class="btn-novo" onclick="abrirModalAlbum()" type="button">+ Novo</button>
     </div>
-    <p class="card-hint">Álbuns agrupam tecidos com custo fixo. Aparecem na busca do vendedor para consulta de preço.</p>
+    <p class="card-hint">Álbuns agrupam padrões de tecido com custo fixo. Aparecem na busca do vendedor e podem ser adicionados como item na tabela de consumo.</p>
     <div id="albumsSection"></div>
+  </div>
+
+  <!-- ── SEÇÃO POR MODELO ──────────────────────────────────────── -->
+  <div class="section-label section-label-model">Configuração por modelo</div>
+
+  <!-- CARD 3 — Modelo -->
+  <div class="card">
+    <div class="card-section-header">
+      <div class="card-section-icon" style="background:#e8f0fe">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3f5fa3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h20M2 12c0-3 2-5 5-5h10c3 0 5 2 5 5M2 12c0 3 2 5 5 5h10c3 0 5-2 5-5M4 17v2M20 17v2"/></svg>
+      </div>
+      <h3>3. Selecionar modelo</h3>
+    </div>
+    <p class="card-hint">Escolha qual modelo quer configurar. Os cards abaixo (metragens e tabela de consumo) são específicos para o modelo selecionado.</p>
+    <div id="modelosContainer" class="modelos-grid"></div>
   </div>
 
   <!-- CARD 4 — Metragens -->
@@ -82,7 +89,7 @@
       <h3>4. Metragens do modelo</h3>
       <span id="modeloBadge4" class="modelo-badge"></span>
     </div>
-    <p class="card-hint">Defina os tamanhos disponíveis para o modelo selecionado. Apenas esses tamanhos aparecem na tabela de consumo.</p>
+    <p class="card-hint">Informe os tamanhos que esse modelo pode ter. Somente esses tamanhos aparecem como linhas na tabela de consumo.</p>
     <div id="metragensList" class="metragens-chips"></div>
     <div class="add-metragem-row">
       <input id="novaMetragem" placeholder="Ex: 1.60" inputmode="decimal" type="text" class="metragem-input"
@@ -103,7 +110,7 @@
       <span id="modeloBadge5" class="modelo-badge"></span>
       <button class="btn-salvar-tabela" onclick="salvarTabela()" type="button">Salvar</button>
     </div>
-    <p class="card-hint">Preencha quanto de cada item é consumido por metragem do modelo.</p>
+    <p class="card-hint">Para cada metragem, preencha quanto de cada item é consumido na fabricação.</p>
     <div id="cardTabelaLocked" class="card-locked-msg" style="display:none">Selecione um modelo acima para ver a tabela de consumo.</div>
     <div class="table-wrap">
       <table class="consumo-table">
