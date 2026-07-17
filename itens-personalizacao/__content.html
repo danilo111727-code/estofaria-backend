@@ -56,42 +56,42 @@
   <!-- ── SEÇÃO POR MODELO ──────────────────────────────────────── -->
   <div class="section-label section-label-model">Configuração por modelo</div>
 
-  <!-- CARD 3 — Modelo + Metragens -->
-  <div class="card" id="card-metragens">
-    <div class="card-section-header">
-      <div class="card-section-icon" style="background:#e8f0fe">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3f5fa3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h20M2 12c0-3 2-5 5-5h10c3 0 5 2 5 5M2 12c0 3 2 5 5 5h10c3 0 5-2 5-5M4 17v2M20 17v2"/></svg>
-      </div>
-      <h3>3. Modelo e metragens</h3>
-      <span id="modeloBadge4" class="modelo-badge"></span>
-    </div>
-    <p class="card-hint">Selecione o modelo e informe os tamanhos disponíveis. As metragens viram as linhas da tabela de consumo.</p>
-    <div class="modelo-select-row">
-      <select id="modeloSelect" class="modelo-select" onchange="selecionarModeloDoSelect(this.value)">
-        <option value="">— Selecione um modelo —</option>
-      </select>
-    </div>
-    <div id="metragensList" class="metragens-chips" style="margin-top:12px;"></div>
-    <div class="range-metragens-row">
-      <button type="button" onclick="reduzirMetragemRange()" class="btn-range-ctrl">− Reduzir</button>
-      <button type="button" onclick="aumentarMetragemRange()" class="btn-range-ctrl btn-range-add">+ Aumentar</button>
-      <button type="button" onclick="usarMetragensDefault()" class="btn-default-metragens">Reiniciar</button>
-    </div>
-    <div id="cardMetragensLocked" class="card-locked-msg" style="display:none">Selecione um modelo acima para configurar as metragens.</div>
-  </div>
-
-  <!-- CARD 4 — Tabela de consumo -->
-  <div class="card card-tabela" id="card-tabela-wrap">
+  <!-- CARD 3 — Modelo e Tabela de consumo -->
+  <div class="card" id="card-tabela-wrap">
     <div class="card-section-header">
       <div class="card-section-icon" style="background:#f0f4ff">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3f5fa3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
       </div>
-      <h3>4. Tabela de consumo</h3>
-      <span id="modeloBadge5" class="modelo-badge"></span>
-      <button class="btn-salvar-tabela" onclick="salvarTabela()" type="button">Salvar</button>
+      <h3>3. Tabela de consumo</h3>
+      <span id="modeloBadge4" class="modelo-badge"></span>
     </div>
-    <p class="card-hint">Para cada metragem, preencha quanto de cada item é consumido na fabricação.</p>
-    <div id="cardTabelaLocked" class="card-locked-msg" style="display:none">Selecione um modelo acima para ver a tabela de consumo.</div>
+    <p class="card-hint">Selecione o modelo e clique em "Abrir tabela" para preencher os consumos por metragem.</p>
+    <div class="modelo-select-row" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <select id="modeloSelect" class="modelo-select" onchange="selecionarModeloDoSelect(this.value)">
+        <option value="">— Selecione um modelo —</option>
+      </select>
+      <button type="button" id="btnAbrirTabela" onclick="abrirTabela()" class="btn-salvar-tabela">Abrir tabela</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- Overlay — Tabela de consumo -->
+<div id="tabelaOverlay" style="display:none;position:fixed;inset:0;background:#f8f9fb;z-index:9100;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+  <div style="max-width:960px;margin:0 auto;padding:20px 16px 80px;">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;gap:12px;flex-wrap:wrap;">
+      <div>
+        <div style="font-size:18px;font-weight:700;color:#1d2740;">Tabela de consumo</div>
+        <div id="tabelaModeloNome" style="font-size:13px;color:#667085;margin-top:3px;"></div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button type="button" onclick="reduzirMetragemRange()" class="btn-range-ctrl">− Linha</button>
+        <button type="button" onclick="aumentarMetragemRange()" class="btn-range-ctrl btn-range-add">+ Linha</button>
+        <button type="button" onclick="usarMetragensDefault()" class="btn-default-metragens">Reiniciar</button>
+        <button type="button" onclick="salvarTabela()" class="btn-salvar-tabela">Salvar</button>
+      </div>
+    </div>
+    <div id="metragensList" class="metragens-chips" style="margin-bottom:16px;"></div>
     <div class="table-wrap">
       <table class="consumo-table">
         <thead><tr id="headerRow"><th class="metragem-col">Metragem</th></tr></thead>
@@ -99,7 +99,6 @@
       </table>
     </div>
   </div>
-
 </div>
 
 <!-- Modal álbum -->
