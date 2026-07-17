@@ -1097,7 +1097,7 @@ function abrirTabela(){
   const nomeEl = el('tabelaModeloNome')
   if(nomeEl) nomeEl.textContent = getNomeModeloAtual()
   renderTabela()
-  overlay.style.display = 'block'
+  overlay.style.display = 'flex'
   document.body.style.overflow = 'hidden'
 }
 
