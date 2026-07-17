@@ -139,31 +139,13 @@ body{ margin:0; font-family:Arial,sans-serif; background:#f5f7fc; }
 }
 .btn-novo:hover{ background:#f0f4ff; border-color:#3f5fa3; }
 
-.albums-carousel{
-  display:flex; gap:12px; overflow-x:auto; padding:4px 2px 14px;
-  scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch;
-  scrollbar-width:thin; scrollbar-color:#d0d5dd transparent;
+.album-selector-wrap{ margin-top:4px; }
+.album-selector-select{
+  width:100%; padding:10px 14px; border-radius:10px;
+  border:1.5px solid #d0d5dd; font-size:14px; background:#fff;
+  color:#1d2740; cursor:pointer; height:44px;
 }
-.albums-carousel::-webkit-scrollbar{ height:4px; }
-.albums-carousel::-webkit-scrollbar-track{ background:transparent; }
-.albums-carousel::-webkit-scrollbar-thumb{ background:#d0d5dd; border-radius:4px; }
-.album-cover{
-  flex:0 0 110px; height:130px; border-radius:14px; cursor:pointer;
-  scroll-snap-align:start; transition:transform .18s, box-shadow .18s;
-  box-shadow:0 2px 10px rgba(0,0,0,.13); user-select:none;
-}
-.album-cover:hover{ transform:translateY(-4px); box-shadow:0 8px 22px rgba(0,0,0,.2); }
-.album-cover:active{ transform:scale(.96); }
-.album-cover-face{
-  width:100%; height:100%; border-radius:14px;
-  display:flex; flex-direction:column; align-items:center; justify-content:center;
-  padding:12px; box-sizing:border-box; text-align:center;
-}
-.album-cover-name{
-  color:#fff; font-size:13px; font-weight:800; line-height:1.3;
-  word-break:break-word; text-shadow:0 1px 4px rgba(0,0,0,.3);
-}
-.album-cover-count{ color:rgba(255,255,255,.72); font-size:11px; margin-top:8px; }
+.album-selector-select:focus{ outline:none; border-color:#3f5fa3; box-shadow:0 0 0 3px rgba(63,95,163,.1); }
 .albums-empty{ font-size:13px; color:#94a3b8; margin:0; }
 
 /* ── Modelo badge ── */
