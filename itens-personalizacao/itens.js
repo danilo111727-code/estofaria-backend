@@ -664,18 +664,17 @@ function renderAlbums(){
     container.innerHTML = '<p class="albums-empty">Nenhum álbum ainda. Clique em "+ Novo" para criar o primeiro.</p>'
     return
   }
+  const opts = albums.map(a => {
+    const count = a.itens ? a.itens.length : 0
+    return `<option value="${escapeHtml(a.id)}">${escapeHtml(a.nome)} · ${count} tecido${count !== 1 ? 's' : ''}</option>`
+  }).join('')
   container.innerHTML = `
-    <div class="albums-carousel">
-      ${albums.map((album, i) => {
-        const cor = ALBUM_CORES[i % ALBUM_CORES.length]
-        const count = album.itens ? album.itens.length : 0
-        return `<div class="album-cover" onclick="abrirModalAlbum('${escapeHtml(album.id)}')" title="Abrir ${escapeHtml(album.nome)}">
-          <div class="album-cover-face" style="background:${cor}">
-            <div class="album-cover-name">${escapeHtml(album.nome)}</div>
-            <div class="album-cover-count">${count} tecido${count !== 1 ? 's' : ''}</div>
-          </div>
-        </div>`
-      }).join('')}
+    <div class="album-selector-wrap">
+      <select id="albumSelectorSelect" class="album-selector-select"
+        onchange="if(this.value){ abrirModalAlbum(this.value); this.value='' }">
+        <option value="">Selecione um álbum para abrir ou editar…</option>
+        ${opts}
+      </select>
     </div>
   `
 }
