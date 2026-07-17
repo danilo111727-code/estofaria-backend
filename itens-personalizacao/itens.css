@@ -153,6 +153,31 @@ body{ margin:0; font-family:Arial,sans-serif; background:#f5f7fc; }
 .album-tecido-code{ color:#888; }
 .albums-empty{ font-size:13px; color:#94a3b8; margin:0; }
 
+/* ── Modelo badge ── */
+.modelo-badge{
+  display:inline-flex; align-items:center; gap:4px;
+  background:#eef2ff; color:#3f5fa3; border-radius:20px;
+  padding:3px 10px; font-size:12px; font-weight:700;
+  white-space:nowrap; flex-shrink:0;
+}
+.modelo-badge:empty{ display:none; }
+
+/* ── Card locked ── */
+.card-locked-msg{
+  background:#f8fafc; border:1px dashed #d0d5dd; border-radius:10px;
+  padding:14px 16px; font-size:13px; color:#94a3b8;
+  text-align:center; margin-top:4px;
+}
+
+/* ── Default metragens button ── */
+.btn-default-metragens{
+  background:#f1f5f9; color:#475569; border:1.5px solid #e2e8f0;
+  padding:0 14px; border-radius:10px; font-size:13px;
+  font-weight:600; cursor:pointer; height:40px; white-space:nowrap;
+  transition:all .15s;
+}
+.btn-default-metragens:hover{ background:#e2e8f0; border-color:#cbd5e1; color:#1d2740; }
+
 /* ── Metragens ── */
 .metragens-chips{
   display:flex; flex-wrap:wrap; gap:7px; margin-bottom:12px; min-height:20px;
@@ -255,6 +280,7 @@ body{ margin:0; font-family:Arial,sans-serif; background:#f5f7fc; }
   text-align:center; padding:4px 6px; font-size:13px; border-radius:0;
 }
 .qty-input:focus{ outline:none; background:#f8fbff; box-shadow:inset 0 0 0 1px #b7c4e6; }
+.qty-input.has-value{ background:#eff6ff; color:#1e40af; font-weight:700; }
 .empty-state{ color:#667085; padding:16px; text-align:center; }
 
 /* ── Responsive ── */
