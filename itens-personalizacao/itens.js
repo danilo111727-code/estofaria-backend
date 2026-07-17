@@ -430,30 +430,12 @@ function getNomeModeloAtual(){
 
 function renderModeloBadge(){
   const nome = modeloSelecionado !== '' ? getNomeModeloAtual() : ''
-  const b4 = el('modeloBadge4'), b5 = el('modeloBadge5')
+  const b4 = el('modeloBadge4')
   if(b4) b4.textContent = nome
-  if(b5) b5.textContent = nome
 }
 
 function renderCardsVisibility(){
-  const nenhum = modeloSelecionado === null  // nunca acontece, mas guard
-  const isGeral = modeloSelecionado === GLOBAL_TAG_ID
-
-  const lockedM = el('cardMetragensLocked')
-  const lockedT = el('cardTabelaLocked')
-  const tableWrap = document.querySelector('#card-tabela-wrap .table-wrap')
-  const metragemAdd = document.querySelector('.add-metragem-row')
-
-  if(isGeral){
-    if(lockedM){ lockedM.style.display = 'block'; lockedM.textContent = 'As metragens são específicas por modelo. Selecione um modelo para configurar.' }
-    if(metragemAdd) metragemAdd.style.display = 'none'
-  }else{
-    if(lockedM) lockedM.style.display = 'none'
-    if(metragemAdd) metragemAdd.style.display = 'flex'
-  }
-
-  if(lockedT) lockedT.style.display = 'none'
-  if(tableWrap) tableWrap.style.display = 'block'
+  // Nada a fazer — layout simplificado com overlay
 }
 
 // ── Seleção de modelo ─────────────────────────────────────────────────────────
@@ -1105,6 +1087,27 @@ async function carregarItensSalvos(){
   renderTabela()
 }
 
+function abrirTabela(){
+  if(!modeloSelecionado){
+    alert('Selecione um modelo primeiro.')
+    return
+  }
+  const overlay = el('tabelaOverlay')
+  if(!overlay) return
+  const nomeEl = el('tabelaModeloNome')
+  if(nomeEl) nomeEl.textContent = getNomeModeloAtual()
+  renderMetragens()
+  renderTabela()
+  overlay.style.display = 'block'
+  document.body.style.overflow = 'hidden'
+}
+
+function fecharTabela(){
+  const overlay = el('tabelaOverlay')
+  if(overlay) overlay.style.display = 'none'
+  document.body.style.overflow = ''
+}
+
 async function salvarTabela(){
   const modelId = getSelectedModelId()
   const consumosKey = modelId || 'global'
@@ -1116,7 +1119,8 @@ async function salvarTabela(){
     saveLocalItems(GLOBAL_ITEMS_KEY, itens)
     renderItensLista()
     renderTabela()
-    alert('Tabela salva (itens gerais)!')
+    fecharTabela()
+    alert('Tabela salva!')
     return
   }
 
@@ -1134,11 +1138,12 @@ async function salvarTabela(){
     })
     itens = normalizedItems.map((apiItem,i) => ({...apiItem, category: itens[i]?.category || apiItem.category || 'outro', consumos: itens[i]?.consumos || {}}))
     renderItensLista()
-    renderTabela()
+    fecharTabela()
     alert('Tabela salva com sucesso!')
   }catch(e){
     console.error(e)
     saveLocalItems(modelId, itens)
+    fecharTabela()
     alert('Salvo localmente. Será sincronizado depois: ' + e.message)
   }
 }
@@ -1192,6 +1197,8 @@ window.salvarTabela         = salvarTabela
 window.openItemMenu         = openItemMenu
 window.handleEditFromMenu   = handleEditFromMenu
 window.handleDeleteFromMenu = handleDeleteFromMenu
+window.abrirTabela          = abrirTabela
+window.fecharTabela         = fecharTabela
 window.abrirModalAlbum      = abrirModalAlbum
 window.fecharModalAlbum     = fecharModalAlbum
 window.salvarAlbumDoModal   = salvarAlbumDoModal
