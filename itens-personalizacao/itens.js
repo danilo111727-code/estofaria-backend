@@ -614,9 +614,10 @@ function renderItensLista(){
   const container = el('itensLista')
   if(!container) return
   renderCatTabs()
+  const semAlbuns = itens.filter(i => !i.isAlbum)
   const filtrados = categoriaAtiva === 'todos'
-    ? itens
-    : itens.filter(i => (i.category || 'outro') === categoriaAtiva)
+    ? semAlbuns
+    : semAlbuns.filter(i => (i.category || 'outro') === categoriaAtiva)
 
   if(!filtrados.length){
     container.innerHTML = `<div class="itens-lista-empty">${
@@ -653,52 +654,37 @@ function saveAlbums(lista){
 let _modalAlbumId = null
 let _modalTecidos = []
 
+const ALBUM_CORES = ['#3f5fa3','#16a34a','#dc2626','#9333ea','#d97706','#0891b2','#be185d','#059669','#b45309','#1d4ed8']
+
 function renderAlbums(){
   const container = el('albumsSection')
   if(!container) return
   const albums = loadAlbums()
   if(!albums.length){
-    container.innerHTML = '<p class="albums-empty">Nenhum álbum cadastrado ainda.</p>'
+    container.innerHTML = '<p class="albums-empty">Nenhum álbum ainda. Clique em "+ Novo" para criar o primeiro.</p>'
     return
   }
-  container.innerHTML = albums.map(album => `
-    <div class="album-card">
-      <div class="album-card-top">
-        <div class="album-card-info">
-          <div class="album-card-name">📁 ${escapeHtml(album.nome)}</div>
-          <div class="album-card-meta">
-            ${formatBRLFromCents(Math.round(Number(album.custo||0)*100))}
-            ${album.unidade ? ` · ${escapeHtml(album.unidade)}` : ''}
-            · ${album.itens ? album.itens.length : 0} tecido(s)
+  container.innerHTML = `
+    <div class="albums-carousel">
+      ${albums.map((album, i) => {
+        const cor = ALBUM_CORES[i % ALBUM_CORES.length]
+        const count = album.itens ? album.itens.length : 0
+        return `<div class="album-cover" onclick="abrirModalAlbum('${escapeHtml(album.id)}')" title="Abrir ${escapeHtml(album.nome)}">
+          <div class="album-cover-face" style="background:${cor}">
+            <div class="album-cover-name">${escapeHtml(album.nome)}</div>
+            <div class="album-cover-count">${count} tecido${count !== 1 ? 's' : ''}</div>
           </div>
-        </div>
-        <div class="album-card-actions">
-          <button type="button" class="btn-album btn-album-add"
-            onclick="adicionarAlbumNaTabela('${escapeHtml(album.id)}')">+ Tabela</button>
-          <button type="button" class="btn-album btn-album-edit"
-            onclick="abrirModalAlbum('${escapeHtml(album.id)}')">Editar</button>
-          <button type="button" class="btn-album btn-album-del"
-            onclick="excluirAlbum('${escapeHtml(album.id)}')">Excluir</button>
-        </div>
-      </div>
-      ${album.itens && album.itens.length ? `
-        <div class="album-tecidos">
-          ${album.itens.map(t => `
-            <span class="album-tecido-chip">
-              ${escapeHtml(t.nome)}${t.codigo ? ` <span class="album-tecido-code">(${escapeHtml(t.codigo)})</span>` : ''}
-            </span>
-          `).join('')}
-        </div>
-      ` : ''}
+        </div>`
+      }).join('')}
     </div>
-  `).join('')
+  `
 }
 
 function autoAdicionarAlbumNaTabela(album){
   if(!album) return
   if(itens.some(i => i.name.toLowerCase() === album.nome.toLowerCase())) return
-  itens.push({name:album.nome, unit:album.unidade||'álbum', price_cents:Math.round(Number(album.custo||0)*100), consumos:{}, category:'tecido'})
-  saveGlobalCols(itens.map(({id,name,unit,price_cents,category}) => ({id,name,unit,price_cents,category})))
+  itens.push({name:album.nome, unit:album.unidade||'álbum', price_cents:Math.round(Number(album.custo||0)*100), consumos:{}, category:'tecido', isAlbum:true})
+  saveGlobalCols(itens.map(({id,name,unit,price_cents,category,isAlbum}) => ({id,name,unit,price_cents,category,isAlbum})))
   renderItensLista()
   renderTabela()
 }
@@ -981,7 +967,7 @@ async function adicionarItem(){
     }
     item.category = category
     itens.push(item)
-    saveGlobalCols(itens.map(({id,name,unit,price_cents,category}) => ({id,name,unit,price_cents,category})))
+    saveGlobalCols(itens.map(({id,name,unit,price_cents,category,isAlbum}) => ({id,name,unit,price_cents,category,isAlbum})))
     el('nomeItem').value = ''
     el('valorItem').value = ''
     if(el('albumItem')) el('albumItem').value = ''
@@ -1011,7 +997,7 @@ async function editarItem(index){
       const updated = await updateItemOnApi(getSelectedModelId(), item)
       itens[index] = {...normalizeStoredItems([updated])[0], category:item.category}  || item
     }
-    saveGlobalCols(itens.map(({id,name,unit,price_cents,category}) => ({id,name,unit,price_cents,category})))
+    saveGlobalCols(itens.map(({id,name,unit,price_cents,category,isAlbum}) => ({id,name,unit,price_cents,category,isAlbum})))
     renderItensLista()
     renderTabela()
   }catch(e){ console.error(e); alert('Não foi possível salvar a edição: ' + e.message) }
@@ -1024,7 +1010,7 @@ async function excluirItem(index){
   try{
     if(canPersistItemsToApi() && item?.id) await deleteItemOnApi(getSelectedModelId(), item.id)
     itens.splice(index, 1)
-    saveGlobalCols(itens.map(({id,name,unit,price_cents,category}) => ({id,name,unit,price_cents,category})))
+    saveGlobalCols(itens.map(({id,name,unit,price_cents,category,isAlbum}) => ({id,name,unit,price_cents,category,isAlbum})))
     renderItensLista()
     renderTabela()
   }catch(e){ console.error(e); alert('Não foi possível excluir o item: ' + e.message) }
@@ -1116,7 +1102,7 @@ async function salvarTabela(){
   const consumosKey = modelId || 'global'
 
   saveModelConsumos(consumosKey, buildConsumosMap(itens))
-  saveGlobalCols(itens.map(({id,name,unit,price_cents,category}) => ({id,name,unit,price_cents,category})))
+  saveGlobalCols(itens.map(({id,name,unit,price_cents,category,isAlbum}) => ({id,name,unit,price_cents,category,isAlbum})))
 
   if(!modelId || modelId === GLOBAL_TAG_ID){
     saveLocalItems(GLOBAL_ITEMS_KEY, itens)
