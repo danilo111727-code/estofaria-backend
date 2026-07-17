@@ -890,7 +890,7 @@ function renderTabela(){
       td.className = 'qty-cell'
       const val = getConsumo(item, metragem)
       const hasVal = val > 0 ? ' has-value' : ''
-      td.innerHTML = `<input class="qty-input${hasVal}" inputmode="decimal" value="${escapeHtml(formatQuantity(val))}" onblur="atualizarConsumo(${index},'${metragem}',this.value)" oninput="this.className='qty-input'+(parseFloat(this.value.replace(',','.'))||0)>0?' has-value':''>"
+      td.innerHTML = `<input class="qty-input${hasVal}" inputmode="decimal" value="${escapeHtml(formatQuantity(val))}" onblur="atualizarConsumo(${index},'${metragem}',this.value)" oninput="this.className='qty-input'+(parseFloat(this.value.replace(',','.'))||0)>0?' has-value':''>"` 
       tr.appendChild(td)
     })
     body.appendChild(tr)
