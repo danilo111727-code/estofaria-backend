@@ -77,7 +77,11 @@
       <h3>3. Selecionar modelo</h3>
     </div>
     <p class="card-hint">Escolha qual modelo quer configurar. Os cards abaixo (metragens e tabela de consumo) são específicos para o modelo selecionado.</p>
-    <div id="modelosContainer" class="modelos-grid"></div>
+    <div class="modelo-select-row">
+      <select id="modeloSelect" class="modelo-select" onchange="selecionarModeloDoSelect(this.value)">
+        <option value="">— Selecione um modelo —</option>
+      </select>
+    </div>
   </div>
 
   <!-- CARD 4 — Metragens -->
