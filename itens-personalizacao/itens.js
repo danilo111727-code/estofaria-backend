@@ -535,9 +535,9 @@ function removerMetragem(val){
   renderTabela()
 }
 
-const METRAGEM_STEP = 0.5
-const METRAGEM_DEFAULT_MIN = 5.0
-const METRAGEM_DEFAULT_MAX = 10.0
+const METRAGEM_STEP = 0.1
+const METRAGEM_DEFAULT_MIN = 1.0
+const METRAGEM_DEFAULT_MAX = 5.0
 
 function gerarRangeMetragens(min, max){
   const lista = []
@@ -1096,7 +1096,6 @@ function abrirTabela(){
   if(!overlay) return
   const nomeEl = el('tabelaModeloNome')
   if(nomeEl) nomeEl.textContent = getNomeModeloAtual()
-  renderMetragens()
   renderTabela()
   overlay.style.display = 'block'
   document.body.style.overflow = 'hidden'
