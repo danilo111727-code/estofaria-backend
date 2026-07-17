@@ -175,11 +175,18 @@ function saveSharedModelsCache(lista){
 }
 
 async function fetchModelsFromApi(){
+  const http = window.ESTOFARIA_HTTP
   for(const base of getApiCandidates()){
     try{
-      const r = await fetchJsonWithTimeout(buildApiUrl(base, '/models?ts='+Date.now()),{headers:{Accept:'application/json'},cache:'no-store'})
-      if(!r.ok) continue
-      const data = await r.json()
+      const url = buildApiUrl(base, '/models?ts='+Date.now())
+      let data
+      if(http && typeof http.fetchJson === 'function'){
+        data = await http.fetchJson(url, { cache:'no-store', timeoutMs:8000 })
+      }else{
+        const r = await fetchJsonWithTimeout(url, {headers:{Accept:'application/json'},cache:'no-store'})
+        if(!r.ok) continue
+        data = await r.json()
+      }
       const arr = Array.isArray(data) ? data : (Array.isArray(data?.models) ? data.models : [])
       const normalized = arr.map((item,i) => normalizeModel(item,i)).filter(item => item.name)
       if(normalized.length){ saveSharedModelsCache(normalized); return normalized }
