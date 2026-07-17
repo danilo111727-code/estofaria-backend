@@ -412,6 +412,41 @@ function carregarUnidadesModalAlbum(valorAtual){
   }
 }
 
+// ── Badge e visibilidade dos cards ────────────────────────────────────────────
+function getNomeModeloAtual(){
+  if(modeloSelecionado === GLOBAL_TAG_ID) return '📋 Geral'
+  const found = modelos.find(m => String(m.id) === modeloSelecionado)
+  return found ? `📌 ${found.name}` : `📌 ${modeloSelecionado}`
+}
+
+function renderModeloBadge(){
+  const nome = modeloSelecionado !== '' ? getNomeModeloAtual() : ''
+  const b4 = el('modeloBadge4'), b5 = el('modeloBadge5')
+  if(b4) b4.textContent = nome
+  if(b5) b5.textContent = nome
+}
+
+function renderCardsVisibility(){
+  const nenhum = modeloSelecionado === null  // nunca acontece, mas guard
+  const isGeral = modeloSelecionado === GLOBAL_TAG_ID
+
+  const lockedM = el('cardMetragensLocked')
+  const lockedT = el('cardTabelaLocked')
+  const tableWrap = document.querySelector('#card-tabela-wrap .table-wrap')
+  const metragemAdd = document.querySelector('.add-metragem-row')
+
+  if(isGeral){
+    if(lockedM){ lockedM.style.display = 'block'; lockedM.textContent = 'As metragens são específicas por modelo. Selecione um modelo para configurar.' }
+    if(metragemAdd) metragemAdd.style.display = 'none'
+  }else{
+    if(lockedM) lockedM.style.display = 'none'
+    if(metragemAdd) metragemAdd.style.display = 'flex'
+  }
+
+  if(lockedT) lockedT.style.display = 'none'
+  if(tableWrap) tableWrap.style.display = 'block'
+}
+
 // ── Seleção de modelo ─────────────────────────────────────────────────────────
 function getSelectedModelId(){ return modeloSelecionado }
 function canPersistItemsToApi(){ return !!getSelectedModelId() }
@@ -449,6 +484,8 @@ function renderModelosSelecionaveis(lista){
     modeloSelecionado = GLOBAL_TAG_ID
     container.querySelectorAll('.modelo-tag').forEach(t => t.classList.remove('active'))
     geralTag.classList.add('active')
+    renderModeloBadge()
+    renderCardsVisibility()
     renderMetragens()
     await carregarItensSalvos()
   }
@@ -464,6 +501,8 @@ function renderModelosSelecionaveis(lista){
       modeloSelecionado = id
       container.querySelectorAll('.modelo-tag').forEach(t => t.classList.remove('active'))
       tag.classList.add('active')
+      renderModeloBadge()
+      renderCardsVisibility()
       renderMetragens()
       await carregarItensSalvos()
     }
@@ -519,7 +558,35 @@ function removerMetragem(val){
   renderTabela()
 }
 
+function usarMetragensDefault(){
+  if(modeloSelecionado === GLOBAL_TAG_ID) return
+  const DEFAULT = ['1.40','1.60','1.80','2.00']
+  const existentes = loadMetragens(modeloSelecionado)
+  const novas = DEFAULT.filter(m => !existentes.includes(m))
+  if(!novas.length){ alert('As metragens padrão já estão todas adicionadas.'); return }
+  const merged = [...existentes, ...novas].sort((a,b) => parseFloat(a) - parseFloat(b))
+  saveMetragens(modeloSelecionado, merged)
+  renderMetragens()
+  renderTabela()
+}
+
 // ── Lista de itens (NOVO) ─────────────────────────────────────────────────────
+function getCatCounts(){
+  const counts = {todos: itens.length, tecido:0, espuma:0, pe:0, outro:0}
+  itens.forEach(i => { const c = i.category || 'outro'; if(counts[c] !== undefined) counts[c]++ })
+  return counts
+}
+
+function renderCatTabs(){
+  const counts = getCatCounts()
+  const labels = {todos:'Todos', tecido:'🧵 Tecidos', espuma:'🧽 Espumas', pe:'🦶 Pés', outro:'➕ Outros'}
+  document.querySelectorAll('.cat-tab').forEach(btn => {
+    const cat = btn.dataset.cat
+    const n = counts[cat] ?? 0
+    btn.textContent = n > 0 ? `${labels[cat]} (${n})` : labels[cat]
+  })
+}
+
 function filtrarCategoria(cat){
   categoriaAtiva = cat
   document.querySelectorAll('.cat-tab').forEach(btn => {
@@ -531,6 +598,7 @@ function filtrarCategoria(cat){
 function renderItensLista(){
   const container = el('itensLista')
   if(!container) return
+  renderCatTabs()
   const filtrados = categoriaAtiva === 'todos'
     ? itens
     : itens.filter(i => (i.category || 'outro') === categoriaAtiva)
@@ -798,7 +866,9 @@ function renderTabela(){
     itens.forEach((item, index) => {
       const td = document.createElement('td')
       td.className = 'qty-cell'
-      td.innerHTML = `<input class="qty-input" inputmode="decimal" value="${escapeHtml(formatQuantity(getConsumo(item,metragem)))}" onblur="atualizarConsumo(${index},'${metragem}',this.value)">`
+      const val = getConsumo(item, metragem)
+      const hasVal = val > 0 ? ' has-value' : ''
+      td.innerHTML = `<input class="qty-input${hasVal}" inputmode="decimal" value="${escapeHtml(formatQuantity(val))}" onblur="atualizarConsumo(${index},'${metragem}',this.value)" oninput="this.className='qty-input'+(parseFloat(this.value.replace(',','.'))||0)>0?' has-value':''>"
       tr.appendChild(td)
     })
     body.appendChild(tr)
@@ -961,6 +1031,8 @@ async function carregarItensSalvos(){
     consumos: consumosMap[col.name.toLowerCase()] || {}
   }))
 
+  renderModeloBadge()
+  renderCardsVisibility()
   renderItensLista()
   renderTabela()
 }
@@ -1013,6 +1085,8 @@ let __itensInitDone = false
 async function initItensPersonalizacao(){
   if(__itensInitDone) return
   __itensInitDone = true
+  renderModeloBadge()
+  renderCardsVisibility()
   renderMetragens()
   renderAlbums()
   await carregarUnidades()
@@ -1027,6 +1101,7 @@ window.formatCurrency       = formatCurrency
 window.filtrarCategoria     = filtrarCategoria
 window.adicionarMetragem    = adicionarMetragem
 window.removerMetragem      = removerMetragem
+window.usarMetragensDefault = usarMetragensDefault
 window.adicionarItem        = adicionarItem
 window.editarItem           = editarItem
 window.excluirItem          = excluirItem
