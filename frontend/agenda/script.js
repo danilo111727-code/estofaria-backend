@@ -1693,7 +1693,10 @@ async function editarPedido(ordem) {
     const descricao = descricaoVal.trim()
     if (!descricao) { notifyError('Informe a descrição do produto.'); return }
 
-    const valorAtual = Number(ordem.valor_total || ordem.valor || 0)
+    const _vc = getValorCache()
+    const _byId = ordem.id ? _vc[String(ordem.id)] : 0
+    const _byCk = _vc[makeValorCacheKey(ordem)]
+    const valorAtual = Number(ordem.valor_total || ordem.valor || 0) || Number(_byId || _byCk || 0)
     const valorVal = await ui().prompt({
       title: 'Editar pedido',
       message: 'Valor da venda (Cancelar = manter valor atual)',
@@ -1707,7 +1710,7 @@ async function editarPedido(ordem) {
         ? 0
         : parseFloat(valorVal.trim().replace(/\./g, '').replace(',', '.')) || 0
 
-    saveValorCache(ordem.id, valorNum, { cliente, descricao })
+    if (valorNum > 0) saveValorCache(ordem.id, valorNum, { cliente, descricao })
     const row = await apiPatch('/agenda/orders/' + ordem.id, {
       cliente,
       descricao,
