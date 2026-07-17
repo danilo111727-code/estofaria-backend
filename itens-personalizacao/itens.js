@@ -209,7 +209,8 @@ function loadGlobalCols(){
       name: String(c.name).trim(),
       unit: String(c.unit || 'unidade').trim(),
       price_cents: Number(c.price_cents || 0),
-      category: c.category || 'outro'
+      category: c.category || 'outro',
+      isAlbum: c.isAlbum || false
     })) : []
   }catch{ return [] }
 }
@@ -219,7 +220,8 @@ function saveGlobalCols(cols){
     (Array.isArray(cols) ? cols : []).map(c => ({
       id: c.id || null, name: c.name, unit: c.unit,
       price_cents: Number(c.price_cents || 0),
-      category: c.category || 'outro'
+      category: c.category || 'outro',
+      isAlbum: c.isAlbum || false
     }))
   ))
 }
@@ -1154,6 +1156,17 @@ async function initItensPersonalizacao(){
 
 window.addEventListener('DOMContentLoaded', initItensPersonalizacao)
 window.addEventListener('load', initItensPersonalizacao)
+
+// Atualiza modelos quando outra aba (precificação/catálogo) salva no localStorage
+window.addEventListener('storage', e => {
+  if(e.key && STORAGE_MODELS_KEYS.includes(e.key)){
+    fetchModelsFromApi().then(apiModels => {
+      const localLists = STORAGE_MODELS_KEYS.map(readModelsFromStorage)
+      modelos = mergeUniqueModels(apiModels, localLists)
+      renderModelosSelecionaveis(modelos)
+    })
+  }
+})
 
 // ── Exports (para HTML inline) ────────────────────────────────────────────────
 window.formatCurrency       = formatCurrency
