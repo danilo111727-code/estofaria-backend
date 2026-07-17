@@ -299,3 +299,21 @@ body{ margin:0; font-family:Arial,sans-serif; background:#f5f7fc; }
   font-size:10px; font-weight:700; color:#667085; letter-spacing:0.02em;
   margin-bottom:3px; line-height:1;
 }
+
+/* ── Botões copiar/colar coluna ─────────────────────────────────────────────── */
+.btn-copy-col{
+  display:block; width:100%; margin-top:6px; padding:3px 6px;
+  font-size:10px; font-weight:600; color:#667085; background:none;
+  border:1px solid #d0d5dd; border-radius:5px; cursor:pointer;
+  white-space:nowrap; transition:background .15s,color .15s;
+}
+.btn-copy-col:hover{ background:#f2f4f7; color:#344054; }
+.btn-paste-col{
+  display:block; width:100%; margin-top:6px; padding:3px 6px;
+  font-size:10px; font-weight:700; color:#fff; background:#3f5fa3;
+  border:1px solid #3f5fa3; border-radius:5px; cursor:pointer;
+  white-space:nowrap; transition:background .15s;
+}
+.btn-paste-col:hover{ background:#2d4a8a; }
+.item-head.col-copied{ background:#eef2ff; }
+.item-head.col-copied .item-name{ color:#3f5fa3; }
