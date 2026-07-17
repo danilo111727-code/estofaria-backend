@@ -15,23 +15,15 @@
   <!-- ── SEÇÃO GLOBAL ─────────────────────────────────────────── -->
   <div class="section-label">Configuração global (vale para todos os modelos)</div>
 
-  <!-- CARD 1 — Itens -->
+  <!-- CARD 1 — Cadastrar itens -->
   <div class="card">
     <div class="card-section-header">
       <div class="card-section-icon" style="background:#fff3e0">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f97316" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
       </div>
-      <h3>1. Itens de personalização</h3>
+      <h3>1. Cadastrar itens</h3>
     </div>
-    <p class="card-hint">Cadastre tudo que entra no custo de personalização: tecidos, espumas, pés, acabamentos. Esses itens viram colunas na tabela de consumo.</p>
-
-    <div class="cat-tabs" id="catTabs">
-      <button class="cat-tab active" data-cat="todos" onclick="filtrarCategoria('todos')">Todos</button>
-      <button class="cat-tab" data-cat="tecido" onclick="filtrarCategoria('tecido')">🧵 Tecidos</button>
-      <button class="cat-tab" data-cat="espuma" onclick="filtrarCategoria('espuma')">🧽 Espumas</button>
-      <button class="cat-tab" data-cat="pe" onclick="filtrarCategoria('pe')">🦶 Pés</button>
-      <button class="cat-tab" data-cat="outro" onclick="filtrarCategoria('outro')">➕ Outros</button>
-    </div>
+    <p class="card-hint">Cadastre os itens que entram no custo de personalização: tecidos, espumas, pés, acabamentos. Cada item vira uma coluna na tabela de consumo.</p>
 
     <div id="itensLista" class="itens-lista"></div>
 
@@ -40,15 +32,23 @@
       <div class="add-item-row">
         <input id="nomeItem" placeholder="Nome do item" class="add-field add-field-name">
         <select id="categoriaItem" class="add-field add-field-cat">
-          <option value="outro">➕ Outro</option>
-          <option value="tecido">🧵 Tecido</option>
-          <option value="espuma">🧽 Espuma</option>
-          <option value="pe">🦶 Pé</option>
+          <option value="outro">Outro</option>
+          <option value="tecido">Tecido</option>
+          <option value="espuma">Espuma</option>
+          <option value="pe">Pé</option>
         </select>
         <select id="unidade" class="add-field add-field-unit"></select>
         <input id="valorItem" placeholder="R$ 0,00" inputmode="numeric" oninput="formatCurrency(this)" class="add-field add-field-price">
         <button type="button" onclick="adicionarItem()" class="btn-add-item">+ Adicionar</button>
       </div>
+    </div>
+
+    <div class="cat-tabs" id="catTabs">
+      <button class="cat-tab active" data-cat="todos" onclick="filtrarCategoria('todos')">Todos</button>
+      <button class="cat-tab" data-cat="tecido" onclick="filtrarCategoria('tecido')">Tecidos</button>
+      <button class="cat-tab" data-cat="espuma" onclick="filtrarCategoria('espuma')">Espumas</button>
+      <button class="cat-tab" data-cat="pe" onclick="filtrarCategoria('pe')">Pés</button>
+      <button class="cat-tab" data-cat="outro" onclick="filtrarCategoria('outro')">Outros</button>
     </div>
   </div>
 
