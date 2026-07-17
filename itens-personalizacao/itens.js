@@ -3,6 +3,7 @@ let modelos = []
 let itens = []
 let modeloSelecionado = ''   // '' = Itens gerais
 let categoriaAtiva = 'todos'
+let copiedColumn = null      // { index, name, consumos: { metragem: value } }
 
 // ── Chaves de storage ─────────────────────────────────────────────────────────
 const ALBUMS_KEY            = 'esd_albums_v1'
@@ -842,7 +843,9 @@ function renderTabela(){
 
   itens.forEach((item, index) => {
     const th = document.createElement('th')
-    th.className = 'item-head'
+    const isCopied = copiedColumn !== null && copiedColumn.index === index
+    const canPaste = copiedColumn !== null && copiedColumn.index !== index
+    th.className = 'item-head' + (isCopied ? ' col-copied' : '')
     th.innerHTML = `
       <div class="item-head-inner">
         <div class="item-menu-wrap">
@@ -851,6 +854,10 @@ function renderTabela(){
         <div class="item-name">${escapeHtml(item.name)}</div>
         <div class="item-unit">${escapeHtml(item.unit)}</div>
         <div class="item-price">${formatBRLFromCents(item.price_cents||0)}</div>
+        ${canPaste
+          ? `<button type="button" class="btn-paste-col" onclick="colarColuna(${index})">Colar</button>`
+          : `<button type="button" class="btn-copy-col" onclick="copiarColuna(${index})">${isCopied ? '✓ Copiado' : 'Copiar'}</button>`
+        }
       </div>`
     header.appendChild(th)
   })
@@ -1086,6 +1093,30 @@ async function carregarItensSalvos(){
   renderTabela()
 }
 
+function copiarColuna(index){
+  const item = itens[index]
+  if(!item) return
+  const metragens = loadMetragens(modeloSelecionado)
+  const consumos = {}
+  metragens.forEach(m => { consumos[m] = getConsumo(item, m) })
+  copiedColumn = { index, name: item.name, consumos }
+  renderTabela()
+}
+
+function colarColuna(index){
+  if(!copiedColumn) return
+  const item = itens[index]
+  if(!item) return
+  item.consumos = item.consumos || {}
+  Object.entries(copiedColumn.consumos).forEach(([m, v]) => { item.consumos[m] = v })
+  const consumosKey = getSelectedModelId() || 'global'
+  const consumosMap = loadModelConsumos(consumosKey)
+  consumosMap[item.name.toLowerCase()] = item.consumos
+  saveModelConsumos(consumosKey, consumosMap)
+  copiedColumn = null
+  renderTabela()
+}
+
 function abrirTabela(){
   if(!modeloSelecionado){
     alert('Selecione um modelo primeiro.')
@@ -1197,6 +1228,8 @@ window.handleEditFromMenu   = handleEditFromMenu
 window.handleDeleteFromMenu = handleDeleteFromMenu
 window.abrirTabela          = abrirTabela
 window.fecharTabela         = fecharTabela
+window.copiarColuna         = copiarColuna
+window.colarColuna          = colarColuna
 window.abrirModalAlbum      = abrirModalAlbum
 window.fecharModalAlbum     = fecharModalAlbum
 window.salvarAlbumDoModal   = salvarAlbumDoModal
