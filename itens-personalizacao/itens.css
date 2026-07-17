@@ -211,19 +211,15 @@ body{ margin:0; font-family:Arial,sans-serif; background:#f5f7fc; }
 }
 .chip-remove:hover{ color:#dc2626; background:#fee2e2; }
 .metragens-empty{ font-size:13px; color:#94a3b8; }
-.add-metragem-row{ display:flex; gap:8px; align-items:center; }
-.metragem-input{
-  padding:9px 12px; border:1px solid #d0d5dd; border-radius:10px;
-  font-size:14px; width:110px; background:#fff; height:40px;
+.range-metragens-row{ display:flex; gap:8px; align-items:center; margin-top:10px; flex-wrap:wrap; }
+.btn-range-ctrl{
+  padding:0 18px; height:40px; border-radius:10px; font-size:14px; font-weight:700;
+  cursor:pointer; border:1.5px solid #d0d5dd; background:#f8fafc; color:#374151;
+  transition:background .15s, border-color .15s;
 }
-.metragem-input:focus{ outline:none; border-color:#3f5fa3; box-shadow:0 0 0 3px rgba(63,95,163,.1); }
-.btn-add-metragem{
-  background:#1d2740; color:#fff; border:none;
-  padding:0 16px; border-radius:10px; font-size:13px;
-  font-weight:700; cursor:pointer; height:40px; white-space:nowrap;
-  transition:background .15s;
-}
-.btn-add-metragem:hover{ background:#141d30; }
+.btn-range-ctrl:hover{ background:#e2e8f0; border-color:#94a3b8; }
+.btn-range-add{ background:#3f5fa3; color:#fff; border-color:#3f5fa3; }
+.btn-range-add:hover{ background:#141d30; border-color:#141d30; }
 
 /* ── Salvar tabela ── */
 .btn-salvar-tabela{
