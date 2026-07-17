@@ -471,43 +471,26 @@ async function carregarModelos(){
 }
 
 function renderModelosSelecionaveis(lista){
-  const container = el('modelosContainer')
-  if(!container) return
-  container.innerHTML = ''
+  const select = el('modeloSelect')
+  if(!select) return
 
-  // Opção "Geral"
-  const geralTag = document.createElement('button')
-  geralTag.type = 'button'
-  geralTag.className = 'modelo-tag' + (modeloSelecionado === GLOBAL_TAG_ID ? ' active' : '')
-  geralTag.textContent = '📋 Geral'
-  geralTag.onclick = async () => {
-    modeloSelecionado = GLOBAL_TAG_ID
-    container.querySelectorAll('.modelo-tag').forEach(t => t.classList.remove('active'))
-    geralTag.classList.add('active')
-    renderModeloBadge()
-    renderCardsVisibility()
-    renderMetragens()
-    await carregarItensSalvos()
-  }
-  container.appendChild(geralTag)
-
+  select.innerHTML = '<option value="">— Selecione um modelo —</option>'
   lista.forEach(modelo => {
-    const id = String(modelo.id)
-    const tag = document.createElement('button')
-    tag.type = 'button'
-    tag.className = 'modelo-tag' + (modeloSelecionado === id ? ' active' : '')
-    tag.textContent = modelo.name
-    tag.onclick = async () => {
-      modeloSelecionado = id
-      container.querySelectorAll('.modelo-tag').forEach(t => t.classList.remove('active'))
-      tag.classList.add('active')
-      renderModeloBadge()
-      renderCardsVisibility()
-      renderMetragens()
-      await carregarItensSalvos()
-    }
-    container.appendChild(tag)
+    const opt = document.createElement('option')
+    opt.value = String(modelo.id)
+    opt.textContent = modelo.name
+    select.appendChild(opt)
   })
+
+  select.value = modeloSelecionado || ''
+}
+
+async function selecionarModeloDoSelect(value){
+  modeloSelecionado = value || GLOBAL_TAG_ID
+  renderModeloBadge()
+  renderCardsVisibility()
+  renderMetragens()
+  await carregarItensSalvos()
 }
 
 // ── Metragens (NOVO) ──────────────────────────────────────────────────────────
@@ -1099,6 +1082,7 @@ window.addEventListener('load', initItensPersonalizacao)
 // ── Exports (para HTML inline) ────────────────────────────────────────────────
 window.formatCurrency       = formatCurrency
 window.filtrarCategoria     = filtrarCategoria
+window.selecionarModeloDoSelect = selecionarModeloDoSelect
 window.adicionarMetragem    = adicionarMetragem
 window.removerMetragem      = removerMetragem
 window.usarMetragensDefault = usarMetragensDefault
