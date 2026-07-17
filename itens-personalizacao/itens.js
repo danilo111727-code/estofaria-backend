@@ -487,6 +487,9 @@ function renderModelosSelecionaveis(lista){
 
 async function selecionarModeloDoSelect(value){
   modeloSelecionado = value || GLOBAL_TAG_ID
+  // Auto-inicializa range de metragens se o modelo não tem nenhuma ainda
+  if(modeloSelecionado && modeloSelecionado !== GLOBAL_TAG_ID && loadMetragens(modeloSelecionado).length === 0)
+    saveMetragens(modeloSelecionado, gerarRangeMetragens(METRAGEM_DEFAULT_MIN, METRAGEM_DEFAULT_MAX))
   renderModeloBadge()
   renderCardsVisibility()
   renderMetragens()
@@ -541,14 +544,43 @@ function removerMetragem(val){
   renderTabela()
 }
 
+const METRAGEM_STEP = 0.5
+const METRAGEM_DEFAULT_MIN = 5.0
+const METRAGEM_DEFAULT_MAX = 10.0
+
+function gerarRangeMetragens(min, max){
+  const lista = []
+  for(let m = min; m <= max + 0.001; m += METRAGEM_STEP)
+    lista.push((Math.round(m * 10) / 10).toFixed(1))
+  return lista
+}
+
 function usarMetragensDefault(){
   if(modeloSelecionado === GLOBAL_TAG_ID) return
-  const DEFAULT = ['1.40','1.60','1.80','2.00']
-  const existentes = loadMetragens(modeloSelecionado)
-  const novas = DEFAULT.filter(m => !existentes.includes(m))
-  if(!novas.length){ alert('As metragens padrão já estão todas adicionadas.'); return }
-  const merged = [...existentes, ...novas].sort((a,b) => parseFloat(a) - parseFloat(b))
-  saveMetragens(modeloSelecionado, merged)
+  saveMetragens(modeloSelecionado, gerarRangeMetragens(METRAGEM_DEFAULT_MIN, METRAGEM_DEFAULT_MAX))
+  renderMetragens()
+  renderTabela()
+}
+
+function aumentarMetragemRange(){
+  if(!modeloSelecionado || modeloSelecionado === GLOBAL_TAG_ID) return
+  const lista = loadMetragens(modeloSelecionado).map(Number).filter(n => !isNaN(n)).sort((a,b)=>a-b)
+  const max = lista.length ? lista[lista.length-1] : METRAGEM_DEFAULT_MAX
+  const novoMax = Math.round((max + METRAGEM_STEP) * 10) / 10
+  const novoStr = novoMax.toFixed(1)
+  const strs = lista.map(n => n.toFixed(1))
+  if(!strs.includes(novoStr)) strs.push(novoStr)
+  saveMetragens(modeloSelecionado, strs)
+  renderMetragens()
+  renderTabela()
+}
+
+function reduzirMetragemRange(){
+  if(!modeloSelecionado || modeloSelecionado === GLOBAL_TAG_ID) return
+  const lista = loadMetragens(modeloSelecionado).map(Number).filter(n => !isNaN(n)).sort((a,b)=>a-b)
+  if(lista.length <= 1){ alert('Mínimo de 1 metragem.'); return }
+  lista.pop()
+  saveMetragens(modeloSelecionado, lista.map(n => n.toFixed(1)))
   renderMetragens()
   renderTabela()
 }
@@ -1143,9 +1175,10 @@ window.formatCurrency       = formatCurrency
 window.filtrarCategoria     = filtrarCategoria
 window.selecionarModeloDoSelect  = selecionarModeloDoSelect
 window.preencherValorDoAlbum     = preencherValorDoAlbum
-window.adicionarMetragem    = adicionarMetragem
-window.removerMetragem      = removerMetragem
-window.usarMetragensDefault = usarMetragensDefault
+window.removerMetragem       = removerMetragem
+window.usarMetragensDefault  = usarMetragensDefault
+window.aumentarMetragemRange = aumentarMetragemRange
+window.reduzirMetragemRange  = reduzirMetragemRange
 window.adicionarItem        = adicionarItem
 window.editarItem           = editarItem
 window.excluirItem          = excluirItem
