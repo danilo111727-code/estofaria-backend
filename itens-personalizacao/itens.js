@@ -755,6 +755,7 @@ function salvarAlbumDoModal(){
   if(nomeAntigo !== null) sincronizarAlbumNasTabelas(nomeAntigo, nome, custo, unidade)
   fecharModalAlbum()
   renderAlbums()
+  renderAlbumSelectParaItem()
 }
 
 function sincronizarAlbumNasTabelas(nomeAntigo, nomeNovo, novoCusto, novaUnidade){
@@ -873,16 +874,45 @@ async function atualizarConsumo(index, metragem, value){
 }
 
 // ── CRUD de itens ─────────────────────────────────────────────────────────────
+function renderAlbumSelectParaItem(){
+  const select = el('albumItem')
+  if(!select) return
+  const albums = loadAlbums()
+  const current = select.value
+  select.innerHTML = '<option value="">— Sem álbum —</option>'
+  albums.forEach(a => {
+    const opt = document.createElement('option')
+    opt.value = a.id
+    opt.textContent = a.nome
+    select.appendChild(opt)
+  })
+  if(current) select.value = current
+}
+
+function preencherValorDoAlbum(select){
+  const albumId = select?.value
+  if(!albumId) return
+  const album = loadAlbums().find(a => a.id === albumId)
+  if(!album) return
+  const custoInput = el('valorItem')
+  if(custoInput && album.custo > 0)
+    custoInput.value = formatBRLFromCents(Math.round(album.custo * 100))
+}
+
 async function adicionarItem(){
   const modelId = getSelectedModelId()
   const nome = String(el('nomeItem')?.value||'').trim()
-  const unit = String(el('unidade')?.value||'').trim()
+  const albumId = String(el('albumItem')?.value||'')
   const price_cents = parseCurrencyToCents(el('valorItem')?.value||'')
-  const category = String(el('categoriaItem')?.value||'outro')
 
   if(!nome){ alert('Digite o nome do item.'); el('nomeItem')?.focus(); return }
-  if(!unit){ alert('Cadastre uma unidade na aba Material para poder selecionar aqui.'); return }
   if(itens.some(i => i.name.toLowerCase() === nome.toLowerCase())){ alert('Esse item já existe.'); return }
+
+  let unit = 'unidade', category = 'outro'
+  if(albumId){
+    const album = loadAlbums().find(a => a.id === albumId)
+    if(album){ unit = album.unidade || 'metro'; category = 'tecido' }
+  }
 
   try{
     let item = {name:nome, unit, price_cents, consumos:{}, category}
@@ -894,6 +924,7 @@ async function adicionarItem(){
     saveGlobalCols(itens.map(({id,name,unit,price_cents,category}) => ({id,name,unit,price_cents,category})))
     el('nomeItem').value = ''
     el('valorItem').value = ''
+    if(el('albumItem')) el('albumItem').value = ''
     renderItensLista()
     renderTabela()
   }catch(e){
@@ -1072,7 +1103,7 @@ async function initItensPersonalizacao(){
   renderCardsVisibility()
   renderMetragens()
   renderAlbums()
-  await carregarUnidades()
+  renderAlbumSelectParaItem()
   await carregarModelos()
 }
 
@@ -1082,7 +1113,8 @@ window.addEventListener('load', initItensPersonalizacao)
 // ── Exports (para HTML inline) ────────────────────────────────────────────────
 window.formatCurrency       = formatCurrency
 window.filtrarCategoria     = filtrarCategoria
-window.selecionarModeloDoSelect = selecionarModeloDoSelect
+window.selecionarModeloDoSelect  = selecionarModeloDoSelect
+window.preencherValorDoAlbum     = preencherValorDoAlbum
 window.adicionarMetragem    = adicionarMetragem
 window.removerMetragem      = removerMetragem
 window.usarMetragensDefault = usarMetragensDefault
