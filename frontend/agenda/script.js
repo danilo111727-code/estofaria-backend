@@ -440,18 +440,17 @@ function saveValorCache(id, valor, order) {
 function mergeValorCache(orders) {
   const cache = getValorCache()
   return orders.map(o => {
-    const apiValor = Number(o.valor_total || o.valor || 0)
+    const byId = o.id ? Number(cache[String(o.id)] || 0) : 0
+    const ck = makeValorCacheKey(o)
+    const byCk = ck !== 'ck:|' ? Number(cache[ck] || 0) : 0
+    const cacheValor = byId > 0 ? byId : byCk
+    if (cacheValor > 0) {
+      return { ...o, valor: cacheValor, valor_total: cacheValor }
+    }
+    const apiValor = Number(o.valor || 0)
     if (apiValor > 0) {
       saveValorCache(o.id, apiValor, o)
-      return o
-    }
-    const byId = o.id ? cache[String(o.id)] : undefined
-    if (byId > 0) return { ...o, valor: byId, valor_total: byId }
-    const ck = makeValorCacheKey(o)
-    const byCk = ck !== 'ck:|' ? cache[ck] : undefined
-    if (byCk > 0) {
-      if (o.id) saveValorCache(o.id, byCk, o)
-      return { ...o, valor: byCk, valor_total: byCk }
+      return { ...o, valor_total: apiValor }
     }
     return o
   })
