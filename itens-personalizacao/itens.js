@@ -875,21 +875,20 @@ function renderTabela(){
       td.className = 'qty-cell'
       const val = getConsumo(item, metragem)
       const hasVal = val > 0 ? ' has-value' : ''
-      const price = (item.price_cents || 0) / 100
-      const calcVal = val > 0 && price > 0 ? formatBRLFromCents(Math.round(val * (item.price_cents || 0))) : ''
-      td.innerHTML = `
-        <div class="cell-metragem-label">${escapeHtml(metragem)}m</div>
-        <input class="qty-input${hasVal}" inputmode="decimal" value="${escapeHtml(formatQuantity(val))}"
-          onblur="atualizarConsumo(${index},'${metragem}',this.value)"
-          oninput="
-            const q=parseFloat(this.value.replace(',','.'))||0;
-            this.className='qty-input'+(q>0?' has-value':'');
-            const c=this.nextElementSibling;
-            const p=${item.price_cents||0};
-            c.textContent=q>0&&p>0?formatBRLFromCents(Math.round(q*p)):'';
-          ">
-        <div class="cell-calc">${escapeHtml(calcVal)}</div>
-      `
+      const input = document.createElement('input')
+      input.className = 'qty-input' + hasVal
+      input.inputMode = 'decimal'
+      input.value = formatQuantity(val)
+      input.addEventListener('blur', () => atualizarConsumo(index, metragem, input.value))
+      input.addEventListener('input', () => {
+        const q = parseFloat(input.value.replace(',', '.')) || 0
+        input.className = 'qty-input' + (q > 0 ? ' has-value' : '')
+      })
+      const label = document.createElement('div')
+      label.className = 'cell-metragem-label'
+      label.textContent = metragem + 'm'
+      td.appendChild(label)
+      td.appendChild(input)
       tr.appendChild(td)
     })
     body.appendChild(tr)
