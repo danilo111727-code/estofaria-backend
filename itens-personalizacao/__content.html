@@ -30,14 +30,11 @@
     <div class="add-item-section">
       <div class="add-item-title">Adicionar item</div>
       <div class="add-item-row">
-        <input id="nomeItem" placeholder="Nome do item" class="add-field add-field-name">
-        <select id="categoriaItem" class="add-field add-field-cat">
-          <option value="outro">Outro</option>
-          <option value="tecido">Tecido</option>
-          <option value="espuma">Espuma</option>
-          <option value="pe">Pé</option>
+        <input id="nomeItem" placeholder="Nome do item" class="add-field add-field-name"
+          onkeydown="if(event.key==='Enter'){adicionarItem();event.preventDefault()}">
+        <select id="albumItem" class="add-field add-field-album" onchange="preencherValorDoAlbum(this)">
+          <option value="">— Sem álbum —</option>
         </select>
-        <select id="unidade" class="add-field add-field-unit"></select>
         <input id="valorItem" placeholder="R$ 0,00" inputmode="numeric" oninput="formatCurrency(this)" class="add-field add-field-price">
         <button type="button" onclick="adicionarItem()" class="btn-add-item">+ Adicionar</button>
       </div>
