@@ -1707,6 +1707,7 @@ async function editarPedido(ordem) {
         ? 0
         : parseFloat(valorVal.trim().replace(/\./g, '').replace(',', '.')) || 0
 
+    saveValorCache(ordem.id, valorNum, { cliente, descricao })
     const row = await apiPatch('/agenda/orders/' + ordem.id, {
       cliente,
       descricao,
@@ -1716,7 +1717,6 @@ async function editarPedido(ordem) {
     // Mescla valores do usuário sobre a resposta do servidor,
     // pois o backend pode não retornar os campos atualizados
     replaceOrder({ ...row, cliente, descricao, valor: valorNum, valor_total: valorNum })
-    saveValorCache(ordem.id, valorNum, { cliente, descricao })
     notifyPainelRefresh('order-updated')
     renderBlocos()
     notifySuccess('Pedido atualizado!')
@@ -1758,6 +1758,7 @@ async function adicionarPedidoNaVaga(blocoId) {
       ? 0
       : parseFloat(valorVal.trim().replace(/\./g, '').replace(',', '.')) || 0
 
+    saveValorCache(null, valorNum, { cliente, descricao })
     const row = await apiPost('/agenda/blocos/' + blocoId + '/pedido', {
       cliente,
       descricao,
@@ -1766,7 +1767,7 @@ async function adicionarPedidoNaVaga(blocoId) {
     })
     const newOrder = normalizeOrder({ ...row, cliente, descricao, valor: valorNum, valor_total: valorNum })
     state.orders.push(newOrder)
-    saveValorCache(newOrder.id, valorNum, { cliente, descricao })
+    if (newOrder.id) saveValorCache(newOrder.id, valorNum, { cliente, descricao })
     notifyPainelRefresh('order-created')
     renderBlocos()
     notifySuccess('Pedido adicionado!')
