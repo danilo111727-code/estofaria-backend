@@ -875,9 +875,20 @@ function renderTabela(){
       td.className = 'qty-cell'
       const val = getConsumo(item, metragem)
       const hasVal = val > 0 ? ' has-value' : ''
+      const price = (item.price_cents || 0) / 100
+      const calcVal = val > 0 && price > 0 ? formatBRLFromCents(Math.round(val * (item.price_cents || 0))) : ''
       td.innerHTML = `
         <div class="cell-metragem-label">${escapeHtml(metragem)}m</div>
-        <input class="qty-input${hasVal}" inputmode="decimal" value="${escapeHtml(formatQuantity(val))}" onblur="atualizarConsumo(${index},'${metragem}',this.value)" oninput="this.className='qty-input'+(parseFloat(this.value.replace(',','.'))||0)>0?' has-value':''>"
+        <input class="qty-input${hasVal}" inputmode="decimal" value="${escapeHtml(formatQuantity(val))}"
+          onblur="atualizarConsumo(${index},'${metragem}',this.value)"
+          oninput="
+            const q=parseFloat(this.value.replace(',','.'))||0;
+            this.className='qty-input'+(q>0?' has-value':'');
+            const c=this.nextElementSibling;
+            const p=${item.price_cents||0};
+            c.textContent=q>0&&p>0?formatBRLFromCents(Math.round(q*p)):'';
+          ">
+        <div class="cell-calc">${escapeHtml(calcVal)}</div>
       `
       tr.appendChild(td)
     })
