@@ -583,6 +583,12 @@ async function loadConfig() {
 
 async function loadOrders() {
   const rows = await apiGet('/agenda/orders')
+  console.log('[ESD-DIAG] loadOrders: API retornou', Array.isArray(rows) ? rows.length : 0, 'pedidos')
+  if (Array.isArray(rows) && rows.length > 0) {
+    const amostra = rows.slice(0, 3).map(r => ({ id: r.id, cliente: r.cliente, valor: r.valor, valor_total: r.valor_total }))
+    console.log('[ESD-DIAG] Amostra dos pedidos (id/cliente/valor/valor_total):', JSON.stringify(amostra))
+  }
+  console.log('[ESD-DIAG] Cache localStorage atual:', localStorage.getItem('esd_order_valores'))
   const normalized = Array.isArray(rows) ? rows.map(normalizeOrder) : []
   const prevOrders = state.orders.slice()
   const withCache = mergeValorCache(normalized)
@@ -594,6 +600,8 @@ async function loadOrders() {
     if (prevValor > 0) return { ...o, valor: prevValor, valor_total: prevValor }
     return o
   })
+  const comValor = state.orders.filter(o => Number(o.valor || o.valor_total || 0) > 0)
+  console.log('[ESD-DIAG] Pedidos com valor após merge:', comValor.length, comValor.map(o => ({ id: o.id, cliente: o.cliente, valor: o.valor })))
 }
 
 async function limparAgenda() {
@@ -1710,7 +1718,9 @@ async function editarPedido(ordem) {
         ? 0
         : parseFloat(valorVal.trim().replace(/\./g, '').replace(',', '.')) || 0
 
+    console.log('[ESD-DIAG] editarPedido: ordem.id=', ordem.id, 'valorAtual=', valorAtual, 'valorNum=', valorNum, 'cliente=', cliente, 'descricao=', descricao)
     if (valorNum > 0) saveValorCache(ordem.id, valorNum, { cliente, descricao })
+    console.log('[ESD-DIAG] Cache após saveValorCache:', localStorage.getItem('esd_order_valores'))
     const row = await apiPatch('/agenda/orders/' + ordem.id, {
       cliente,
       descricao,
