@@ -288,3 +288,15 @@ body{ margin:0; font-family:Arial,sans-serif; background:#f5f7fc; }
   .item-unit, .item-price{ font-size:10px; }
   .qty-input{ width:64px; min-width:64px; max-width:64px; height:32px !important; min-height:32px !important; font-size:12px; padding:4px; }
 }
+
+/* ── Sticky cabeçalhos dentro do overlay da tabela ─────────────────────────── */
+#tabelaOverlay .consumo-table thead th{
+  position:sticky; top:0; z-index:2;
+}
+#tabelaOverlay .metragem-col,
+#tabelaOverlay .metragem-cell{
+  position:sticky; left:0; z-index:1;
+}
+#tabelaOverlay .consumo-table thead th.metragem-col{
+  z-index:3;
+}
