@@ -413,13 +413,26 @@ function getValorCache() {
   try { return JSON.parse(localStorage.getItem(VALOR_CACHE_KEY) || '{}') } catch (_) { return {} }
 }
 
-function saveValorCache(id, valor) {
-  if (!id) return
+function makeValorCacheKey(o) {
+  const cl = String(o.cliente || '').toLowerCase().trim().replace(/\s+/g, ' ')
+  const de = String(o.descricao || '').toLowerCase().trim().replace(/\s+/g, ' ').slice(0, 50)
+  return 'ck:' + cl + '|' + de
+}
+
+function saveValorCache(id, valor, order) {
   const cache = getValorCache()
   if (valor > 0) {
-    cache[String(id)] = valor
+    if (id) cache[String(id)] = valor
+    if (order) {
+      const ck = makeValorCacheKey(order)
+      if (ck !== 'ck:|') cache[ck] = valor
+    }
   } else {
-    delete cache[String(id)]
+    if (id) delete cache[String(id)]
+    if (order) {
+      const ck = makeValorCacheKey(order)
+      delete cache[ck]
+    }
   }
   try { localStorage.setItem(VALOR_CACHE_KEY, JSON.stringify(cache)) } catch (_) {}
 }
@@ -429,11 +442,17 @@ function mergeValorCache(orders) {
   return orders.map(o => {
     const apiValor = Number(o.valor_total || o.valor || 0)
     if (apiValor > 0) {
-      if (o.id) saveValorCache(o.id, apiValor)
+      saveValorCache(o.id, apiValor, o)
       return o
     }
-    const cached = o.id ? cache[String(o.id)] : undefined
-    if (cached > 0) return { ...o, valor: cached, valor_total: cached }
+    const byId = o.id ? cache[String(o.id)] : undefined
+    if (byId > 0) return { ...o, valor: byId, valor_total: byId }
+    const ck = makeValorCacheKey(o)
+    const byCk = ck !== 'ck:|' ? cache[ck] : undefined
+    if (byCk > 0) {
+      if (o.id) saveValorCache(o.id, byCk, o)
+      return { ...o, valor: byCk, valor_total: byCk }
+    }
     return o
   })
 }
@@ -1687,7 +1706,7 @@ async function editarPedido(ordem) {
     // Mescla valores do usuário sobre a resposta do servidor,
     // pois o backend pode não retornar os campos atualizados
     replaceOrder({ ...row, cliente, descricao, valor: valorNum, valor_total: valorNum })
-    saveValorCache(ordem.id, valorNum)
+    saveValorCache(ordem.id, valorNum, { cliente, descricao })
     notifyPainelRefresh('order-updated')
     renderBlocos()
     notifySuccess('Pedido atualizado!')
@@ -1738,7 +1757,7 @@ async function adicionarPedidoNaVaga(blocoId) {
     })
     const newOrder = normalizeOrder({ ...row, cliente, descricao, valor: valorNum, valor_total: valorNum })
     state.orders.push(newOrder)
-    if (newOrder.id) saveValorCache(newOrder.id, valorNum)
+    saveValorCache(newOrder.id, valorNum, { cliente, descricao })
     notifyPainelRefresh('order-created')
     renderBlocos()
     notifySuccess('Pedido adicionado!')
