@@ -407,6 +407,37 @@ function normalizeId(value) {
 
 const DELETED_ORDER_PREFIX = '[pedido excluído] '
 
+const VALOR_CACHE_KEY = 'esd_order_valores'
+
+function getValorCache() {
+  try { return JSON.parse(localStorage.getItem(VALOR_CACHE_KEY) || '{}') } catch (_) { return {} }
+}
+
+function saveValorCache(id, valor) {
+  if (!id) return
+  const cache = getValorCache()
+  if (valor > 0) {
+    cache[String(id)] = valor
+  } else {
+    delete cache[String(id)]
+  }
+  try { localStorage.setItem(VALOR_CACHE_KEY, JSON.stringify(cache)) } catch (_) {}
+}
+
+function mergeValorCache(orders) {
+  const cache = getValorCache()
+  return orders.map(o => {
+    const apiValor = Number(o.valor_total || o.valor || 0)
+    if (apiValor > 0) {
+      if (o.id) saveValorCache(o.id, apiValor)
+      return o
+    }
+    const cached = o.id ? cache[String(o.id)] : undefined
+    if (cached > 0) return { ...o, valor: cached, valor_total: cached }
+    return o
+  })
+}
+
 function isDeletedAgendaOrder(order) {
   return normalizeLooseText(order?.descricao).startsWith('[pedido excluido]')
 }
@@ -533,7 +564,8 @@ async function loadConfig() {
 
 async function loadOrders() {
   const rows = await apiGet('/agenda/orders')
-  state.orders = Array.isArray(rows) ? rows.map(normalizeOrder) : []
+  const normalized = Array.isArray(rows) ? rows.map(normalizeOrder) : []
+  state.orders = mergeValorCache(normalized)
 }
 
 async function limparAgenda() {
@@ -1655,6 +1687,7 @@ async function editarPedido(ordem) {
     // Mescla valores do usuário sobre a resposta do servidor,
     // pois o backend pode não retornar os campos atualizados
     replaceOrder({ ...row, cliente, descricao, valor: valorNum, valor_total: valorNum })
+    saveValorCache(ordem.id, valorNum)
     notifyPainelRefresh('order-updated')
     renderBlocos()
     notifySuccess('Pedido atualizado!')
@@ -1703,7 +1736,9 @@ async function adicionarPedidoNaVaga(blocoId) {
       valor: valorNum,
       valor_total: valorNum
     })
-    state.orders.push(normalizeOrder({ ...row, cliente, descricao, valor: valorNum, valor_total: valorNum }))
+    const newOrder = normalizeOrder({ ...row, cliente, descricao, valor: valorNum, valor_total: valorNum })
+    state.orders.push(newOrder)
+    if (newOrder.id) saveValorCache(newOrder.id, valorNum)
     notifyPainelRefresh('order-created')
     renderBlocos()
     notifySuccess('Pedido adicionado!')
