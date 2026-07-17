@@ -294,13 +294,17 @@ body{ margin:0; font-family:Arial,sans-serif; background:#f5f7fc; }
   position:sticky; top:0; z-index:2;
 }
 
-/* ── Label de metragem dentro de cada célula ────────────────────────────────── */
+/* ── Células do overlay ──────────────────────────────────────────────────────── */
 #tabelaOverlay .qty-cell{
   text-align:left; padding:6px 8px !important; vertical-align:top;
 }
 .cell-metragem-label{
   font-size:10px; font-weight:700; color:#667085; letter-spacing:0.02em;
   margin-bottom:3px; line-height:1; text-align:left;
+}
+.cell-calc{
+  font-size:10px; font-weight:600; color:#12b76a;
+  margin-top:3px; line-height:1; min-height:13px; text-align:left;
 }
 
 /* ── Botões copiar/colar coluna ─────────────────────────────────────────────── */
