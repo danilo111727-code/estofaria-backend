@@ -77,21 +77,23 @@
 </div>
 
 <!-- Overlay — Tabela de consumo -->
-<div id="tabelaOverlay" style="display:none;position:fixed;inset:0;background:#f8f9fb;z-index:9100;overflow-y:auto;-webkit-overflow-scrolling:touch;">
-  <div style="max-width:960px;margin:0 auto;padding:20px 16px 80px;">
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;gap:12px;flex-wrap:wrap;">
-      <div>
-        <div style="font-size:18px;font-weight:700;color:#1d2740;">Tabela de consumo</div>
-        <div id="tabelaModeloNome" style="font-size:13px;color:#667085;margin-top:3px;"></div>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <button type="button" onclick="reduzirMetragemRange()" class="btn-range-ctrl">− Linha</button>
-        <button type="button" onclick="aumentarMetragemRange()" class="btn-range-ctrl btn-range-add">+ Linha</button>
-        <button type="button" onclick="usarMetragensDefault()" class="btn-default-metragens">Reiniciar</button>
-        <button type="button" onclick="salvarTabela()" class="btn-salvar-tabela">Salvar</button>
-      </div>
+<div id="tabelaOverlay" style="display:none;position:fixed;inset:0;background:#f8f9fb;z-index:9100;flex-direction:column;">
+  <!-- Cabeçalho fixo -->
+  <div style="flex-shrink:0;background:#fff;border-bottom:1px solid #e5e7eb;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+    <div>
+      <div style="font-size:17px;font-weight:700;color:#1d2740;">Tabela de consumo</div>
+      <div id="tabelaModeloNome" style="font-size:13px;color:#667085;margin-top:2px;"></div>
     </div>
-    <div class="table-wrap">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <button type="button" onclick="reduzirMetragemRange()" class="btn-range-ctrl">− Linha</button>
+      <button type="button" onclick="aumentarMetragemRange()" class="btn-range-ctrl btn-range-add">+ Linha</button>
+      <button type="button" onclick="usarMetragensDefault()" class="btn-default-metragens">Reiniciar</button>
+      <button type="button" onclick="salvarTabela()" class="btn-salvar-tabela">Salvar</button>
+    </div>
+  </div>
+  <!-- Conteúdo com scroll -->
+  <div style="flex:1;overflow-y:auto;overflow-x:auto;-webkit-overflow-scrolling:touch;padding:16px 16px 40px;">
+    <div class="table-wrap" style="overflow:visible;margin-top:0;">
       <table class="consumo-table">
         <thead><tr id="headerRow"><th class="metragem-col">Metragem</th></tr></thead>
         <tbody id="bodyRows"></tbody>
