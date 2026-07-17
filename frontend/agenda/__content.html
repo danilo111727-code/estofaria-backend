@@ -169,6 +169,12 @@
   </aside>
 
   <script src="script.js?v=20260717b"></script>
+  <script src="../pull-to-refresh.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      initPullToRefresh(function () { return typeof load === 'function' ? load() : Promise.resolve() })
+    })
+  </script>
   <script src="../keyboard-dismiss.js"></script>
 </body>
 </html>
