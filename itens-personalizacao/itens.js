@@ -1129,6 +1129,8 @@ function abrirTabela(){
   renderTabela()
   overlay.style.display = 'flex'
   document.body.style.overflow = 'hidden'
+  const scrollArea = el('tabelaScrollArea')
+  if(scrollArea){ scrollArea.scrollTop = 0; scrollArea.scrollLeft = 0 }
 }
 
 function fecharTabela(){
