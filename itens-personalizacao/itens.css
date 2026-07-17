@@ -61,7 +61,8 @@ body{ margin:0; font-family:Arial,sans-serif; background:#f5f7fc; }
 
 /* ── Category tabs ── */
 .cat-tabs{
-  display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px;
+  display:flex; gap:6px; flex-wrap:wrap; margin-bottom:0;
+  border-top:1px solid #f1f3f8; padding-top:14px; margin-top:14px;
 }
 .cat-tab{
   padding:6px 14px; border-radius:999px; border:1.5px solid #e2e8f0;
