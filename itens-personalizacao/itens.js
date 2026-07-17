@@ -832,7 +832,7 @@ function renderTabela(){
   const body   = el('bodyRows')
   if(!header || !body) return
 
-  header.innerHTML = '<th class="metragem-col">Metragem</th>'
+  header.innerHTML = ''
   body.innerHTML = ''
 
   if(!itens.length){
@@ -857,22 +857,21 @@ function renderTabela(){
 
   const metragens = loadMetragens(modeloSelecionado)
   if(!metragens.length){
-    body.innerHTML = `<tr><td class="empty-state" colspan="${itens.length+1}">Configure as metragens do modelo no Card 4 para preencher a tabela.</td></tr>`
+    body.innerHTML = `<tr><td class="empty-state" colspan="${itens.length}">Configure as metragens do modelo para preencher a tabela.</td></tr>`
     return
   }
 
   metragens.forEach(metragem => {
     const tr = document.createElement('tr')
-    const tdM = document.createElement('td')
-    tdM.className = 'metragem-cell'
-    tdM.textContent = metragem + 'm'
-    tr.appendChild(tdM)
     itens.forEach((item, index) => {
       const td = document.createElement('td')
       td.className = 'qty-cell'
       const val = getConsumo(item, metragem)
       const hasVal = val > 0 ? ' has-value' : ''
-      td.innerHTML = `<input class="qty-input${hasVal}" inputmode="decimal" value="${escapeHtml(formatQuantity(val))}" onblur="atualizarConsumo(${index},'${metragem}',this.value)" oninput="this.className='qty-input'+(parseFloat(this.value.replace(',','.'))||0)>0?' has-value':''>"` 
+      td.innerHTML = `
+        <div class="cell-metragem-label">${escapeHtml(metragem)}m</div>
+        <input class="qty-input${hasVal}" inputmode="decimal" value="${escapeHtml(formatQuantity(val))}" onblur="atualizarConsumo(${index},'${metragem}',this.value)" oninput="this.className='qty-input'+(parseFloat(this.value.replace(',','.'))||0)>0?' has-value':''>"
+      `
       tr.appendChild(td)
     })
     body.appendChild(tr)
