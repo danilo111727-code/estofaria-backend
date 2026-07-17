@@ -121,8 +121,7 @@ body{ margin:0; font-family:Arial,sans-serif; background:#f5f7fc; }
 }
 .add-field:focus{ outline:none; border-color:#3f5fa3; box-shadow:0 0 0 3px rgba(63,95,163,.1); }
 .add-field-name{ flex:2 1 160px; min-width:120px; }
-.add-field-cat{ flex:1 1 110px; min-width:100px; }
-.add-field-unit{ flex:1 1 100px; min-width:90px; }
+.add-field-album{ flex:1 1 140px; min-width:120px; }
 .add-field-price{ flex:1 1 110px; min-width:100px; text-align:right; }
 .btn-add-item{
   background:#3f5fa3; color:#fff; border:none;
