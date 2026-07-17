@@ -65,33 +65,22 @@
   <!-- ── SEÇÃO POR MODELO ──────────────────────────────────────── -->
   <div class="section-label section-label-model">Configuração por modelo</div>
 
-  <!-- CARD 3 — Modelo -->
-  <div class="card">
+  <!-- CARD 3 — Modelo + Metragens -->
+  <div class="card" id="card-metragens">
     <div class="card-section-header">
       <div class="card-section-icon" style="background:#e8f0fe">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3f5fa3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h20M2 12c0-3 2-5 5-5h10c3 0 5 2 5 5M2 12c0 3 2 5 5 5h10c3 0 5-2 5-5M4 17v2M20 17v2"/></svg>
       </div>
-      <h3>3. Selecionar modelo</h3>
+      <h3>3. Modelo e metragens</h3>
+      <span id="modeloBadge4" class="modelo-badge"></span>
     </div>
-    <p class="card-hint">Escolha qual modelo quer configurar. Os cards abaixo (metragens e tabela de consumo) são específicos para o modelo selecionado.</p>
+    <p class="card-hint">Selecione o modelo e informe os tamanhos disponíveis. As metragens viram as linhas da tabela de consumo.</p>
     <div class="modelo-select-row">
       <select id="modeloSelect" class="modelo-select" onchange="selecionarModeloDoSelect(this.value)">
         <option value="">— Selecione um modelo —</option>
       </select>
     </div>
-  </div>
-
-  <!-- CARD 4 — Metragens -->
-  <div class="card" id="card-metragens">
-    <div class="card-section-header">
-      <div class="card-section-icon" style="background:#fef3f2">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9l10 13L22 9"/><path d="M12 2v20"/><path d="M2 9h20"/></svg>
-      </div>
-      <h3>4. Metragens do modelo</h3>
-      <span id="modeloBadge4" class="modelo-badge"></span>
-    </div>
-    <p class="card-hint">Informe os tamanhos que esse modelo pode ter. Somente esses tamanhos aparecem como linhas na tabela de consumo.</p>
-    <div id="metragensList" class="metragens-chips"></div>
+    <div id="metragensList" class="metragens-chips" style="margin-top:12px;"></div>
     <div class="add-metragem-row">
       <input id="novaMetragem" placeholder="Ex: 1.60" inputmode="decimal" type="text" class="metragem-input"
         onkeydown="if(event.key==='Enter'){adicionarMetragem();event.preventDefault()}">
@@ -101,13 +90,13 @@
     <div id="cardMetragensLocked" class="card-locked-msg" style="display:none">Selecione um modelo acima para configurar as metragens.</div>
   </div>
 
-  <!-- CARD 5 — Tabela de consumo -->
+  <!-- CARD 4 — Tabela de consumo -->
   <div class="card card-tabela" id="card-tabela-wrap">
     <div class="card-section-header">
       <div class="card-section-icon" style="background:#f0f4ff">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3f5fa3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
       </div>
-      <h3>5. Tabela de consumo</h3>
+      <h3>4. Tabela de consumo</h3>
       <span id="modeloBadge5" class="modelo-badge"></span>
       <button class="btn-salvar-tabela" onclick="salvarTabela()" type="button">Salvar</button>
     </div>
