@@ -81,11 +81,10 @@
       </select>
     </div>
     <div id="metragensList" class="metragens-chips" style="margin-top:12px;"></div>
-    <div class="add-metragem-row">
-      <input id="novaMetragem" placeholder="Ex: 1.60" inputmode="decimal" type="text" class="metragem-input"
-        onkeydown="if(event.key==='Enter'){adicionarMetragem();event.preventDefault()}">
-      <button type="button" onclick="adicionarMetragem()" class="btn-add-metragem">+ Adicionar</button>
-      <button type="button" onclick="usarMetragensDefault()" class="btn-default-metragens">Usar padrão</button>
+    <div class="range-metragens-row">
+      <button type="button" onclick="reduzirMetragemRange()" class="btn-range-ctrl">− Reduzir</button>
+      <button type="button" onclick="aumentarMetragemRange()" class="btn-range-ctrl btn-range-add">+ Aumentar</button>
+      <button type="button" onclick="usarMetragensDefault()" class="btn-default-metragens">Reiniciar</button>
     </div>
     <div id="cardMetragensLocked" class="card-locked-msg" style="display:none">Selecione um modelo acima para configurar as metragens.</div>
   </div>
