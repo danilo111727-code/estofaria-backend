@@ -309,6 +309,7 @@ function handleAgendaSync(serializedPayload) {
   latestQuotesLoaded = false
   invalidatePainelCaches()
   schedulePainelRefresh(80)
+  setTimeout(() => loadSecondaryData().catch(() => {}), 150)
 }
 function syncAgendaStateOnBoot() {
   try {
