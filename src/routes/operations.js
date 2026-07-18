@@ -841,6 +841,7 @@ router.post('/agenda/blocos/:id/pedido', (req, res) => {
     qtd: 1,
     tecido_comprado: false,
     valor: num(req.body?.valor, 0),
+    modelos: Array.isArray(req.body?.modelos) ? req.body.modelos.map(m => ({ id: String(m.id || ''), name: String(m.name || '') })) : [],
     status: 'pendente',
     created_at: nowIso(),
     updated_at: nowIso()
