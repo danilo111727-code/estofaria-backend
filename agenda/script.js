@@ -1660,84 +1660,199 @@ async function editarPedido(ordem) {
   }
 }
 
-function promptSelecionarModelos() {
+function promptDescricaoComModelos() {
   return new Promise(resolve => {
     const doc = (function() {
       try { if (window.parent && window.parent !== window && window.parent.document && window.parent.document.body) return window.parent.document } catch (_) {}
       return document
     })()
-    let modelos = []
+    let catalogoModelos = []
     try {
       const raw = localStorage.getItem('catalogo_modelos') || localStorage.getItem('precificacao_modelos')
-      if (raw) { const parsed = JSON.parse(raw); modelos = Array.isArray(parsed) ? parsed : [] }
+      if (raw) { const parsed = JSON.parse(raw); catalogoModelos = Array.isArray(parsed) ? parsed : [] }
     } catch (_) {}
+    const selectedModelos = {}
     const backdrop = doc.createElement('div')
-    Object.assign(backdrop.style, { position: 'fixed', inset: '0', background: 'rgba(15,23,42,.56)', backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '18px', zIndex: '1000001', boxSizing: 'border-box' })
+    Object.assign(backdrop.style, { position:'fixed', inset:'0', background:'rgba(15,23,42,.52)', backdropFilter:'blur(2px)', display:'flex', alignItems:'flex-end', justifyContent:'center', zIndex:'1000001', boxSizing:'border-box' })
     const modal = doc.createElement('div')
-    Object.assign(modal.style, { background: '#fff', borderRadius: '18px', width: '100%', maxWidth: '340px', boxShadow: '0 8px 40px rgba(0,0,0,.18)', fontFamily: 'system-ui,sans-serif', overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: '80vh' })
+    Object.assign(modal.style, { background:'#fff', borderRadius:'20px 20px 0 0', width:'100%', maxWidth:'480px', boxShadow:'0 -4px 40px rgba(0,0,0,.18)', fontFamily:'system-ui,sans-serif', overflow:'hidden', display:'flex', flexDirection:'column', paddingBottom:'env(safe-area-inset-bottom,0px)' })
+    const handle = doc.createElement('div')
+    Object.assign(handle.style, { width:'40px', height:'4px', background:'#e2e8f0', borderRadius:'2px', margin:'16px auto 0' })
     const head = doc.createElement('div')
-    Object.assign(head.style, { padding: '18px 20px 12px', borderBottom: '1px solid #f1f5f9', flexShrink: '0' })
+    Object.assign(head.style, { padding:'14px 20px 0' })
     const headTitle = doc.createElement('div')
     headTitle.textContent = 'Adicionar pedido'
-    Object.assign(headTitle.style, { fontWeight: '800', fontSize: '16px', color: '#0f172a', marginBottom: '3px' })
+    Object.assign(headTitle.style, { fontWeight:'800', fontSize:'16px', color:'#0f172a', marginBottom:'2px' })
     const headSub = doc.createElement('div')
-    headSub.textContent = 'Selecione os modelos do catálogo (opcional)'
-    Object.assign(headSub.style, { fontSize: '13px', color: '#64748b' })
+    headSub.textContent = 'Descrição do produto'
+    Object.assign(headSub.style, { fontSize:'13px', color:'#64748b', marginBottom:'14px' })
     head.appendChild(headTitle)
     head.appendChild(headSub)
-    const list = doc.createElement('div')
-    Object.assign(list.style, { overflowY: 'auto', flex: '1', padding: '4px 0' })
-    const selectedMap = {}
-    if (modelos.length === 0) {
-      const empty = doc.createElement('div')
-      empty.textContent = 'Nenhum modelo cadastrado no catálogo.'
-      Object.assign(empty.style, { padding: '28px 20px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' })
-      list.appendChild(empty)
-    } else {
-      modelos.forEach(m => {
-        const nome = String(m.name || m.nome || 'Modelo').trim()
-        const id = String(m.id || nome)
-        const item = doc.createElement('label')
-        Object.assign(item.style, { display: 'flex', alignItems: 'center', gap: '12px', padding: '13px 20px', cursor: 'pointer', borderBottom: '1px solid #f8fafc' })
-        const checkbox = doc.createElement('input')
-        checkbox.type = 'checkbox'
-        Object.assign(checkbox.style, { width: '18px', height: '18px', accentColor: '#6366f1', flexShrink: '0', cursor: 'pointer' })
-        checkbox.addEventListener('change', () => { if (checkbox.checked) selectedMap[id] = { id, name: nome }; else delete selectedMap[id] })
-        const label = doc.createElement('span')
-        label.textContent = nome
-        Object.assign(label.style, { fontSize: '14px', color: '#0f172a', fontWeight: '500', lineHeight: '1.3' })
-        item.appendChild(checkbox)
-        item.appendChild(label)
-        list.appendChild(item)
-        item.addEventListener('pointerover', () => { item.style.background = '#f8fafc' })
-        item.addEventListener('pointerout', () => { item.style.background = '' })
-      })
+    const labelRow = doc.createElement('div')
+    Object.assign(labelRow.style, { display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px', padding:'0 20px' })
+    const lbl = doc.createElement('label')
+    lbl.textContent = 'Produto'
+    Object.assign(lbl.style, { fontSize:'13px', fontWeight:'700', color:'#374151' })
+    const btnModelos = doc.createElement('button')
+    const iconSVG = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><polyline points="3 6 4 7 6 5"/><polyline points="3 12 4 13 6 11"/><polyline points="3 18 4 19 6 17"/></svg>'
+    function updateBtnLabel() {
+      const n = Object.keys(selectedModelos).length
+      btnModelos.innerHTML = iconSVG + ' <span style="margin-left:5px">' + (n > 0 ? n + ' modelo' + (n>1?'s':'') : 'Modelos') + '</span>'
+      Object.assign(btnModelos.style, { background:n>0?'#ede9fe':'#f8fafc', color:n>0?'#6d28d9':'#64748b', border:n>0?'1px solid #c4b5fd':'1px solid #e2e8f0' })
     }
+    Object.assign(btnModelos.style, { display:'inline-flex', alignItems:'center', padding:'5px 10px', borderRadius:'8px', fontSize:'12px', fontWeight:'600', cursor:'pointer' })
+    updateBtnLabel()
+    labelRow.appendChild(lbl)
+    labelRow.appendChild(btnModelos)
+    const inputWrap = doc.createElement('div')
+    Object.assign(inputWrap.style, { padding:'0 20px' })
+    const textarea = doc.createElement('textarea')
+    textarea.placeholder = 'Ex.: Sofá Istanbul 3 lugares'
+    textarea.rows = 3
+    Object.assign(textarea.style, { width:'100%', boxSizing:'border-box', border:'1.5px solid #e2e8f0', borderRadius:'10px', padding:'12px', fontSize:'15px', color:'#0f172a', resize:'none', outline:'none', fontFamily:'system-ui,sans-serif', lineHeight:'1.5' })
+    textarea.addEventListener('focus', () => { textarea.style.borderColor='#6366f1'; textarea.style.boxShadow='0 0 0 3px rgba(99,102,241,.12)' })
+    textarea.addEventListener('blur',  () => { textarea.style.borderColor='#e2e8f0'; textarea.style.boxShadow='' })
+    inputWrap.appendChild(textarea)
     const footer = doc.createElement('div')
-    Object.assign(footer.style, { padding: '14px 20px', borderTop: '1px solid #f1f5f9', display: 'flex', gap: '8px', flexShrink: '0' })
-    function mkbtn(text, bg, color, border) {
+    Object.assign(footer.style, { padding:'16px 20px 22px', display:'flex', gap:'8px' })
+    function mkbtn(txt, bg, color, border) {
       const b = doc.createElement('button')
-      b.textContent = text
-      Object.assign(b.style, { flex: '1', padding: '12px 6px', borderRadius: '10px', border: border || 'none', background: bg, color, fontSize: '13px', fontWeight: '700', cursor: 'pointer' })
+      b.textContent = txt
+      Object.assign(b.style, { flex:'1', padding:'14px 6px', borderRadius:'12px', border:border||'none', background:bg, color, fontSize:'14px', fontWeight:'700', cursor:'pointer' })
       return b
     }
-    const btnCancelar = mkbtn('Cancelar', '#fff', '#64748b', '1px solid #e2e8f0')
-    const btnPular    = mkbtn('Pular', '#f1f5f9', '#475569')
-    const btnOk       = mkbtn('Confirmar', '#6366f1', '#fff')
-    btnCancelar.addEventListener('click', () => { doc.body.removeChild(backdrop); resolve(null) })
-    btnPular.addEventListener('click',    () => { doc.body.removeChild(backdrop); resolve([]) })
-    btnOk.addEventListener('click',       () => { doc.body.removeChild(backdrop); resolve(Object.values(selectedMap)) })
-    footer.appendChild(btnCancelar)
-    footer.appendChild(btnPular)
+    const btnCancel = mkbtn('Cancelar','#fff','#64748b','1px solid #e2e8f0')
+    const btnOk     = mkbtn('Confirmar','#6366f1','#fff')
+    footer.appendChild(btnCancel)
     footer.appendChild(btnOk)
+    modal.appendChild(handle)
     modal.appendChild(head)
-    modal.appendChild(list)
+    modal.appendChild(labelRow)
+    modal.appendChild(inputWrap)
     modal.appendChild(footer)
     backdrop.appendChild(modal)
     doc.body.appendChild(backdrop)
+    setTimeout(() => textarea.focus(), 100)
+    function openModelPicker() {
+      return new Promise(resolveModels => {
+        const pb = doc.createElement('div')
+        Object.assign(pb.style, { position:'fixed', inset:'0', background:'rgba(15,23,42,.4)', display:'flex', alignItems:'flex-end', justifyContent:'center', zIndex:'1000002', boxSizing:'border-box' })
+        const ps = doc.createElement('div')
+        Object.assign(ps.style, { background:'#fff', borderRadius:'20px 20px 0 0', width:'100%', maxWidth:'480px', boxShadow:'0 -4px 40px rgba(0,0,0,.18)', fontFamily:'system-ui,sans-serif', display:'flex', flexDirection:'column', maxHeight:'70vh', paddingBottom:'env(safe-area-inset-bottom,0px)' })
+        const ph = doc.createElement('div')
+        Object.assign(ph.style, { width:'40px', height:'4px', background:'#e2e8f0', borderRadius:'2px', margin:'16px auto 0' })
+        const phd = doc.createElement('div')
+        Object.assign(phd.style, { padding:'14px 20px 12px', borderBottom:'1px solid #f1f5f9', flexShrink:'0' })
+        const pt = doc.createElement('div')
+        pt.textContent = 'Modelos do catálogo'
+        Object.assign(pt.style, { fontWeight:'800', fontSize:'15px', color:'#0f172a', marginBottom:'2px' })
+        const pst = doc.createElement('div')
+        pst.textContent = 'Alimenta o gráfico "Modelos mais vendidos" (opcional)'
+        Object.assign(pst.style, { fontSize:'12px', color:'#94a3b8' })
+        phd.appendChild(pt); phd.appendChild(pst)
+        const list = doc.createElement('div')
+        Object.assign(list.style, { overflowY:'auto', flex:'1' })
+        const tempSel = Object.assign({}, selectedModelos)
+        if (catalogoModelos.length === 0) {
+          const empty = doc.createElement('div')
+          empty.textContent = 'Nenhum modelo cadastrado no catálogo.'
+          Object.assign(empty.style, { padding:'32px 20px', textAlign:'center', color:'#94a3b8', fontSize:'13px' })
+          list.appendChild(empty)
+        } else {
+          catalogoModelos.forEach(m => {
+            const nome = String(m.name || m.nome || 'Modelo').trim()
+            const id = String(m.id || nome)
+            const item = doc.createElement('label')
+            Object.assign(item.style, { display:'flex', alignItems:'center', gap:'12px', padding:'14px 20px', cursor:'pointer', borderBottom:'1px solid #f8fafc' })
+            const cb = doc.createElement('input')
+            cb.type = 'checkbox'; cb.checked = !!tempSel[id]
+            Object.assign(cb.style, { width:'18px', height:'18px', accentColor:'#6366f1', flexShrink:'0', cursor:'pointer' })
+            cb.addEventListener('change', () => { if (cb.checked) tempSel[id]={id,name:nome}; else delete tempSel[id] })
+            const span = doc.createElement('span')
+            span.textContent = nome
+            Object.assign(span.style, { fontSize:'14px', color:'#0f172a', fontWeight:'500' })
+            item.appendChild(cb); item.appendChild(span)
+            item.addEventListener('pointerover', () => { item.style.background='#f8fafc' })
+            item.addEventListener('pointerout',  () => { item.style.background='' })
+            list.appendChild(item)
+          })
+        }
+        const pf = doc.createElement('div')
+        Object.assign(pf.style, { padding:'14px 20px 20px', display:'flex', gap:'8px', borderTop:'1px solid #f1f5f9', flexShrink:'0' })
+        function mpbtn(txt, bg, color, border) {
+          const b = doc.createElement('button'); b.textContent = txt
+          Object.assign(b.style, { flex:'1', padding:'13px 6px', borderRadius:'12px', border:border||'none', background:bg, color, fontSize:'13px', fontWeight:'700', cursor:'pointer' })
+          return b
+        }
+        const pbc = mpbtn('Fechar','#fff','#64748b','1px solid #e2e8f0')
+        const pbo = mpbtn('Aplicar','#6366f1','#fff')
+        pbc.addEventListener('click', () => { doc.body.removeChild(pb); resolveModels(null) })
+        pbo.addEventListener('click', () => { doc.body.removeChild(pb); resolveModels(tempSel) })
+        pf.appendChild(pbc); pf.appendChild(pbo)
+        ps.appendChild(ph); ps.appendChild(phd); ps.appendChild(list); ps.appendChild(pf)
+        pb.appendChild(ps)
+        doc.body.appendChild(pb)
+      })
+    }
+    btnModelos.addEventListener('click', async () => {
+      const result = await openModelPicker()
+      if (result !== null) {
+        Object.keys(selectedModelos).forEach(k => delete selectedModelos[k])
+        Object.assign(selectedModelos, result)
+        updateBtnLabel()
+      }
+      textarea.focus()
+    })
+    btnCancel.addEventListener('click', () => { doc.body.removeChild(backdrop); resolve(null) })
+    btnOk.addEventListener('click', () => {
+      const d = textarea.value.trim()
+      if (!d) {
+        textarea.style.borderColor='#ef4444'; textarea.style.boxShadow='0 0 0 3px rgba(239,68,68,.12)'
+        setTimeout(() => { textarea.style.borderColor='#6366f1'; textarea.style.boxShadow='0 0 0 3px rgba(99,102,241,.12)'; textarea.focus() }, 1500)
+        return
+      }
+      doc.body.removeChild(backdrop)
+      resolve({ descricao: d, modelos: Object.values(selectedModelos) })
+    })
   })
 }
 
+function initPullToRefresh() {
+  let startY = 0, curY = 0, active = false, indicator = null
+  const THRESHOLD = 65
+  document.addEventListener('touchstart', e => {
+    if (window.scrollY !== 0 && document.documentElement.scrollTop !== 0) return
+    startY = e.touches[0].clientY; curY = startY; active = true
+  }, { passive: true })
+  document.addEventListener('touchmove', e => {
+    if (!active) return
+    curY = e.touches[0].clientY
+    const dy = curY - startY
+    if (dy < 8) return
+    if (!indicator) {
+      indicator = document.createElement('div')
+      Object.assign(indicator.style, { position:'fixed', top:'0', left:'0', right:'0', zIndex:'999998', display:'flex', alignItems:'center', justifyContent:'center', gap:'7px', background:'#6366f1', color:'#fff', fontSize:'13px', fontWeight:'700', fontFamily:'system-ui,sans-serif', height:'0', overflow:'hidden', transition:'height .12s ease' })
+      indicator.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.51"/></svg><span>Solte para recarregar</span>'
+      document.body.appendChild(indicator)
+    }
+    const ratio = Math.min(dy / THRESHOLD, 1)
+    indicator.style.height = Math.round(ratio * 44) + 'px'
+    indicator.style.opacity = ratio.toFixed(2)
+  }, { passive: true })
+  document.addEventListener('touchend', e => {
+    if (!active) return; active = false
+    const dy = curY - startY
+    if (dy >= THRESHOLD && indicator) {
+      indicator.style.height = '44px'
+      indicator.querySelector('span').textContent = 'Recarregando...'
+      setTimeout(() => { if (typeof initAgenda === 'function') initAgenda() }, 250)
+      setTimeout(() => { if (indicator && indicator.parentNode) indicator.parentNode.removeChild(indicator); indicator = null }, 1200)
+    } else if (indicator) {
+      indicator.style.height = '0'
+      setTimeout(() => { if (indicator && indicator.parentNode) indicator.parentNode.removeChild(indicator); indicator = null }, 200)
+    }
+  }, { passive: true })
+}
 async function adicionarPedidoNaVaga(blocoId) {
   try {
     const clienteVal = await ui().prompt({
@@ -1750,15 +1865,10 @@ async function adicionarPedidoNaVaga(blocoId) {
     const cliente = clienteVal.trim()
     if (!cliente) { notifyError('Informe o nome do cliente.'); return }
 
-    const descricaoVal = await ui().prompt({
-      title: 'Adicionar pedido',
-      message: 'Descrição do produto',
-      label: 'Produto',
-      placeholder: 'Ex.: Sofá Istanbul 3 lugares'
-    })
-    if (descricaoVal === null) return
-    const descricao = descricaoVal.trim()
-    if (!descricao) { notifyError('Informe a descrição do produto.'); return }
+    const descResult = await promptDescricaoComModelos()
+    if (descResult === null) return
+    const descricao = descResult.descricao
+    const modelosSelecionados = descResult.modelos
 
     const valorVal = await ui().prompt({
       title: 'Adicionar pedido',
@@ -1770,9 +1880,6 @@ async function adicionarPedidoNaVaga(blocoId) {
     const valorNum = valorVal.trim() === ''
       ? 0
       : parseFloat(valorVal.trim().replace(/\./g, '').replace(',', '.')) || 0
-
-    const modelosSelecionados = await promptSelecionarModelos()
-    if (modelosSelecionados === null) return
 
     const row = await apiPost('/agenda/blocos/' + blocoId + '/pedido', {
       cliente,
@@ -1816,9 +1923,10 @@ window.limparAgenda = limparAgenda
 window.initAgenda = initAgenda
 
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initAgenda, { once: true })
+  document.addEventListener('DOMContentLoaded', () => { initAgenda(); initPullToRefresh() }, { once: true })
 } else {
   initAgenda()
+  initPullToRefresh()
 }
 
 window.addEventListener('load', () => scheduleRenderSync(20))
