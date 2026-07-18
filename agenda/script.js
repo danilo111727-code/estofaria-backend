@@ -1660,6 +1660,84 @@ async function editarPedido(ordem) {
   }
 }
 
+function promptSelecionarModelos() {
+  return new Promise(resolve => {
+    const doc = (function() {
+      try { if (window.parent && window.parent !== window && window.parent.document && window.parent.document.body) return window.parent.document } catch (_) {}
+      return document
+    })()
+    let modelos = []
+    try {
+      const raw = localStorage.getItem('catalogo_modelos') || localStorage.getItem('precificacao_modelos')
+      if (raw) { const parsed = JSON.parse(raw); modelos = Array.isArray(parsed) ? parsed : [] }
+    } catch (_) {}
+    const backdrop = doc.createElement('div')
+    Object.assign(backdrop.style, { position: 'fixed', inset: '0', background: 'rgba(15,23,42,.56)', backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '18px', zIndex: '1000001', boxSizing: 'border-box' })
+    const modal = doc.createElement('div')
+    Object.assign(modal.style, { background: '#fff', borderRadius: '18px', width: '100%', maxWidth: '340px', boxShadow: '0 8px 40px rgba(0,0,0,.18)', fontFamily: 'system-ui,sans-serif', overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: '80vh' })
+    const head = doc.createElement('div')
+    Object.assign(head.style, { padding: '18px 20px 12px', borderBottom: '1px solid #f1f5f9', flexShrink: '0' })
+    const headTitle = doc.createElement('div')
+    headTitle.textContent = 'Adicionar pedido'
+    Object.assign(headTitle.style, { fontWeight: '800', fontSize: '16px', color: '#0f172a', marginBottom: '3px' })
+    const headSub = doc.createElement('div')
+    headSub.textContent = 'Selecione os modelos do catálogo (opcional)'
+    Object.assign(headSub.style, { fontSize: '13px', color: '#64748b' })
+    head.appendChild(headTitle)
+    head.appendChild(headSub)
+    const list = doc.createElement('div')
+    Object.assign(list.style, { overflowY: 'auto', flex: '1', padding: '4px 0' })
+    const selectedMap = {}
+    if (modelos.length === 0) {
+      const empty = doc.createElement('div')
+      empty.textContent = 'Nenhum modelo cadastrado no catálogo.'
+      Object.assign(empty.style, { padding: '28px 20px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' })
+      list.appendChild(empty)
+    } else {
+      modelos.forEach(m => {
+        const nome = String(m.name || m.nome || 'Modelo').trim()
+        const id = String(m.id || nome)
+        const item = doc.createElement('label')
+        Object.assign(item.style, { display: 'flex', alignItems: 'center', gap: '12px', padding: '13px 20px', cursor: 'pointer', borderBottom: '1px solid #f8fafc' })
+        const checkbox = doc.createElement('input')
+        checkbox.type = 'checkbox'
+        Object.assign(checkbox.style, { width: '18px', height: '18px', accentColor: '#6366f1', flexShrink: '0', cursor: 'pointer' })
+        checkbox.addEventListener('change', () => { if (checkbox.checked) selectedMap[id] = { id, name: nome }; else delete selectedMap[id] })
+        const label = doc.createElement('span')
+        label.textContent = nome
+        Object.assign(label.style, { fontSize: '14px', color: '#0f172a', fontWeight: '500', lineHeight: '1.3' })
+        item.appendChild(checkbox)
+        item.appendChild(label)
+        list.appendChild(item)
+        item.addEventListener('pointerover', () => { item.style.background = '#f8fafc' })
+        item.addEventListener('pointerout', () => { item.style.background = '' })
+      })
+    }
+    const footer = doc.createElement('div')
+    Object.assign(footer.style, { padding: '14px 20px', borderTop: '1px solid #f1f5f9', display: 'flex', gap: '8px', flexShrink: '0' })
+    function mkbtn(text, bg, color, border) {
+      const b = doc.createElement('button')
+      b.textContent = text
+      Object.assign(b.style, { flex: '1', padding: '12px 6px', borderRadius: '10px', border: border || 'none', background: bg, color, fontSize: '13px', fontWeight: '700', cursor: 'pointer' })
+      return b
+    }
+    const btnCancelar = mkbtn('Cancelar', '#fff', '#64748b', '1px solid #e2e8f0')
+    const btnPular    = mkbtn('Pular', '#f1f5f9', '#475569')
+    const btnOk       = mkbtn('Confirmar', '#6366f1', '#fff')
+    btnCancelar.addEventListener('click', () => { doc.body.removeChild(backdrop); resolve(null) })
+    btnPular.addEventListener('click',    () => { doc.body.removeChild(backdrop); resolve([]) })
+    btnOk.addEventListener('click',       () => { doc.body.removeChild(backdrop); resolve(Object.values(selectedMap)) })
+    footer.appendChild(btnCancelar)
+    footer.appendChild(btnPular)
+    footer.appendChild(btnOk)
+    modal.appendChild(head)
+    modal.appendChild(list)
+    modal.appendChild(footer)
+    backdrop.appendChild(modal)
+    doc.body.appendChild(backdrop)
+  })
+}
+
 async function adicionarPedidoNaVaga(blocoId) {
   try {
     const clienteVal = await ui().prompt({
@@ -1693,11 +1771,15 @@ async function adicionarPedidoNaVaga(blocoId) {
       ? 0
       : parseFloat(valorVal.trim().replace(/\./g, '').replace(',', '.')) || 0
 
+    const modelosSelecionados = await promptSelecionarModelos()
+    if (modelosSelecionados === null) return
+
     const row = await apiPost('/agenda/blocos/' + blocoId + '/pedido', {
       cliente,
       descricao,
       valor: valorNum,
-      valor_total: valorNum
+      valor_total: valorNum,
+      modelos: modelosSelecionados
     })
     state.orders.push(normalizeOrder(row))
     notifyPainelRefresh('order-created')
