@@ -1486,7 +1486,8 @@ function renderBlocos() {
       const _modHtml = _mods.length > 0
         ? '<div class="bloco-vaga-modelos">' + _mods.map(m => `<span class="bloco-vaga-modelo-tag">${m.name || m.modelo || ''}</span>`).join('') + '</div>'
         : ''
-      info.innerHTML = `<div class="bloco-vaga-cliente">${ordem.cliente || '-'}</div><div class="bloco-vaga-produto">${ordem.descricao || '-'}</div>${_modHtml}${valorStr}`
+      const _descHtml = ordem.descricao ? `<div class="bloco-vaga-produto">${ordem.descricao}</div>` : (_mods.length === 0 ? `<div class="bloco-vaga-produto">-</div>` : '')
+      info.innerHTML = `<div class="bloco-vaga-cliente">${ordem.cliente || '-'}</div>${_descHtml}${_modHtml}${valorStr}`
       info.addEventListener('click', (e) => { e.stopPropagation(); editarPedido(ordem) })
 
       const pill = document.createElement('button')
@@ -1981,8 +1982,8 @@ async function editarPedido(ordem) {
     )
     if (descResult === null) return
     const descricao = descResult.descricao
-    if (!descricao) { notifyError('Informe a descrição do produto.'); return }
     const selectedModels = descResult.modelos
+    if (!descricao && selectedModels.length === 0) { notifyError('Informe a descrição ou selecione ao menos um modelo.'); return }
 
     const _vc = getValorCache()
     const _byId = ordem.id ? _vc[String(ordem.id)] : 0
@@ -2044,8 +2045,8 @@ async function adicionarPedidoNaVaga(blocoId) {
     )
     if (descResult === null) return
     const descricao = descResult.descricao
-    if (!descricao) { notifyError('Informe a descrição do produto.'); return }
     const selectedModels = descResult.modelos
+    if (!descricao && selectedModels.length === 0) { notifyError('Informe a descrição ou selecione ao menos um modelo.'); return }
 
     const valorVal = await ui().prompt({
       title: 'Adicionar pedido',
