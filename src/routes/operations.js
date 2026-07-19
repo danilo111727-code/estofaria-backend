@@ -709,6 +709,7 @@ router.patch('/agenda/orders/:id', (req, res) => {
   if(req.body?.qtd !== undefined) row.qtd = Math.max(1, Math.round(num(req.body.qtd, row.qtd)))
   if(req.body?.tecido_comprado !== undefined) row.tecido_comprado = Boolean(req.body.tecido_comprado)
   if(req.body?.status !== undefined) row.status = text(req.body.status, row.status).toLowerCase()
+  if(req.body?.modelos !== undefined) row.modelos = Array.isArray(req.body.modelos) ? req.body.modelos.map(m => ({ id: String(m.id || ''), name: String(m.name || '') })) : []
   const today = new Date().toISOString().slice(0, 10)
   const refDate = row.ent_date || row.prod_date
   if(row.status === 'atrasado' && refDate && refDate >= today) row.status = 'pendente'
