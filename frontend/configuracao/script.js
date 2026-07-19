@@ -1,5 +1,5 @@
 (function () {
-  var API = ((window.ESTOFARIA_CONFIG && window.ESTOFARIA_CONFIG.API_URL) || (window.API_BASE || 'https://estofaria-backend.onrender.com')) + '/api'
+  var API = (window.ESTOFARIA_CONFIG && window.ESTOFARIA_CONFIG.API_URL) || 'https://estofaria-backend.onrender.com'
 
   var state = {
     holidays: [],

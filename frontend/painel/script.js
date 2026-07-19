@@ -577,23 +577,19 @@ function sumPedidoQuotesRevenueCents(quotes) {
     return sum + Math.max(0, getQuoteRevenueCents(quote))
   }, 0)
 }
-function buildRankings(quotes) {
+function buildRankings(orders) {
   const soldCount = {}
-  const revenueSum = {}
-  ;(Array.isArray(quotes) ? quotes : []).forEach(quote => {
-    getQuoteModels(quote).forEach(modelo => {
-      const nome = String(modelo?.modelo || modelo?.name || 'Modelo').trim() || 'Modelo'
+  ;(Array.isArray(orders) ? orders : []).forEach(order => {
+    const modelos = Array.isArray(order.modelos) ? order.modelos : []
+    modelos.forEach(modelo => {
+      const nome = String(modelo?.name || modelo?.modelo || 'Modelo').trim() || 'Modelo'
       soldCount[nome] = (soldCount[nome] || 0) + 1
-      revenueSum[nome] = (revenueSum[nome] || 0) + getModeloSubtotalCents(modelo)
     })
   })
   const soldEntries = Object.entries(soldCount).sort((a, b) => b[1] - a[1]).slice(0, 6)
-  const revenueEntries = Object.entries(revenueSum).sort((a, b) => b[1] - a[1]).slice(0, 6)
   return {
     soldLabels: soldEntries.length ? soldEntries.map(([label]) => label) : ['Sem dados'],
-    soldValues: soldEntries.length ? soldEntries.map(([, value]) => value) : [0],
-    revenueLabels: revenueEntries.length ? revenueEntries.map(([label]) => label) : ['Sem dados'],
-    revenueValues: revenueEntries.length ? revenueEntries.map(([, value]) => Number((value / 100).toFixed(0))) : [0]
+    soldValues: soldEntries.length ? soldEntries.map(([, value]) => value) : [0]
   }
 }
 function animateChartCanvas(id) {
@@ -810,8 +806,8 @@ function buildDashboardCharts(orders) {
   _sparkDonut('dashChartFatMes', curRev, Math.max(avgMonthRev * 1.5, curRev, 1))
   _sparkLine('dashChartFatAno', yearMonths.map(m => m.rev), true)
 }
-function renderRankings(quotes) {
-  const rankings = buildRankings(quotes)
+function renderRankings(orders) {
+  const rankings = buildRankings(orders)
   chartVendidosInstance = buildBarChart('chartVendidos', chartVendidosInstance, rankings.soldLabels, rankings.soldValues, 'rgba(144, 202, 249, 0.9)', 'Mais vendido', false)
 }
 function getWeekDeliveries(orders) {
@@ -935,7 +931,7 @@ async function loadSecondaryData() {
   updateSummaryWithAgenda(latestSummaryData, latestOrdersData, latestQuotesData)
   updateAgendaInfo(orders, config)
   updateFeriadoInfo(holidays)
-  renderRankings(quotes)
+  renderRankings(latestOrdersData)
   updateResumoSemana(latestOrdersData)
 }
 async function renderPainel() {

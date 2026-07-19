@@ -1,5 +1,23 @@
 const API = (window.API_BASE || '') + '/api'
 
+;(function injectModelTagStyles() {
+  const styleId = 'esd-model-tag-styles'
+  const doc = (function() {
+    try {
+      if (window.parent && window.parent !== window && window.parent.document && window.parent.document.body)
+        return window.parent.document
+    } catch (_) {}
+    return document
+  })()
+  if (doc.getElementById(styleId)) return
+  const style = doc.createElement('style')
+  style.id = styleId
+  style.textContent = `.bloco-vaga-modelos{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px}.bloco-vaga-modelo-tag{display:inline-block;background:#dbeafe;color:#1e40af;border-radius:20px;padding:2px 8px;font-size:11px;font-weight:700;line-height:1.5}`
+  doc.head.appendChild(style)
+})()
+
+
+
 const PAINEL_SYNC_KEY = 'estofaria_sync:agenda'
 const PAINEL_CACHE_PREFIX = 'estofaria_painel_cache:'
 const DIAS_UTEIS_KEY = 'esd_dias_uteis'
@@ -1395,9 +1413,11 @@ function renderBlocos() {
 
   if (!state.blocos.length) {
     container.innerHTML = '<div class="blocos-empty">Nenhum bloco de produção.<br>Toque em <strong>+ Adicionar nova produção</strong> para começar.</div>'
+    try { localStorage.setItem('esd_proxima_vaga', '') } catch (_) {}
     return
   }
 
+  let _proximaVaga = null
   state.blocos.forEach(bloco => {
     const ordens = getActiveBlocoOrders(bloco.id)
     const ocupadas = ordens.length
@@ -1407,6 +1427,7 @@ function renderBlocos() {
       !['cancelado', 'indisponivel'].includes(String(o.status))
     ).length
     const livres = Math.max(0, totalVagas - totalConsumidas)
+    if (_proximaVaga === null && livres > 0) _proximaVaga = bloco.data_entrega
 
     // Não renderiza blocos sem vagas e sem pedidos ativos
     if (totalVagas <= 0 && ocupadas === 0) return
@@ -1464,7 +1485,12 @@ function renderBlocos() {
       const valorStr = valorInfo > 0
         ? `<div class="bloco-vaga-valor">R$ ${valorInfo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>`
         : ''
-      info.innerHTML = `<div class="bloco-vaga-cliente">${ordem.cliente || '-'}</div><div class="bloco-vaga-produto">${ordem.descricao || '-'}</div>${valorStr}`
+      const _mods = Array.isArray(ordem.modelos) ? ordem.modelos : []
+      const _modHtml = _mods.length > 0
+        ? '<div class="bloco-vaga-modelos">' + _mods.map(m => `<span class="bloco-vaga-modelo-tag">${m.name || m.modelo || ''}</span>`).join('') + '</div>'
+        : ''
+      const _descHtml = ordem.descricao ? `<div class="bloco-vaga-produto">${ordem.descricao}</div>` : (_mods.length === 0 ? `<div class="bloco-vaga-produto">-</div>` : '')
+      info.innerHTML = `<div class="bloco-vaga-cliente">${ordem.cliente || '-'}</div>${_descHtml}${_modHtml}${valorStr}`
       info.addEventListener('click', (e) => { e.stopPropagation(); editarPedido(ordem) })
 
       const pill = document.createElement('button')
@@ -1532,6 +1558,7 @@ function renderBlocos() {
 
     container.appendChild(card)
   })
+  try { localStorage.setItem('esd_proxima_vaga', _proximaVaga || '') } catch (_) {}
   scheduleRenderSync()
 }
 
@@ -1676,6 +1703,268 @@ async function excluirBloco(blocoId, ocupadas) {
   }
 }
 
+
+async function fetchCatalogModels() {
+  try {
+    const timeout = new Promise(resolve => setTimeout(() => resolve([]), 3000))
+    const models = await Promise.race([apiGet('/models'), timeout])
+    return Array.isArray(models) ? models : (Array.isArray(models?.models) ? models.models : [])
+  } catch (_) { return [] }
+}
+
+function promptSelecionarModelos(currentSelected, allModels) {
+  return new Promise(resolve => {
+    const doc = (function() {
+      try {
+        if (window.parent && window.parent !== window && window.parent.document && window.parent.document.body)
+          return window.parent.document
+      } catch (_) {}
+      return document
+    })()
+
+    const selected = new Set((currentSelected || []).map(m => String(m.id || '')).filter(Boolean))
+
+    const backdrop = doc.createElement('div')
+    Object.assign(backdrop.style, {
+      position: 'fixed', inset: '0', background: 'rgba(15,23,42,.56)',
+      backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'flex-end',
+      justifyContent: 'center', zIndex: '1000002', boxSizing: 'border-box'
+    })
+
+    const sheet = doc.createElement('div')
+    Object.assign(sheet.style, {
+      background: '#fff', borderRadius: '18px 18px 0 0', width: '100%', maxWidth: '560px',
+      maxHeight: '70vh', display: 'flex', flexDirection: 'column',
+      boxShadow: '0 -4px 30px rgba(0,0,0,.18)', fontFamily: 'system-ui,sans-serif', overflow: 'hidden'
+    })
+
+    const head = doc.createElement('div')
+    Object.assign(head.style, {
+      padding: '18px 20px 14px', fontWeight: '800', fontSize: '16px', color: '#0f172a',
+      borderBottom: '1px solid #f1f5f9', flexShrink: '0'
+    })
+    head.textContent = 'Selecionar Modelos'
+
+    const body = doc.createElement('div')
+    Object.assign(body.style, { overflowY: 'auto', flex: '1', padding: '6px 0' })
+
+    if (!allModels.length) {
+      const empty = doc.createElement('div')
+      Object.assign(empty.style, { padding: '24px 20px', textAlign: 'center', color: '#94a3b8', fontSize: '14px' })
+      empty.textContent = 'Nenhum modelo cadastrado no catálogo.'
+      body.appendChild(empty)
+    } else {
+      allModels.forEach(model => {
+        const modelId = String(model.id || '')
+        const modelName = String(model.nome || model.name || model.modelo || 'Modelo').trim()
+        const row = doc.createElement('label')
+        Object.assign(row.style, {
+          display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 20px',
+          cursor: 'pointer', borderBottom: '1px solid #f8fafc'
+        })
+        row.addEventListener('mouseenter', () => { row.style.background = '#f8fafc' })
+        row.addEventListener('mouseleave', () => { row.style.background = '' })
+
+        const cb = doc.createElement('input')
+        cb.type = 'checkbox'
+        cb.checked = selected.has(modelId)
+        Object.assign(cb.style, { width: '20px', height: '20px', accentColor: '#2563eb', flexShrink: '0', cursor: 'pointer' })
+        cb.addEventListener('change', () => {
+          if (cb.checked) selected.add(modelId)
+          else selected.delete(modelId)
+        })
+
+        const lbl = doc.createElement('span')
+        Object.assign(lbl.style, { fontSize: '15px', color: '#0f172a', flex: '1', lineHeight: '1.4' })
+        lbl.textContent = modelName
+
+        row.appendChild(cb)
+        row.appendChild(lbl)
+        body.appendChild(row)
+      })
+    }
+
+    const foot = doc.createElement('div')
+    Object.assign(foot.style, {
+      padding: '12px 20px 20px', display: 'flex', gap: '10px',
+      borderTop: '1px solid #f1f5f9', flexShrink: '0'
+    })
+
+    function makeBtn(text, primary) {
+      const b = doc.createElement('button')
+      b.type = 'button'; b.textContent = text
+      Object.assign(b.style, {
+        flex: '1', border: 'none', borderRadius: '12px', padding: '13px 16px',
+        fontSize: '15px', fontWeight: '700', cursor: 'pointer',
+        background: primary ? '#2563eb' : '#e2e8f0',
+        color: primary ? '#fff' : '#0f172a'
+      })
+      return b
+    }
+
+    const cancelBtn = makeBtn('Cancelar', false)
+    const applyBtn  = makeBtn('Aplicar', true)
+
+    cancelBtn.addEventListener('click', () => { backdrop.remove(); resolve(null) })
+    applyBtn.addEventListener('click', () => {
+      const result = allModels
+        .filter(m => selected.has(String(m.id || '')))
+        .map(m => ({ id: String(m.id || ''), name: String(m.nome || m.name || m.modelo || '') }))
+      backdrop.remove()
+      resolve(result)
+    })
+    backdrop.addEventListener('click', e => { if (e.target === backdrop) { backdrop.remove(); resolve(null) } })
+
+    foot.appendChild(cancelBtn)
+    foot.appendChild(applyBtn)
+    sheet.appendChild(head)
+    sheet.appendChild(body)
+    sheet.appendChild(foot)
+    backdrop.appendChild(sheet)
+    doc.body.appendChild(backdrop)
+  })
+}
+
+function promptDescricaoComModelos(title, currentDescricao, currentModelos, allModels) {
+  return new Promise(resolve => {
+    const doc = (function() {
+      try {
+        if (window.parent && window.parent !== window && window.parent.document && window.parent.document.body)
+          return window.parent.document
+      } catch (_) {}
+      return document
+    })()
+
+    let selectedModelos = Array.isArray(currentModelos) ? [...currentModelos] : []
+
+    const backdrop = doc.createElement('div')
+    Object.assign(backdrop.style, {
+      position: 'fixed', inset: '0', background: 'rgba(15,23,42,.56)',
+      backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'center',
+      justifyContent: 'center', padding: '18px', zIndex: '1000001', boxSizing: 'border-box'
+    })
+
+    const modal = doc.createElement('div')
+    Object.assign(modal.style, {
+      background: '#fff', borderRadius: '18px', width: '100%', maxWidth: '360px',
+      boxShadow: '0 8px 40px rgba(0,0,0,.18)', fontFamily: 'system-ui,sans-serif', overflow: 'hidden'
+    })
+
+    const head = doc.createElement('div')
+    head.textContent = title
+    Object.assign(head.style, {
+      padding: '18px 20px 14px', fontWeight: '800', fontSize: '16px', color: '#0f172a'
+    })
+
+    const body = doc.createElement('div')
+    Object.assign(body.style, { padding: '0 20px 16px', display: 'flex', flexDirection: 'column', gap: '12px' })
+
+    // Label + botão Modelos na mesma linha
+    const labelRow = doc.createElement('div')
+    Object.assign(labelRow.style, { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' })
+
+    const lbl = doc.createElement('label')
+    lbl.textContent = 'Descrição do produto'
+    Object.assign(lbl.style, { fontSize: '13px', fontWeight: '700', color: '#334155' })
+
+    const modelBtn = doc.createElement('button')
+    modelBtn.type = 'button'
+    Object.assign(modelBtn.style, {
+      border: 'none', borderRadius: '8px', padding: '5px 10px',
+      fontSize: '12px', fontWeight: '700', cursor: 'pointer',
+      background: '#eff6ff', color: '#2563eb'
+    })
+
+    function updateModelBtn() {
+      modelBtn.textContent = selectedModelos.length > 0 ? `📦 Modelos (${selectedModelos.length})` : '📦 Modelos'
+    }
+    updateModelBtn()
+
+    modelBtn.addEventListener('click', async () => {
+      if (!allModels.length) { return }
+      const result = await promptSelecionarModelos(selectedModelos, allModels)
+      if (result !== null) {
+        selectedModelos = result
+        updateModelBtn()
+        renderTags()
+      }
+    })
+
+    labelRow.appendChild(lbl)
+    if (allModels.length > 0) labelRow.appendChild(modelBtn)
+
+    const textarea = doc.createElement('textarea')
+    textarea.placeholder = 'Ex.: Sofá Istanbul 3 lugares'
+    textarea.value = currentDescricao || ''
+    Object.assign(textarea.style, {
+      width: '100%', boxSizing: 'border-box', border: '1px solid #cbd5e1',
+      borderRadius: '12px', padding: '12px 14px', fontSize: '15px', outline: 'none',
+      resize: 'none', minHeight: '80px', fontFamily: 'system-ui,sans-serif', lineHeight: '1.4'
+    })
+    textarea.addEventListener('focus', () => { textarea.style.borderColor = '#2563eb'; textarea.style.boxShadow = '0 0 0 3px rgba(37,99,235,.14)' })
+    textarea.addEventListener('blur', () => { textarea.style.borderColor = '#cbd5e1'; textarea.style.boxShadow = '' })
+
+    const tagsContainer = doc.createElement('div')
+    Object.assign(tagsContainer.style, { display: 'flex', flexWrap: 'wrap', gap: '6px', minHeight: '0' })
+
+    function renderTags() {
+      tagsContainer.innerHTML = ''
+      selectedModelos.forEach(m => {
+        const tag = doc.createElement('span')
+        Object.assign(tag.style, {
+          display: 'inline-flex', alignItems: 'center', gap: '5px',
+          background: '#dbeafe', color: '#1e40af', borderRadius: '20px',
+          padding: '3px 10px', fontSize: '12px', fontWeight: '600'
+        })
+        tag.textContent = m.name || m.modelo || ''
+        tagsContainer.appendChild(tag)
+      })
+    }
+    renderTags()
+
+    const descWrap = doc.createElement('div')
+    descWrap.appendChild(labelRow)
+    descWrap.appendChild(textarea)
+
+    body.appendChild(descWrap)
+    body.appendChild(tagsContainer)
+
+    const foot = doc.createElement('div')
+    Object.assign(foot.style, {
+      padding: '12px 20px 18px', display: 'flex', gap: '10px', justifyContent: 'flex-end'
+    })
+
+    function makeBtn(text, primary) {
+      const b = doc.createElement('button')
+      b.type = 'button'; b.textContent = text
+      Object.assign(b.style, {
+        border: 'none', borderRadius: '12px', padding: '11px 20px',
+        fontSize: '14px', fontWeight: '800', cursor: 'pointer',
+        background: primary ? '#2563eb' : '#e2e8f0',
+        color: primary ? '#fff' : '#0f172a'
+      })
+      return b
+    }
+    const cancelBtn = makeBtn('Cancelar', false)
+    const confirmBtn = makeBtn('Confirmar', true)
+
+    cancelBtn.addEventListener('click', () => { backdrop.remove(); resolve(null) })
+    confirmBtn.addEventListener('click', () => {
+      backdrop.remove()
+      resolve({ descricao: textarea.value.trim(), modelos: selectedModelos })
+    })
+
+    foot.appendChild(cancelBtn)
+    foot.appendChild(confirmBtn)
+    modal.appendChild(head)
+    modal.appendChild(body)
+    modal.appendChild(foot)
+    backdrop.appendChild(modal)
+    doc.body.appendChild(backdrop)
+    setTimeout(() => textarea.focus(), 30)
+  })
+}
+
 async function editarPedido(ordem) {
   try {
     const clienteVal = await ui().prompt({
@@ -1689,16 +1978,17 @@ async function editarPedido(ordem) {
     const cliente = clienteVal.trim()
     if (!cliente) { notifyError('Informe o nome do cliente.'); return }
 
-    const descricaoVal = await ui().prompt({
-      title: 'Editar pedido',
-      message: 'Descrição do produto',
-      label: 'Produto',
-      placeholder: 'Ex.: Sofá Istanbul 3 lugares',
-      value: ordem.descricao || ''
-    })
-    if (descricaoVal === null) return
-    const descricao = descricaoVal.trim()
-    if (!descricao) { notifyError('Informe a descrição do produto.'); return }
+    const allModels = await fetchCatalogModels()
+    const descResult = await promptDescricaoComModelos(
+      'Editar pedido',
+      ordem.descricao || '',
+      Array.isArray(ordem.modelos) ? ordem.modelos : [],
+      allModels
+    )
+    if (descResult === null) return
+    const descricao = descResult.descricao
+    const selectedModels = descResult.modelos
+    if (!descricao && selectedModels.length === 0) { notifyError('Informe a descrição ou selecione ao menos um modelo.'); return }
 
     const _vc = getValorCache()
     const _byId = ordem.id ? _vc[String(ordem.id)] : 0
@@ -1724,11 +2014,12 @@ async function editarPedido(ordem) {
       cliente,
       descricao,
       valor: valorNum,
-      valor_total: valorNum
+      valor_total: valorNum,
+      modelos: selectedModels
     })
     // Mescla valores do usuário sobre a resposta do servidor,
     // pois o backend pode não retornar os campos atualizados
-    replaceOrder({ ...row, cliente, descricao, valor: valorNum, valor_total: valorNum })
+    replaceOrder({ ...row, cliente, descricao, valor: valorNum, valor_total: valorNum, modelos: selectedModels })
     notifyPainelRefresh('order-updated')
     renderBlocos()
     notifySuccess('Pedido atualizado!')
@@ -1750,15 +2041,17 @@ async function adicionarPedidoNaVaga(blocoId) {
     const cliente = clienteVal.trim()
     if (!cliente) { notifyError('Informe o nome do cliente.'); return }
 
-    const descricaoVal = await ui().prompt({
-      title: 'Adicionar pedido',
-      message: 'Descrição do produto',
-      label: 'Produto',
-      placeholder: 'Ex.: Sofá Istanbul 3 lugares'
-    })
-    if (descricaoVal === null) return
-    const descricao = descricaoVal.trim()
-    if (!descricao) { notifyError('Informe a descrição do produto.'); return }
+    const allModels = await fetchCatalogModels()
+    const descResult = await promptDescricaoComModelos(
+      'Adicionar pedido',
+      '',
+      [],
+      allModels
+    )
+    if (descResult === null) return
+    const descricao = descResult.descricao
+    const selectedModels = descResult.modelos
+    if (!descricao && selectedModels.length === 0) { notifyError('Informe a descrição ou selecione ao menos um modelo.'); return }
 
     const valorVal = await ui().prompt({
       title: 'Adicionar pedido',
@@ -1775,9 +2068,10 @@ async function adicionarPedidoNaVaga(blocoId) {
       cliente,
       descricao,
       valor: valorNum,
-      valor_total: valorNum
+      valor_total: valorNum,
+      modelos: selectedModels
     })
-    const newOrder = normalizeOrder({ ...row, cliente, descricao, valor: valorNum, valor_total: valorNum })
+    const newOrder = normalizeOrder({ ...row, cliente, descricao, valor: valorNum, valor_total: valorNum, modelos: selectedModels })
     state.orders.push(newOrder)
     if (newOrder.id) saveValorCache(newOrder.id, valorNum, { cliente, descricao })
     notifyPainelRefresh('order-created')

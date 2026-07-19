@@ -165,18 +165,8 @@ setInterval(updateTime,1000);
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="script.js?v=20260717i"></script>
-<script src="../pull-to-refresh.js"></script>
-<script>
-  document.addEventListener('DOMContentLoaded', function () {
-    initPullToRefresh(function () {
-      ;['summary','orders','agenda-config','quotes'].forEach(function (k) {
-        try { localStorage.removeItem('estofaria_painel_cache:' + k) } catch (_) {}
-      })
-      return typeof renderPainel === 'function' ? renderPainel() : Promise.resolve()
-    })
-  })
-</script>
+<script src="script.js?v=20260718a
+
 <script src="../keyboard-dismiss.js"></script>
 </body>
 </html>
