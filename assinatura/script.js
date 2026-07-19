@@ -27,7 +27,7 @@ const PLAN_PRESETS = {
   gestao: {
     code:'gestao',
     name:'Plano Gestão',
-    monthly_price_cents:8990,
+    monthly_price_cents:14900,
     seats_limit:2,
     seats_label:'2 acessos por empresa',
     badge:'Até 2 acessos',
@@ -36,7 +36,7 @@ const PLAN_PRESETS = {
   empresarial: {
     code:'empresarial',
     name:'Plano Empresarial',
-    monthly_price_cents:53900,
+    monthly_price_cents:39900,
     seats_limit:null,
     seats_label:'Acessos ilimitados',
     badge:'Acessos ilimitados',
@@ -252,7 +252,8 @@ function normalizeTeamPayload(raw){
 function renderPlan(cfg){
   subscriptionConfig = cfg || {}
   const selectedPlan = syncPlanSelection(cfg?.default_plan_code || cfg?.plan_code || getSelectedPlanCode())
-  $('trialSummary').textContent = `${cfg?.trial_days || 0} dias grátis`
+  const td = Number(cfg?.trial_days || 0)
+  $('trialSummary').textContent = td >= 30 ? `${Math.round(td/30)} ${Math.round(td/30) === 1 ? 'mês' : 'meses'} grátis` : `${td} dias grátis`
   $('providerSummary').textContent = cfg?.payment_provider || 'manual'
   $('supportSummary').textContent = cfg?.support_contact || 'Atendimento comercial'
   if($('planNote') && cfg?.notes){
@@ -377,7 +378,8 @@ async function solicitarAssinatura(ev){
     const out = await apiSend('POST', '/subscription/checkout-request', payload)
     const link = out?.subscription?.payment_link || subscriptionConfig?.payment_link || ''
     const trialDays = Number(out?.subscription?.trial_days || subscriptionConfig?.trial_days || 0)
-    setNotice('ok', `Solicitação recebida com sucesso para o ${selectedPlan.name}. Seu plano começa com ${trialDays} dia(s) grátis.`)
+    const trialLabel = trialDays >= 30 ? `${Math.round(trialDays/30)} ${Math.round(trialDays/30) === 1 ? 'mês' : 'meses'} grátis` : `${trialDays} dia(s) grátis`
+    setNotice('ok', `Solicitação recebida com sucesso para o ${selectedPlan.name}. Seu plano começa com ${trialLabel}.`)
     $('formAssinatura').reset()
     if(isManagementMode) loadLeads()
     if(link) window.open(link, '_blank', 'noopener')
@@ -402,7 +404,7 @@ async function salvarConfiguracao(ev){
     payment_link: $('cfgLink').value.trim(),
     support_contact: $('cfgSupport').value.trim(),
     trial_days: Number($('cfgTrial').value || 0),
-    notes: $('cfgNotes').value.trim() || 'Primeiro mês grátis'
+    notes: $('cfgNotes').value.trim() || '2 meses grátis com suporte'
   }
 
   try{
