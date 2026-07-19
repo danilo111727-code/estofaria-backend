@@ -1413,9 +1413,11 @@ function renderBlocos() {
 
   if (!state.blocos.length) {
     container.innerHTML = '<div class="blocos-empty">Nenhum bloco de produção.<br>Toque em <strong>+ Adicionar nova produção</strong> para começar.</div>'
+    try { localStorage.setItem('esd_proxima_vaga', '') } catch (_) {}
     return
   }
 
+  let _proximaVaga = null
   state.blocos.forEach(bloco => {
     const ordens = getActiveBlocoOrders(bloco.id)
     const ocupadas = ordens.length
@@ -1425,6 +1427,7 @@ function renderBlocos() {
       !['cancelado', 'indisponivel'].includes(String(o.status))
     ).length
     const livres = Math.max(0, totalVagas - totalConsumidas)
+    if (_proximaVaga === null && livres > 0) _proximaVaga = bloco.data_entrega
 
     // Não renderiza blocos sem vagas e sem pedidos ativos
     if (totalVagas <= 0 && ocupadas === 0) return
@@ -1555,6 +1558,7 @@ function renderBlocos() {
 
     container.appendChild(card)
   })
+  try { localStorage.setItem('esd_proxima_vaga', _proximaVaga || '') } catch (_) {}
   scheduleRenderSync()
 }
 
