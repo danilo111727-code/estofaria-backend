@@ -602,8 +602,10 @@ async function loadOrders() {
   const rows = await apiGet('/agenda/orders')
   console.log('[ESD-DIAG] loadOrders: API retornou', Array.isArray(rows) ? rows.length : 0, 'pedidos')
   if (Array.isArray(rows) && rows.length > 0) {
-    const amostra = rows.slice(0, 3).map(r => ({ id: r.id, cliente: r.cliente, valor: r.valor, valor_total: r.valor_total }))
-    console.log('[ESD-DIAG] Amostra dos pedidos (id/cliente/valor/valor_total):', JSON.stringify(amostra))
+    const amostra = rows.slice(0, 3).map(r => ({ id: r.id, cliente: r.cliente, valor: r.valor, valor_total: r.valor_total, modelos: r.modelos }))
+    console.log('[ESD-DIAG] Amostra dos pedidos (id/cliente/valor/modelos):', JSON.stringify(amostra))
+    const comModelos = rows.filter(r => Array.isArray(r.modelos) && r.modelos.length > 0)
+    console.log('[ESD-DIAG] Pedidos com modelos no GET:', comModelos.length, comModelos.map(r => ({ id: r.id, cliente: r.cliente, modelos: r.modelos })))
   }
   console.log('[ESD-DIAG] Cache localStorage atual:', localStorage.getItem('esd_order_valores'))
   const normalized = Array.isArray(rows) ? rows.map(normalizeOrder) : []
@@ -652,8 +654,16 @@ async function limparAgenda() {
 
 async function mudarStatus(id, status) {
   try {
+    const existing = state.orders.find(o => String(o.id) === String(id)) || {}
     const row = await apiPatch('/agenda/orders/' + id, { status })
-    replaceOrder(row)
+    // Preserva modelos e demais campos do estado local caso o servidor
+    // não os retorne (pedidos criados antes da feature de modelos).
+    const merged = { ...existing, ...row }
+    if (!Array.isArray(merged.modelos) && Array.isArray(existing.modelos)) {
+      merged.modelos = existing.modelos
+    }
+    console.log('[ESD-DIAG] mudarStatus: id=', id, 'status=', status, 'row.modelos=', row?.modelos, 'merged.modelos=', merged.modelos)
+    replaceOrder(merged)
     notifyPainelRefresh('order-status')
     renderAll()
   } catch (e) {
@@ -670,7 +680,9 @@ async function excluir(id) {
       status: 'cancelado',
       descricao: `${DELETED_ORDER_PREFIX}${descricaoAtual || 'Pedido excluído'}`.trim()
     })
-    replaceOrder(row)
+    // Preserva campos do estado local (ex.: modelos) caso o servidor não os retorne.
+    const merged = { ...current, ...row }
+    replaceOrder(merged)
     notifyPainelRefresh('order-delete')
     renderAll()
     closeActionSheet()
@@ -1807,9 +1819,18 @@ function promptSelecionarModelos(currentSelected, allModels) {
 
     cancelBtn.addEventListener('click', () => { backdrop.remove(); resolve(null) })
     applyBtn.addEventListener('click', () => {
-      const result = allModels
+      // Modelos que estão no catálogo e foram marcados
+      const catalogMatches = allModels
         .filter(m => selected.has(String(m.id || '')))
         .map(m => ({ id: String(m.id || ''), name: String(m.nome || m.name || m.modelo || '') }))
+      const catalogMatchedIds = new Set(catalogMatches.map(m => m.id))
+      // Preserva modelos que estavam selecionados antes mas não existem mais no catálogo
+      // (evita apagar silenciosamente modelos de pedidos antigos)
+      const preserved = (currentSelected || []).filter(m => {
+        const id = String(m.id || '')
+        return id && selected.has(id) && !catalogMatchedIds.has(id)
+      })
+      const result = [...catalogMatches, ...preserved]
       backdrop.remove()
       resolve(result)
     })
@@ -2007,7 +2028,7 @@ async function editarPedido(ordem) {
         ? 0
         : parseFloat(valorVal.trim().replace(/\./g, '').replace(',', '.')) || 0
 
-    console.log('[ESD-DIAG] editarPedido: ordem.id=', ordem.id, 'valorAtual=', valorAtual, 'valorNum=', valorNum, 'cliente=', cliente, 'descricao=', descricao)
+    console.log('[ESD-DIAG] editarPedido: ordem.id=', ordem.id, 'valorAtual=', valorAtual, 'valorNum=', valorNum, 'cliente=', cliente, 'descricao=', descricao, 'modelos enviados=', JSON.stringify(selectedModels))
     if (valorNum > 0) saveValorCache(ordem.id, valorNum, { cliente, descricao })
     console.log('[ESD-DIAG] Cache após saveValorCache:', localStorage.getItem('esd_order_valores'))
     const row = await apiPatch('/agenda/orders/' + ordem.id, {
@@ -2017,6 +2038,7 @@ async function editarPedido(ordem) {
       valor_total: valorNum,
       modelos: selectedModels
     })
+    console.log('[ESD-DIAG] editarPedido: servidor retornou modelos=', JSON.stringify(row?.modelos))
     // Mescla valores do usuário sobre a resposta do servidor,
     // pois o backend pode não retornar os campos atualizados
     replaceOrder({ ...row, cliente, descricao, valor: valorNum, valor_total: valorNum, modelos: selectedModels })
@@ -2071,6 +2093,7 @@ async function adicionarPedidoNaVaga(blocoId) {
       valor_total: valorNum,
       modelos: selectedModels
     })
+    console.log('[ESD-DIAG] adicionarPedidoNaVaga: enviado modelos=', JSON.stringify(selectedModels), '| servidor retornou modelos=', JSON.stringify(row?.modelos))
     const newOrder = normalizeOrder({ ...row, cliente, descricao, valor: valorNum, valor_total: valorNum, modelos: selectedModels })
     state.orders.push(newOrder)
     if (newOrder.id) saveValorCache(newOrder.id, valorNum, { cliente, descricao })
