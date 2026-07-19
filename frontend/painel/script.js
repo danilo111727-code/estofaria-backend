@@ -4,7 +4,6 @@ let chartVendidosInstance = null
 
 const CACHE_PREFIX = 'estofaria_painel_cache:'
 const TTL_SUMMARY = 30 * 1000
-const TTL_QUOTES = 60 * 1000
 const TTL_ORDERS = 60 * 1000
 const TTL_HOLIDAYS = 12 * 60 * 60 * 1000
 const TTL_CONFIG = 12 * 60 * 60 * 1000
@@ -12,9 +11,7 @@ const AGENDA_SYNC_KEY = 'estofaria_sync:agenda'
 
 let latestSummaryData = null
 let latestOrdersData = []
-let latestQuotesData = null
 let latestOrdersLoaded = false
-let latestQuotesLoaded = false
 let painelRefreshTimer = null
 let agendaSyncSerial = ''
 
@@ -108,7 +105,7 @@ function removeCache(key) {
     localStorage.removeItem(CACHE_PREFIX + key)
   } catch {}
 }
-function invalidatePainelCaches(keys = ['summary', 'orders', 'agenda-config', 'quotes']) {
+function invalidatePainelCaches(keys = ['summary', 'orders', 'agenda-config']) {
   keys.forEach(removeCache)
 }
 function normalizeLooseText(value) {
@@ -165,46 +162,9 @@ function isIgnoredAgendaPlaceholder(order) {
   if (tecido === 'indisponivel' || tecido === 'removido') return true
   return false
 }
-function extractQuoteRefFromAgenda(order) {
-  const idCandidates = [
-    order?.source_quote_id,
-    order?.sourceQuoteId,
-    order?.quote_id,
-    order?.quoteId,
-    order?.orcamento_id,
-    order?.budget_id
-  ]
-  for (const candidate of idCandidates) {
-    const ref = normalizeId(candidate)
-    if (ref) return ref
-  }
-
-  const textCandidates = [
-    order?.tecido,
-    order?.descricao,
-    order?.observacao,
-    order?.observacoes,
-    order?.obs,
-    order?.notes
-  ]
-  for (const raw of textCandidates) {
-    const text = String(raw || '').trim()
-    const match = text.match(/quote\s*:\s*([a-zA-Z0-9_-]+)/)
-    if (match && match[1]) return String(match[1]).trim()
-  }
-  return ''
-}
-function isQuoteBackedAgendaOrder(order) {
-  return Boolean(extractQuoteRefFromAgenda(order))
-}
-function isLegacyQuoteAgendaOrder(order) {
-  const origem = normalizeLooseText(order?.origem || order?.source || order?.tipo || order?.kind)
-  return ['quote', 'orcamento', 'pedido-orcamento', 'pedido de orcamento'].includes(origem)
-}
 function isValidManualAgendaOrder(order) {
   const status = normalizeStatus(order?.status)
   if (['entregue', 'cancelado', 'indisponivel'].includes(status)) return false
-  if (isQuoteBackedAgendaOrder(order) || isLegacyQuoteAgendaOrder(order)) return false
   if (isIgnoredAgendaPlaceholder(order)) return false
 
   const cliente = normalizeLooseText(order?.cliente)
@@ -220,15 +180,12 @@ function buildAgendaOrderKey(order, index) {
     if (ref) return `id:${ref}`
   }
 
-  const quoteRef = extractQuoteRefFromAgenda(order)
   const cliente = normalizeLooseText(order?.cliente)
   const descricao = normalizeLooseText(order?.descricao)
   const status = normalizeStatus(order?.status)
   const quantidade = normalizeId(order?.qtd || order?.quantidade || order?.quantity)
   const prodDate = normalizeId(order?.prod_date || order?.production_date || order?.data_producao)
   const entDate = normalizeId(order?.ent_date || order?.delivery_date || order?.data_entrega)
-
-  if (quoteRef) return ['quote', quoteRef, prodDate, entDate, status, quantidade].filter(Boolean).join(':')
 
   const composite = [cliente, descricao, prodDate, entDate, status, quantidade].filter(Boolean).join('|')
   return composite || `row:${index}`
@@ -281,19 +238,7 @@ function getAgendaOrderRevenueCents(order) {
 function sumManualAgendaRevenueCents(orders) {
   return getManualAgendaOrders(orders).reduce((sum, order) => sum + Math.max(0, getAgendaOrderRevenueCents(order)), 0)
 }
-function isPedidoQuote(quote) {
-  if (normalizeStatus(quote?.status) !== 'pedido') return false
-
-  const cliente = normalizeLooseText(quote?.cliente || quote?.payload?.cliente)
-  if (!cliente || cliente === 'cliente') return false
-
-  if (getQuoteRevenueCents(quote) > 0) return true
-  return getQuoteModels(quote).length > 0
-}
-function countPedidoQuotes(quotes) {
-  return (Array.isArray(quotes) ? quotes : []).filter(isPedidoQuote).length
-}
-function buildDisplaySummary(summary, orders, quotes) {
+function buildDisplaySummary(summary, orders) {
   const base = summary && typeof summary === 'object' ? summary : {}
   const pedidos = latestOrdersLoaded ? countActiveAgendaOrders(orders) : 0
   const faturamentoCents = latestOrdersLoaded ? sumCurrentMonthRevenueCents(orders) : 0
@@ -307,8 +252,8 @@ function buildDisplaySummary(summary, orders, quotes) {
     faturamento_ano_cents: faturamentoAnoCents
   }
 }
-function updateSummaryWithAgenda(summary = latestSummaryData, orders = latestOrdersData, quotes = latestQuotesData) {
-  updateSummary(buildDisplaySummary(summary, orders, quotes))
+function updateSummaryWithAgenda(summary = latestSummaryData, orders = latestOrdersData) {
+  updateSummary(buildDisplaySummary(summary, orders))
   if (latestOrdersLoaded) buildDashboardCharts(orders)
 }
 function schedulePainelRefresh(delay = 120) {
@@ -322,9 +267,7 @@ function handleAgendaSync(serializedPayload) {
   if (!serial || serial === agendaSyncSerial) return
   agendaSyncSerial = serial
   latestOrdersData = []
-  latestQuotesData = null
   latestOrdersLoaded = false
-  latestQuotesLoaded = false
   invalidatePainelCaches()
   schedulePainelRefresh(80)
 }
@@ -334,9 +277,7 @@ function syncAgendaStateOnBoot() {
     if (!pending || pending === agendaSyncSerial) return
     agendaSyncSerial = pending
     latestOrdersData = []
-    latestQuotesData = null
     latestOrdersLoaded = false
-    latestQuotesLoaded = false
     invalidatePainelCaches()
   } catch (_) {}
 }
@@ -511,72 +452,6 @@ function getNextAvailableSlotDate(orders, config) {
     const prodDate = addScheduleDays(weekStart, dayOffset, tipoDias)
     return addScheduleDays(prodDate, prazoDias, tipoDias)
   }
-function isValidQuoteModel(modelo) {
-  const subtotalCents = Number(modelo?.subtotal_cents)
-  const precoCents = Number(modelo?.preco_cents)
-  const preco = safeNumber(modelo?.preco, 0)
-  const itens = Array.isArray(modelo?.itens) ? modelo.itens : []
-  const extras = itens.reduce((sum, item) => {
-    if (Number.isFinite(Number(item?.valor_cents))) return sum + Number(item.valor_cents)
-    return sum + Math.round(safeNumber(item?.valor, 0) * 100)
-  }, 0)
-  return [subtotalCents, precoCents].some(value => Number.isFinite(value) && value > 0) || preco > 0 || extras > 0
-}
-function getQuoteModels(quote) {
-  const payload = quote?.payload || {}
-  const modelos = Array.isArray(payload.modelos) ? payload.modelos : (Array.isArray(quote?.modelos) ? quote.modelos : [])
-  return modelos.filter(isValidQuoteModel)
-}
-function getModeloSubtotalCents(modelo) {
-  if (Number.isFinite(Number(modelo?.subtotal_cents))) return Number(modelo.subtotal_cents)
-  const base = Number.isFinite(Number(modelo?.preco_cents)) ? Number(modelo.preco_cents) : Math.round(safeNumber(modelo?.preco, 0) * 100)
-  const itens = Array.isArray(modelo?.itens) ? modelo.itens : []
-  const extras = itens.reduce((sum, item) => {
-    if (Number.isFinite(Number(item?.valor_cents))) return sum + Number(item.valor_cents)
-    return sum + Math.round(safeNumber(item?.valor, 0) * 100)
-  }, 0)
-  return base + extras
-}
-function getQuoteRevenueCents(quote) {
-  const payload = quote?.payload || {}
-  const centsCandidates = [
-    quote?.total_cents,
-    payload?.total_cents,
-    quote?.valor_total_cents,
-    payload?.valor_total_cents,
-    quote?.subtotal_cents,
-    payload?.subtotal_cents
-  ]
-  for (const value of centsCandidates) {
-    const n = Number(value)
-    if (Number.isFinite(n) && n > 0) return Math.round(n)
-  }
-
-  const reaisCandidates = [
-    quote?.total,
-    payload?.total,
-    quote?.valor_total,
-    payload?.valor_total,
-    quote?.subtotal,
-    payload?.subtotal
-  ]
-  for (const value of reaisCandidates) {
-    const n = Number(value)
-    if (Number.isFinite(n) && n > 0) return Math.round(n * 100)
-  }
-
-  const modelos = getQuoteModels(quote)
-  if (modelos.length) {
-    return modelos.reduce((sum, modelo) => sum + Math.max(0, getModeloSubtotalCents(modelo)), 0)
-  }
-  return 0
-}
-function sumPedidoQuotesRevenueCents(quotes) {
-  return (Array.isArray(quotes) ? quotes : []).reduce((sum, quote) => {
-    if (!isPedidoQuote(quote)) return sum
-    return sum + Math.max(0, getQuoteRevenueCents(quote))
-  }, 0)
-}
 function buildRankings(orders) {
   const soldCount = {}
   ;(Array.isArray(orders) ? orders : []).forEach(order => {
@@ -896,7 +771,7 @@ async function loadSummaryFirst() {
   const cached = readCache('summary')
   if (cached) {
     latestSummaryData = cached
-    updateSummaryWithAgenda(cached, latestOrdersData, latestQuotesData)
+    updateSummaryWithAgenda(cached, latestOrdersData)
   }
   try {
     const summary = await apiGet('/dashboard/summary', 5000)
@@ -916,19 +791,15 @@ async function loadSecondaryData() {
   const years = getHolidayYears().join(',')
   const results = await Promise.allSettled([
     getWithCache('orders', '/agenda/orders', TTL_ORDERS, 6000),
-    getWithCache('quotes', '/quotes?status=pedido', TTL_QUOTES, 6000),
     getWithCache('holidays:' + years, '/calendar/holidays?years=' + encodeURIComponent(years), TTL_HOLIDAYS, 6000),
     getWithCache('agenda-config', '/agenda/config', TTL_CONFIG, 6000)
   ])
   const orders = results[0].status === 'fulfilled' ? (results[0].value?.data || []) : []
-  const quotes = results[1].status === 'fulfilled' ? (results[1].value?.data || []) : []
-  const holidays = results[2].status === 'fulfilled' ? (results[2].value?.data || { holidays: [] }) : { holidays: [] }
-  const config = results[3].status === 'fulfilled' ? (results[3].value?.data || { prazo_dias: 7, vagas_semana: 5, tipo_dias: 'corrido' }) : { prazo_dias: 7, vagas_semana: 5, tipo_dias: 'corrido' }
+  const holidays = results[1].status === 'fulfilled' ? (results[1].value?.data || { holidays: [] }) : { holidays: [] }
+  const config = results[2].status === 'fulfilled' ? (results[2].value?.data || { prazo_dias: 7, vagas_semana: 5, tipo_dias: 'corrido' }) : { prazo_dias: 7, vagas_semana: 5, tipo_dias: 'corrido' }
   latestOrdersData = applyValorCache(Array.isArray(orders) ? orders : [])
-  latestQuotesData = Array.isArray(quotes) ? quotes : []
   latestOrdersLoaded = results[0].status === 'fulfilled'
-  latestQuotesLoaded = results[1].status === 'fulfilled'
-  updateSummaryWithAgenda(latestSummaryData, latestOrdersData, latestQuotesData)
+  updateSummaryWithAgenda(latestSummaryData, latestOrdersData)
   updateAgendaInfo(orders, config)
   updateFeriadoInfo(holidays)
   renderRankings(latestOrdersData)
@@ -940,7 +811,7 @@ async function renderPainel() {
   const cachedSummary = readCache('summary')
   if (cachedSummary) {
     latestSummaryData = cachedSummary
-    updateSummaryWithAgenda(cachedSummary, latestOrdersData, latestQuotesData)
+    updateSummaryWithAgenda(cachedSummary, latestOrdersData)
   }
   setStatus(true, cachedSummary ? 'Atualizando painel...' : 'Carregando...')
 
