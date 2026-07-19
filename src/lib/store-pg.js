@@ -46,12 +46,12 @@ const DEFAULT_STORE = {
     default_plan_code: 'gestao',
     plan_code: 'gestao',
     plan_name: 'Plano Gestão',
-    monthly_price_cents: 8990,
+    monthly_price_cents: 14900,
     annual_price_cents: 0,
     payment_provider: 'stripe',
     payment_link: '',
     support_contact: 'Atendimento comercial',
-    trial_days: 30,
+    trial_days: 60,
     notes: 'Primeiro mês grátis'
   },
   billingLeads: [],
@@ -199,8 +199,8 @@ function nowIso() {
 
 function planPreset(planCode) {
   return String(planCode || '').toLowerCase().includes('empresarial')
-    ? { code: 'empresarial', name: 'Plano Empresarial', seats_limit: null, monthly_price_cents: 53900 }
-    : { code: 'gestao', name: 'Plano Gestão', seats_limit: 2, monthly_price_cents: 8990 }
+    ? { code: 'empresarial', name: 'Plano Empresarial', seats_limit: null, monthly_price_cents: 39900 }
+    : { code: 'gestao', name: 'Plano Gestão', seats_limit: 2, monthly_price_cents: 14900 }
 }
 
 function upsertAudit(store, entry) {

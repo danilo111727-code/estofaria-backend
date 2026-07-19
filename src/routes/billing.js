@@ -227,13 +227,18 @@ router.post('/stripe/create-checkout', requireAuth, async (req, res) => {
   if(!priceId) return res.status(503).json({ error:'price_not_configured', message:'Plano não configurado.' })
   const frontendUrl = process.env.FRONTEND_URL || 'https://estofaria-digital.pages.dev'
   try {
+    const trialDays = Number(store.billingConfig?.trial_days || 60)
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
-      payment_method_types: ['card', 'boleto'],
-      payment_method_options: {
-        boleto: { expires_after_days: 3 }
-      },
+      payment_method_types: ['card'],
+      payment_method_collection: 'always',
       line_items: [{ price: priceId, quantity: 1 }],
+      subscription_data: {
+        trial_period_days: trialDays,
+        trial_settings: {
+          end_behavior: { missing_payment_method: 'cancel' }
+        }
+      },
       metadata: { company_id: String(company.id) },
       customer_email: company.owner_email || req.user?.email || undefined,
       success_url: `${frontendUrl}/assinatura/?sucesso=1`,
