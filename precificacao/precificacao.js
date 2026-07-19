@@ -1395,3 +1395,11 @@ window.formatCurrency = function(input){
 }
 
 window.initPrecificacao = initPrecificacao
+
+window.addEventListener('message', function (e) {
+  if (!e.data || e.data.type !== 'estofaria-ptr-refresh') return
+  try { initPrecificacao() } catch (_) {}
+  setTimeout(function () {
+    try { window.parent.postMessage({ type: 'estofaria-ptr-done' }, '*') } catch (_) {}
+  }, 800)
+})

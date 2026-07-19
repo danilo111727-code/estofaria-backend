@@ -767,4 +767,15 @@ window.addEventListener('DOMContentLoaded', ()=>{
   $('refreshTeamBtn')?.addEventListener('click', loadTeam)
   $('teamUsersList')?.addEventListener('click', handleTeamAction)
   window.addEventListener('estofaria-auth-ready', syncTeamManagementState)
+
+  window.addEventListener('message', function (e) {
+    if (!e.data || e.data.type !== 'estofaria-ptr-refresh') return
+    Promise.all([
+      typeof loadSubscription === 'function' ? loadSubscription().catch(function () {}) : Promise.resolve(),
+      typeof loadLeads === 'function' ? loadLeads().catch(function () {}) : Promise.resolve(),
+      typeof loadTeam === 'function' ? loadTeam().catch(function () {}) : Promise.resolve()
+    ]).finally(function () {
+      try { window.parent.postMessage({ type: 'estofaria-ptr-done' }, '*') } catch (_) {}
+    })
+  })
 })

@@ -230,4 +230,33 @@
   loadModule(resolveModuleFromPath(location.pathname), false);
   setTimeout(function(){ setActiveNav(resolveModuleFromPath(location.pathname)); }, 200);
   setTimeout(function(){ setActiveNav(resolveModuleFromPath(location.pathname)); }, 800);
+
+  // === Pull to Refresh ===
+  (function(){
+    function ptrInit(){
+      if(typeof window.initPullToRefresh !== 'function') return;
+      window.initPullToRefresh(function(){
+        return new Promise(function(resolve){
+          var f = currentModule && framePool[currentModule];
+          if(!f || !f.contentWindow){ resolve(); return; }
+          var done = false;
+          var timer = setTimeout(function(){
+            if(!done){ done = true; resolve(); }
+          }, 6000);
+          var handler = function(e){
+            if(e.data && e.data.type === 'estofaria-ptr-done'){
+              if(!done){ done = true; clearTimeout(timer); window.removeEventListener('message', handler); resolve(); }
+            }
+          };
+          window.addEventListener('message', handler);
+          f.contentWindow.postMessage({ type: 'estofaria-ptr-refresh' }, '*');
+        });
+      });
+    }
+    if(document.readyState === 'loading'){
+      document.addEventListener('DOMContentLoaded', ptrInit);
+    } else {
+      ptrInit();
+    }
+  })();
 })();

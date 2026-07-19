@@ -1704,12 +1704,21 @@ async function excluirBloco(blocoId, ocupadas) {
 }
 
 
+let _catalogModelsCache = null
+let _catalogModelsCacheTs = 0
+
 async function fetchCatalogModels() {
+  const now = Date.now()
+  if (_catalogModelsCache && now - _catalogModelsCacheTs < 5 * 60 * 1000) return _catalogModelsCache
   try {
-    const timeout = new Promise(resolve => setTimeout(() => resolve([]), 3000))
-    const models = await Promise.race([apiGet('/models'), timeout])
-    return Array.isArray(models) ? models : (Array.isArray(models?.models) ? models.models : [])
-  } catch (_) { return [] }
+    const timeout = new Promise(resolve => setTimeout(() => resolve(null), 3000))
+    const raw = await Promise.race([apiGet('/models'), timeout])
+    if (raw !== null) {
+      _catalogModelsCache = Array.isArray(raw) ? raw : (Array.isArray(raw?.models) ? raw.models : [])
+      _catalogModelsCacheTs = now
+    }
+    return _catalogModelsCache || []
+  } catch (_) { return _catalogModelsCache || [] }
 }
 
 function promptSelecionarModelos(currentSelected, allModels) {
@@ -2031,6 +2040,8 @@ async function editarPedido(ordem) {
 
 async function adicionarPedidoNaVaga(blocoId) {
   try {
+    // Pré-busca modelos em paralelo enquanto usuário digita o nome
+    fetchCatalogModels()
     const clienteVal = await ui().prompt({
       title: 'Adicionar pedido',
       message: 'Nome do cliente',
@@ -2106,6 +2117,16 @@ window.handleCityChange = handleCityChange
 window.limparHistorico = limparHistorico
 window.limparAgenda = limparAgenda
 window.initAgenda = initAgenda
+
+window.addEventListener('message', function (e) {
+  if (!e.data || e.data.type !== 'estofaria-ptr-refresh') return
+  load()
+    .then(function () { renderBlocos() })
+    .catch(function () {})
+    .finally(function () {
+      try { window.parent.postMessage({ type: 'estofaria-ptr-done' }, '*') } catch (_) {}
+    })
+})
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initAgenda, { once: true })

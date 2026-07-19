@@ -1472,3 +1472,12 @@ window.enviarPdfAtual = enviarPdfAtual
 window.filtrarItens = filtrarItens
 
 window.addEventListener('load', init)
+
+window.addEventListener('message', function (e) {
+  if (!e.data || e.data.type !== 'estofaria-ptr-refresh') return
+  refreshItemSelect(true)
+    .catch(function () {})
+    .finally(function () {
+      try { window.parent.postMessage({ type: 'estofaria-ptr-done' }, '*') } catch (_) {}
+    })
+})

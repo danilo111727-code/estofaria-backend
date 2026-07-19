@@ -1097,3 +1097,13 @@ window.addEventListener('storage', event => {
     syncCatalogoLive(true)
   }
 })
+
+window.addEventListener('message', function (e) {
+  if (!e.data || e.data.type !== 'estofaria-ptr-refresh') return
+  Promise.resolve()
+    .then(function () { return refreshCatalogo() })
+    .catch(function () {})
+    .finally(function () {
+      try { window.parent.postMessage({ type: 'estofaria-ptr-done' }, '*') } catch (_) {}
+    })
+})

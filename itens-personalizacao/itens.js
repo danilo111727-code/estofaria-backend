@@ -1249,3 +1249,12 @@ window.adicionarTecidoModal = adicionarTecidoModal
 window.removerTecidoModal   = removerTecidoModal
 window.excluirAlbum         = excluirAlbum
 window.adicionarAlbumNaTabela = adicionarAlbumNaTabela
+
+window.addEventListener('message', function (e) {
+  if (!e.data || e.data.type !== 'estofaria-ptr-refresh') return
+  initItensPersonalizacao()
+    .catch(function () {})
+    .finally(function () {
+      try { window.parent.postMessage({ type: 'estofaria-ptr-done' }, '*') } catch (_) {}
+    })
+})

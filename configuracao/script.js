@@ -1,5 +1,5 @@
 (function () {
-  var API = (window.ESTOFARIA_CONFIG && window.ESTOFARIA_CONFIG.API_URL) || 'https://estofaria-backend.onrender.com'
+  var API = ((window.ESTOFARIA_CONFIG && window.ESTOFARIA_CONFIG.API_URL) || window.API_BASE || 'https://estofaria-backend.onrender.com') + '/api'
 
   var state = {
     holidays: [],
@@ -413,6 +413,20 @@
       .then(function () {
         renderHolidayTable()
         renderHistoricoTabela()
+      })
+  })
+
+  window.addEventListener('message', function (e) {
+    if (!e.data || e.data.type !== 'estofaria-ptr-refresh') return
+    Promise.all([loadAgendaConfig(), loadOrders(), loadHolidays()])
+      .then(function () {
+        renderHolidayTable()
+        renderManualHolidayTable()
+        renderHistoricoTabela()
+      })
+      .catch(function () {})
+      .finally(function () {
+        try { window.parent.postMessage({ type: 'estofaria-ptr-done' }, '*') } catch (_) {}
       })
   })
 })()
