@@ -36,7 +36,7 @@ function buildSubscriptionPayload(company, store, req){
       subscription: {
         status: cfg.enabled === false ? 'inactive' : 'trialing',
         payment_provider: cfg.payment_provider || 'stripe',
-        trial_days: Number(cfg.trial_days || 30),
+        trial_days: Number(cfg.trial_days || 60),
         checkout_url: cfg.payment_link || '',
         payment_link: cfg.payment_link || '',
         customer_portal_available: false,
@@ -55,7 +55,7 @@ function buildSubscriptionPayload(company, store, req){
       payment_provider: cfg.payment_provider || company.billing_mode || 'stripe',
       next_charge_at: company.next_charge_at || '',
       grace_until: company.manual_grace_until || '',
-      trial_days: Number(cfg.trial_days || 30),
+      trial_days: Number(cfg.trial_days || 60),
       checkout_url: cfg.payment_link || `${appBaseUrl(req)}/checkout-simulado?company=${encodeURIComponent(company.id)}`,
       payment_link: cfg.payment_link || `${appBaseUrl(req)}/checkout-simulado?company=${encodeURIComponent(company.id)}`,
       customer_portal_available: Boolean(company.stripe_customer_id || company.stripe_subscription_id || company.billing_mode === 'stripe'),
@@ -81,7 +81,7 @@ function buildLeadPayload(lead, checkoutUrl, company, cfg){
     lead,
     subscription: {
       status: company?.financial_status || 'trialing',
-      trial_days: Number(cfg.trial_days || 30),
+      trial_days: Number(cfg.trial_days || 60),
       payment_provider: cfg.payment_provider || 'stripe',
       checkout_url: checkoutUrl,
       payment_link: checkoutUrl,
@@ -138,7 +138,7 @@ function handleCheckout(req, res){
     company.billing_mode = 'stripe'
     company.financial_status = company.financial_status === 'active' ? 'active' : 'trialing'
     company.access_status = 'active'
-    company.next_charge_at = new Date(Date.now() + Number(cfg.trial_days || 30) * 86400000).toISOString()
+    company.next_charge_at = new Date(Date.now() + Number(cfg.trial_days || 60) * 86400000).toISOString()
     if(!company.trial_ends_at) company.trial_ends_at = company.next_charge_at
 
     upsertAudit(store, {
