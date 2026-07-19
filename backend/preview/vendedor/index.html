@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vendedor — Preview</title>
+<link rel="stylesheet" href="style.css">
+<script src="../config.js"></script>
+<script src="../auth-guard.js"></script>
+<link rel="stylesheet" href="../mobile-fixes.css">
+<style>
+  .preview-banner {
+    background: #1565c0;
+    color: #fff;
+    padding: 10px 16px;
+    font-size: 13px;
+    text-align: center;
+    position: sticky;
+    top: 0;
+    z-index: 9999;
+    letter-spacing: 0.02em;
+  }
+  .preview-banner strong { font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="preview-banner">
+  🔍 <strong>PREVIEW</strong> — Versão modificada: NF embutida nos totais. Dados reais do backend.
+</div>
+
+<div class="container">
+
+<div class="cabecalho">
+  <h1>Vendedor</h1>
+  <div class="actions_row">
+    <a href="modelos-pdf.html"><button class="btn_topo">Modelos PDF</button></a>
+    <a href="historico.html"><button class="btn_topo">Histórico</button></a>
+  </div>
+</div>
+
+<div class="bloco">
+<h2>Dados do cliente</h2>
+<label>Nome do cliente</label>
+<input id="cliente" placeholder="Nome do cliente">
+<label>Telefone</label>
+<input id="telefone" placeholder="(00) 00000-0000" inputmode="tel">
+<label>Endereço</label>
+<input id="endereco" placeholder="Rua, número, bairro...">
+</div>
+
+<div class="bloco">
+<h2>Configuração do modelo</h2>
+<label>Modelo</label>
+<select id="modelo"><option value="">Carregando modelos...</option></select>
+<label>Metragem rápida</label>
+<select id="metragemRapida"><option value="">Carregando metragens...</option></select>
+<label>Metragem manual</label>
+<input id="metragemManual" placeholder="Digite ex: 235">
+<div id="previewManual"></div>
+<label>Observação</label>
+<textarea id="observacao" placeholder="Digite alguma observação do pedido..." rows="3" style="width:100%;box-sizing:border-box;resize:vertical;font-family:inherit;font-size:inherit;padding:8px;border:1px solid #ccc;border-radius:6px;"></textarea>
+<button id="sellerAddModelBtn" onclick="addModelo()">Adicionar modelo</button>
+</div>
+
+<div class="bloco">
+<h2>Personalização</h2>
+<div id="modeloAtivo">Nenhum modelo ativo</div>
+<input id="itemBusca" placeholder="Buscar item..." oninput="filtrarItens(this.value)" style="margin-bottom:6px;">
+<select id="item"><option value="">Selecione um modelo e cadastre itens para personalização</option></select>
+<button id="sellerAddItemBtn" onclick="addItem()">Adicionar item</button>
+<div id="listaItens"></div>
+</div>
+
+<div class="bloco">
+<h2>Orçamento</h2>
+<div id="orcamento"></div>
+
+<div class="resumo">
+  <div>Total à vista: <span id="vista"></span></div>
+  <div>Total cartão: <span id="cartao"></span></div>
+</div>
+
+<div class="actions_grid">
+  <button id="sellerSaveQuoteBtn" onclick="salvar()" data-loading-text="Salvando...">Salvar orçamento</button>
+  <button id="sellerPdfBtn" onclick="baixarPdfAtual()" data-loading-text="Visualizando PDF...">Visualizar PDF</button>
+  <button id="sellerShareBtn" onclick="enviarPdfAtual()" data-loading-text="Preparando envio...">Enviar PDF</button>
+</div>
+</div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="pdf-tools.js"></script>
+<script src="script.js"></script>
+<script src="../keyboard-dismiss.js"></script>
+</body>
+</html>

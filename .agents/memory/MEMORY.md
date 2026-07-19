@@ -1,0 +1,1 @@
+- [Deploy process](deploy-process.md) — auto-deploy dispara em push ao main; nunca pushar main; só dev; workflow fix pendente pelo usuário no GitHub.com
