@@ -81,6 +81,12 @@ function notifyPainelRefresh(reason = 'orders') {
     })
     localStorage.setItem(PAINEL_SYNC_KEY, JSON.stringify({ reason, at: Date.now() }))
   } catch (_) {}
+  // postMessage garante entrega entre iframes irmãos no mesmo tab
+  try {
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: 'estofaria-notify-painel', reason }, '*')
+    }
+  } catch (_) {}
 }
 
 function updateTime() {

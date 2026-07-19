@@ -975,12 +975,22 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden) schedulePainelRefresh(90)
 })
 window.addEventListener('message', function (e) {
-  if (!e.data || e.data.type !== 'estofaria-ptr-refresh') return
-  renderPainel()
-    .catch(function () {})
-    .finally(function () {
-      try { window.parent.postMessage({ type: 'estofaria-ptr-done' }, '*') } catch (_) {}
-    })
+  if (!e.data) return
+  if (e.data.type === 'estofaria-notify-painel') {
+    latestOrdersData = []
+    latestQuotesData = null
+    latestOrdersLoaded = false
+    latestQuotesLoaded = false
+    invalidatePainelCaches()
+    schedulePainelRefresh(80)
+  }
+  if (e.data.type === 'estofaria-ptr-refresh') {
+    renderPainel()
+      .catch(function () {})
+      .finally(function () {
+        try { window.parent.postMessage({ type: 'estofaria-ptr-done' }, '*') } catch (_) {}
+      })
+  }
 })
 
 window.addEventListener('storage', event => {

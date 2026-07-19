@@ -213,6 +213,11 @@
       if(loading) loading.classList.add('hidden');
     }
     if(t === 'estofaria-scroll-top') scrollToTop();
+    // Relay: qualquer iframe envia → shell encaminha ao painel
+    if(t === 'estofaria-notify-painel'){
+      var pf = framePool['painel'];
+      if(pf && pf.contentWindow) pf.contentWindow.postMessage(e.data, '*');
+    }
   });
 
   window.addEventListener('resize', function(){
