@@ -1,5 +1,5 @@
 (function(){
-  var CV = '20260719d';
+  var CV = '20260719e';
   var ROUTES = {
     'painel':               { path:'/painel/',               content:'/painel/__content.html?v='+CV,               title:'Painel' },
     'material':             { path:'/material/',             content:'/material/__content.html?v='+CV,             title:'Materiais' },
@@ -78,10 +78,47 @@
     doc.head.appendChild(s);
   }
 
+  // Injeta relay de touch no iframe para que o PTR do shell receba os gestos.
+  // Os iframes capturam todos os eventos de toque — eles nunca chegam ao documento
+  // pai. Este script reenvia touchstart/move/end via postMessage.
+  function injectPtrRelay(doc){
+    if(!doc || doc.getElementById('app-shell-ptr-relay')) return;
+    var s = doc.createElement('script');
+    s.id = 'app-shell-ptr-relay';
+    s.textContent = '(function(){' +
+      'if(window.__ptrRelayInstalled)return;window.__ptrRelayInstalled=true;' +
+      'var sY=0,cDy=0,act=false;' +
+      'function st(){return Math.max(document.documentElement.scrollTop||0,document.body.scrollTop||0)}' +
+      'document.addEventListener("touchstart",function(e){' +
+        'cDy=0;act=false;if(st()>2)return;' +
+        'sY=e.touches[0].clientY;act=true;' +
+        'try{window.parent.postMessage({type:"ptr-touch-start",y:sY},"*")}catch(_){}' +
+      '},{passive:true});' +
+      'document.addEventListener("touchmove",function(e){' +
+        'if(!act)return;' +
+        'if(st()>2){act=false;try{window.parent.postMessage({type:"ptr-touch-cancel"},"*")}catch(_){}return}' +
+        'cDy=e.touches[0].clientY-sY;if(cDy<=0)return;' +
+        'try{window.parent.postMessage({type:"ptr-touch-move",dy:cDy},"*")}catch(_){}' +
+      '},{passive:true});' +
+      'document.addEventListener("touchend",function(){' +
+        'if(!act)return;act=false;' +
+        'try{window.parent.postMessage({type:"ptr-touch-end",dy:cDy},"*")}catch(_){}' +
+        'cDy=0;' +
+      '},{passive:true});' +
+      'document.addEventListener("touchcancel",function(){' +
+        'if(!act)return;act=false;' +
+        'try{window.parent.postMessage({type:"ptr-touch-cancel"},"*")}catch(_){}' +
+        'cDy=0;' +
+      '},{passive:true});' +
+    '})();';
+    try{ (doc.head||doc.body||doc.documentElement).appendChild(s); }catch(_){}
+  }
+
   function syncHeight(f){
     var doc = iframeDoc(f);
     if(!doc) return;
     injectFrameStyles(doc);
+    injectPtrRelay(doc);
     var html = doc.documentElement, body = doc.body;
     var h = Math.max(
       html ? html.scrollHeight : 0, body ? body.scrollHeight : 0,
@@ -95,6 +132,7 @@
     var doc = iframeDoc(f);
     if(!doc) return;
     injectFrameStyles(doc);
+    injectPtrRelay(doc);
     var rerun = function(){
       clearTimeout(resizeTimers[code]);
       resizeTimers[code] = setTimeout(function(){ syncHeight(f); }, 30);

@@ -405,10 +405,14 @@ function getCurrentMonthName() {
   return MONTHS_PT[new Date().getMonth()]
 }
 function orderCreationDate(order) {
+  // Prioridade: timestamps de criação do backend; fallback: datas da agenda
   const ds = order?.created_at || order?.inserted_at || order?.updated_at
+    || order?.prod_date || order?.production_date || order?.data_producao
+    || order?.ent_date || order?.delivery_date || order?.data_entrega
   if (!ds) return null
-  const d = new Date(String(ds))
-  return isNaN(d) ? null : d
+  const s = String(ds)
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(s) ? new Date(s + 'T00:00:00') : new Date(s)
+  return isNaN(d.getTime()) ? null : d
 }
 function sumCurrentMonthRevenueCents(orders) {
   const now = new Date()
