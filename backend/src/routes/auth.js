@@ -109,12 +109,15 @@ function teamPayload(store, company){
       }
     })
   return {
-    company: { id: company.id, name: company.name },
+    company: { id: company.id, name: company.name, access_status: company.access_status || 'active', financial_status: company.financial_status || 'trialing' },
     subscription: {
       plan_code: company.plan_code,
       plan_name: company.plan_name,
       seats_limit: company.seats_limit,
-      seats_used: activeMembershipCount(store, company.id)
+      seats_used: activeMembershipCount(store, company.id),
+      access_status: company.access_status || 'active',
+      financial_status: company.financial_status || 'trialing',
+      trial_ends_at: company.trial_ends_at || ''
     },
     users
   }
@@ -186,8 +189,8 @@ router.post('/register', (req, res) => {
     plan_code: plan.code,
     plan_name: plan.name,
     billing_mode: 'stripe',
-    financial_status: 'trialing',
-    access_status: 'active',
+    financial_status: 'pending',
+    access_status: 'pending_payment',
     seats_limit: plan.seats_limit,
     monthly_price_cents: plan.monthly_price_cents,
     next_charge_at: trialEndsAt,

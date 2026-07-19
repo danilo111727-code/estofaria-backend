@@ -287,8 +287,11 @@ router.post('/webhooks/stripe', express.raw({ type: 'application/json' }), (req,
       const stripeSubId = obj.subscription || ''
       if(stripeCustomerId) company.stripe_customer_id = stripeCustomerId
       if(stripeSubId) company.stripe_subscription_id = stripeSubId
+      const trialDays = Number(store.billingConfig?.trial_days || 60)
       company.financial_status = 'trialing'
       company.access_status = 'active'
+      if(!company.trial_ends_at) company.trial_ends_at = new Date(Date.now() + trialDays * 86400000).toISOString()
+      company.next_charge_at = company.trial_ends_at
     }
     if(type === 'invoice.paid'){
       company.financial_status = 'active'
@@ -298,7 +301,7 @@ router.post('/webhooks/stripe', express.raw({ type: 'application/json' }), (req,
     }
     if(type === 'invoice.payment_failed'){
       company.financial_status = 'past_due'
-      company.access_status = company.manual_grace_until ? 'manual_grace' : 'active'
+      company.access_status = 'blocked'
     }
     if(type === 'customer.subscription.deleted'){
       company.financial_status = 'canceled'
@@ -308,7 +311,7 @@ router.post('/webhooks/stripe', express.raw({ type: 'application/json' }), (req,
       const status = String(event.data?.object?.status || '').toLowerCase()
       if(status) company.financial_status = status
       if(['active','trialing'].includes(status)) company.access_status = 'active'
-      if(['past_due'].includes(status)) company.access_status = company.manual_grace_until ? 'manual_grace' : 'active'
+      if(['past_due'].includes(status)) company.access_status = 'blocked'
       if(['unpaid','canceled','incomplete_expired'].includes(status)) company.access_status = 'blocked'
     }
     company.updated_at = nowIso()

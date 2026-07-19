@@ -42,11 +42,14 @@ function requireAuth(req, res, next){
 
     if(!hasMasterAccess(req.user) && !isSubscriptionExempt(req)){
       const company = store.companies.find(item => String(item.id) === String(user.company_id || ''))
-      const HARD_BLOCKED = ['blocked','suspended','disabled']
-    if(company && HARD_BLOCKED.includes(company.access_status)){
+      const HARD_BLOCKED = ['blocked','suspended','disabled','pending_payment']
+      if(company && HARD_BLOCKED.includes(company.access_status)){
+        const isPending = company.access_status === 'pending_payment'
         return res.status(402).json({
           error:'subscription_required',
-          message:'Sua assinatura está inativa. Acesse a tela de Assinatura para regularizar.',
+          message: isPending
+            ? 'Cadastre seu cartão para ativar os 2 meses grátis e começar a usar o sistema.'
+            : 'Sua assinatura está inativa. Acesse a tela de Assinatura para regularizar.',
           access_status: company.access_status,
           financial_status: company.financial_status,
           redirect: '/assinatura/'
