@@ -119,6 +119,24 @@ function normalizeLooseText(value) {
     .trim()
     .toLowerCase()
 }
+function applyValorCache(orders) {
+  try {
+    const raw = localStorage.getItem('esd_order_valores')
+    if (!raw) return orders
+    const cache = JSON.parse(raw)
+    if (!cache || typeof cache !== 'object') return orders
+    return orders.map(function(o) {
+      const byId = o.id ? Number(cache[String(o.id)] || 0) : 0
+      if (byId > 0) return Object.assign({}, o, { valor: byId, valor_total: byId })
+      const cliente = normalizeLooseText(o.cliente)
+      const descricao = normalizeLooseText(o.descricao)
+      const ck = 'ck:' + cliente + '|' + descricao
+      const byCk = (ck !== 'ck:|') ? Number(cache[ck] || 0) : 0
+      if (byCk > 0) return Object.assign({}, o, { valor: byCk, valor_total: byCk })
+      return o
+    })
+  } catch (_) { return orders }
+}
 function normalizeStatus(value) {
   return normalizeLooseText(value)
 }
@@ -309,7 +327,6 @@ function handleAgendaSync(serializedPayload) {
   latestQuotesLoaded = false
   invalidatePainelCaches()
   schedulePainelRefresh(80)
-  setTimeout(() => loadSecondaryData().catch(() => {}), 150)
 }
 function syncAgendaStateOnBoot() {
   try {
@@ -572,9 +589,7 @@ function buildRankings(orders) {
   const soldEntries = Object.entries(soldCount).sort((a, b) => b[1] - a[1]).slice(0, 6)
   return {
     soldLabels: soldEntries.length ? soldEntries.map(([label]) => label) : ['Sem dados'],
-    soldValues: soldEntries.length ? soldEntries.map(([, value]) => value) : [0],
-    revenueLabels: [],
-    revenueValues: []
+    soldValues: soldEntries.length ? soldEntries.map(([, value]) => value) : [0]
   }
 }
 function animateChartCanvas(id) {
@@ -909,14 +924,14 @@ async function loadSecondaryData() {
   const quotes = results[1].status === 'fulfilled' ? (results[1].value?.data || []) : []
   const holidays = results[2].status === 'fulfilled' ? (results[2].value?.data || { holidays: [] }) : { holidays: [] }
   const config = results[3].status === 'fulfilled' ? (results[3].value?.data || { prazo_dias: 7, vagas_semana: 5, tipo_dias: 'corrido' }) : { prazo_dias: 7, vagas_semana: 5, tipo_dias: 'corrido' }
-  latestOrdersData = Array.isArray(orders) ? orders : []
+  latestOrdersData = applyValorCache(Array.isArray(orders) ? orders : [])
   latestQuotesData = Array.isArray(quotes) ? quotes : []
   latestOrdersLoaded = results[0].status === 'fulfilled'
   latestQuotesLoaded = results[1].status === 'fulfilled'
   updateSummaryWithAgenda(latestSummaryData, latestOrdersData, latestQuotesData)
   updateAgendaInfo(orders, config)
   updateFeriadoInfo(holidays)
-  renderRankings(orders)
+  renderRankings(latestOrdersData)
   updateResumoSemana(latestOrdersData)
 }
 async function renderPainel() {
