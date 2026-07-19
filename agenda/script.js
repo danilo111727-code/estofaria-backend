@@ -1706,8 +1706,9 @@ async function excluirBloco(blocoId, ocupadas) {
 
 async function fetchCatalogModels() {
   try {
-    const models = await apiGet('/models')
-    return Array.isArray(models) ? models : []
+    const timeout = new Promise(resolve => setTimeout(() => resolve([]), 3000))
+    const models = await Promise.race([apiGet('/models'), timeout])
+    return Array.isArray(models) ? models : (Array.isArray(models?.models) ? models.models : [])
   } catch (_) { return [] }
 }
 
