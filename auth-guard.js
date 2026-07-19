@@ -71,7 +71,18 @@
         }
       } catch (_) {}
 
-      return rawFetch(input, init);
+      return rawFetch(input, init).then(function(response) {
+        if (response.status === 402) {
+          try {
+            var target = window.top || window.parent || window;
+            var current = String(target.location.pathname || '');
+            if (!current.startsWith('/assinatura/') && !current.startsWith('/login/')) {
+              target.location.href = '/assinatura/?bloqueado=1';
+            }
+          } catch (_) {}
+        }
+        return response;
+      });
     };
 
     window.__estofariaAuthFetchInstalled = true;

@@ -572,10 +572,58 @@ function loadUserIntoForm(user){
   window.scrollTo({ top: $('teamCard').offsetTop - 90, behavior:'smooth' })
 }
 
+function renderBannerAcesso(accessStatus, financialStatus){
+  const banner = $('bannerAcesso')
+  if(!banner) return
+
+  const CONFIGS = {
+    pending_payment: {
+      bg: '#1e40af', color: '#fff',
+      icon: '💳',
+      title: 'Cadastre seu cartão para começar',
+      text: 'Você tem <strong>2 meses grátis</strong> esperando. Cadastre o cartão agora — a cobrança só começa após o período de teste. Sem cartão, o acesso ao sistema fica bloqueado.',
+      btn: 'Cadastrar cartão e ativar agora'
+    },
+    blocked: {
+      bg: '#991b1b', color: '#fff',
+      icon: '🔒',
+      title: 'Acesso bloqueado',
+      text: 'Sua assinatura está inativa. Regularize para voltar a usar o sistema.',
+      btn: 'Regularizar assinatura'
+    },
+    past_due: {
+      bg: '#92400e', color: '#fff',
+      icon: '⚠️',
+      title: 'Pagamento em atraso',
+      text: 'Há uma fatura em aberto. Atualize seu método de pagamento para continuar usando o sistema.',
+      btn: 'Atualizar pagamento'
+    }
+  }
+
+  const statusKey = accessStatus === 'blocked' && financialStatus === 'past_due' ? 'past_due' : (accessStatus || '')
+  const cfg = CONFIGS[statusKey]
+
+  if(!cfg){
+    banner.style.display = 'none'
+    return
+  }
+
+  banner.style.cssText = `display:block;background:${cfg.bg};color:${cfg.color};padding:20px 24px;text-align:center;border-radius:0 0 12px 12px;margin-bottom:16px`
+  banner.innerHTML = `
+    <div style="font-size:28px;margin-bottom:6px">${cfg.icon}</div>
+    <strong style="font-size:17px;display:block;margin-bottom:6px">${cfg.title}</strong>
+    <p style="margin:0 0 14px;opacity:.92;font-size:14px;max-width:520px;margin-left:auto;margin-right:auto">${cfg.text}</p>
+    <button onclick="document.getElementById('formAssinatura')?.scrollIntoView({behavior:'smooth'})" style="background:#fff;color:${cfg.bg};border:none;padding:10px 22px;border-radius:8px;font-weight:700;cursor:pointer;font-size:14px">${cfg.btn}</button>
+  `
+}
+
 async function loadTeam(){
   try{
     const payload = await apiGet('/auth/team')
     teamState = normalizeTeamPayload(payload)
+    const accessStatus = payload?.company?.access_status || payload?.subscription?.access_status || ''
+    const financialStatus = payload?.company?.financial_status || payload?.subscription?.financial_status || ''
+    renderBannerAcesso(accessStatus, financialStatus)
     renderTeamUsers()
     syncTeamManagementState()
   }catch(error){
@@ -694,6 +742,18 @@ window.addEventListener('DOMContentLoaded', ()=>{
   loadSubscription()
   loadTeam()
   if(isManagementMode) loadLeads()
+
+  // Retorno do Stripe / redirect por bloqueio
+  if(qs.get('sucesso') === '1'){
+    setNotice('ok', '🎉 Cartão cadastrado com sucesso! Seus 2 meses grátis estão ativos. Bem-vindo ao Estofaria Digital.')
+    window.history.replaceState({}, '', window.location.pathname)
+  } else if(qs.get('cancelado') === '1'){
+    setNotice('warn', 'O cadastro do cartão foi cancelado. Cadastre o cartão para liberar o acesso ao sistema.')
+    window.history.replaceState({}, '', window.location.pathname)
+  } else if(qs.get('bloqueado') === '1'){
+    setNotice('warn', 'O acesso ao sistema está bloqueado. Regularize sua assinatura abaixo para continuar.')
+    window.history.replaceState({}, '', window.location.pathname)
+  }
 
   document.querySelectorAll('[data-select-plan]').forEach(button => {
     button.addEventListener('click', () => syncPlanSelection(button.dataset.selectPlan))
