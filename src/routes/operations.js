@@ -709,6 +709,8 @@ router.patch('/agenda/orders/:id', (req, res) => {
   if(req.body?.qtd !== undefined) row.qtd = Math.max(1, Math.round(num(req.body.qtd, row.qtd)))
   if(req.body?.tecido_comprado !== undefined) row.tecido_comprado = Boolean(req.body.tecido_comprado)
   if(req.body?.status !== undefined) row.status = text(req.body.status, row.status).toLowerCase()
+  if(req.body?.valor !== undefined) row.valor = num(req.body.valor, row.valor || 0)
+  if(req.body?.valor_total !== undefined) row.valor_total = num(req.body.valor_total, row.valor_total || 0)
   if(req.body?.modelos !== undefined) row.modelos = Array.isArray(req.body.modelos) ? req.body.modelos.map(m => ({ id: String(m.id || ''), name: String(m.name || '') })) : []
   const today = new Date().toISOString().slice(0, 10)
   const refDate = row.ent_date || row.prod_date
