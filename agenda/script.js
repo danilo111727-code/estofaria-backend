@@ -658,8 +658,28 @@ async function limparAgenda() {
 
 async function mudarStatus(id, status) {
   try {
+    const existing = state.orders.find(o => String(o.id) === String(id))
+    console.log('[ESD-DIAG] mudarStatus: id=', id, 'status=', status,
+      'modelos antes=', JSON.stringify(existing?.modelos),
+      'valor antes=', existing?.valor_total || existing?.valor)
     const row = await apiPatch('/agenda/orders/' + id, { status })
-    replaceOrder(row)
+    console.log('[ESD-DIAG] mudarStatus: modelos na resposta servidor=', JSON.stringify(row?.modelos),
+      'valor na resposta=', row?.valor_total || row?.valor)
+    // Merge defensivo: preserva modelos e valor do estado local caso o
+    // servidor retorne pedido sem esses campos (pedidos antigos ou criados
+    // por fluxo que não salva modelos, ex: conversão de orçamento).
+    const merged = { ...existing, ...row }
+    if ((!Array.isArray(merged.modelos) || merged.modelos.length === 0) &&
+        Array.isArray(existing?.modelos) && existing.modelos.length > 0) {
+      merged.modelos = existing.modelos
+      console.log('[ESD-DIAG] mudarStatus: modelos preservados do estado local=', JSON.stringify(merged.modelos))
+    }
+    const valorMerged = Number(merged.valor_total || merged.valor || 0)
+    if (valorMerged === 0) {
+      const prevValor = Number(existing?.valor_total || existing?.valor || 0)
+      if (prevValor > 0) { merged.valor = prevValor; merged.valor_total = prevValor }
+    }
+    replaceOrder(merged)
     notifyPainelRefresh('order-status')
     renderAll()
   } catch (e) {
@@ -676,7 +696,18 @@ async function excluir(id) {
       status: 'cancelado',
       descricao: `${DELETED_ORDER_PREFIX}${descricaoAtual || 'Pedido excluído'}`.trim()
     })
-    replaceOrder(row)
+    // Merge defensivo: preserva modelos e valor do estado local
+    const merged = { ...current, ...row }
+    if ((!Array.isArray(merged.modelos) || merged.modelos.length === 0) &&
+        Array.isArray(current.modelos) && current.modelos.length > 0) {
+      merged.modelos = current.modelos
+    }
+    const valorMerged = Number(merged.valor_total || merged.valor || 0)
+    if (valorMerged === 0) {
+      const prevValor = Number(current.valor_total || current.valor || 0)
+      if (prevValor > 0) { merged.valor = prevValor; merged.valor_total = prevValor }
+    }
+    replaceOrder(merged)
     notifyPainelRefresh('order-delete')
     renderAll()
     closeActionSheet()
@@ -2081,6 +2112,7 @@ async function adicionarPedidoNaVaga(blocoId) {
       : parseFloat(valorVal.trim().replace(/\./g, '').replace(',', '.')) || 0
 
     saveValorCache(null, valorNum, { cliente, descricao })
+    console.log('[ESD-DIAG] adicionarPedidoNaVaga: enviando modelos=', JSON.stringify(selectedModels))
     const row = await apiPost('/agenda/blocos/' + blocoId + '/pedido', {
       cliente,
       descricao,
@@ -2088,6 +2120,7 @@ async function adicionarPedidoNaVaga(blocoId) {
       valor_total: valorNum,
       modelos: selectedModels
     })
+    console.log('[ESD-DIAG] adicionarPedidoNaVaga: resposta servidor modelos=', JSON.stringify(row?.modelos))
     const newOrder = normalizeOrder({ ...row, cliente, descricao, valor: valorNum, valor_total: valorNum, modelos: selectedModels })
     state.orders.push(newOrder)
     if (newOrder.id) saveValorCache(newOrder.id, valorNum, { cliente, descricao })
