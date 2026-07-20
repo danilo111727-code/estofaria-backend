@@ -81,6 +81,12 @@ function notifyPainelRefresh(reason = 'orders') {
     })
     localStorage.setItem(PAINEL_SYNC_KEY, JSON.stringify({ reason, at: Date.now() }))
   } catch (_) {}
+  // postMessage garante entrega entre iframes irmãos no mesmo tab
+  try {
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: 'estofaria-notify-painel', reason }, '*')
+    }
+  } catch (_) {}
 }
 
 function updateTime() {
@@ -602,10 +608,8 @@ async function loadOrders() {
   const rows = await apiGet('/agenda/orders')
   console.log('[ESD-DIAG] loadOrders: API retornou', Array.isArray(rows) ? rows.length : 0, 'pedidos')
   if (Array.isArray(rows) && rows.length > 0) {
-    const amostra = rows.slice(0, 3).map(r => ({ id: r.id, cliente: r.cliente, valor: r.valor, valor_total: r.valor_total, modelos: r.modelos }))
-    console.log('[ESD-DIAG] Amostra dos pedidos (id/cliente/valor/modelos):', JSON.stringify(amostra))
-    const comModelos = rows.filter(r => Array.isArray(r.modelos) && r.modelos.length > 0)
-    console.log('[ESD-DIAG] Pedidos com modelos no GET:', comModelos.length, comModelos.map(r => ({ id: r.id, cliente: r.cliente, modelos: r.modelos })))
+    const amostra = rows.slice(0, 3).map(r => ({ id: r.id, cliente: r.cliente, valor: r.valor, valor_total: r.valor_total }))
+    console.log('[ESD-DIAG] Amostra dos pedidos (id/cliente/valor/valor_total):', JSON.stringify(amostra))
   }
   console.log('[ESD-DIAG] Cache localStorage atual:', localStorage.getItem('esd_order_valores'))
   const normalized = Array.isArray(rows) ? rows.map(normalizeOrder) : []
@@ -654,15 +658,27 @@ async function limparAgenda() {
 
 async function mudarStatus(id, status) {
   try {
-    const existing = state.orders.find(o => String(o.id) === String(id)) || {}
+    const existing = state.orders.find(o => String(o.id) === String(id))
+    console.log('[ESD-DIAG] mudarStatus: id=', id, 'status=', status,
+      'modelos antes=', JSON.stringify(existing?.modelos),
+      'valor antes=', existing?.valor_total || existing?.valor)
     const row = await apiPatch('/agenda/orders/' + id, { status })
-    // Preserva modelos e demais campos do estado local caso o servidor
-    // não os retorne (pedidos criados antes da feature de modelos).
+    console.log('[ESD-DIAG] mudarStatus: modelos na resposta servidor=', JSON.stringify(row?.modelos),
+      'valor na resposta=', row?.valor_total || row?.valor)
+    // Merge defensivo: preserva modelos e valor do estado local caso o
+    // servidor retorne pedido sem esses campos (pedidos antigos ou criados
+    // por fluxo que não salva modelos, ex: conversão de orçamento).
     const merged = { ...existing, ...row }
-    if (!Array.isArray(merged.modelos) && Array.isArray(existing.modelos)) {
+    if ((!Array.isArray(merged.modelos) || merged.modelos.length === 0) &&
+        Array.isArray(existing?.modelos) && existing.modelos.length > 0) {
       merged.modelos = existing.modelos
+      console.log('[ESD-DIAG] mudarStatus: modelos preservados do estado local=', JSON.stringify(merged.modelos))
     }
-    console.log('[ESD-DIAG] mudarStatus: id=', id, 'status=', status, 'row.modelos=', row?.modelos, 'merged.modelos=', merged.modelos)
+    const valorMerged = Number(merged.valor_total || merged.valor || 0)
+    if (valorMerged === 0) {
+      const prevValor = Number(existing?.valor_total || existing?.valor || 0)
+      if (prevValor > 0) { merged.valor = prevValor; merged.valor_total = prevValor }
+    }
     replaceOrder(merged)
     notifyPainelRefresh('order-status')
     renderAll()
@@ -680,8 +696,17 @@ async function excluir(id) {
       status: 'cancelado',
       descricao: `${DELETED_ORDER_PREFIX}${descricaoAtual || 'Pedido excluído'}`.trim()
     })
-    // Preserva campos do estado local (ex.: modelos) caso o servidor não os retorne.
+    // Merge defensivo: preserva modelos e valor do estado local
     const merged = { ...current, ...row }
+    if ((!Array.isArray(merged.modelos) || merged.modelos.length === 0) &&
+        Array.isArray(current.modelos) && current.modelos.length > 0) {
+      merged.modelos = current.modelos
+    }
+    const valorMerged = Number(merged.valor_total || merged.valor || 0)
+    if (valorMerged === 0) {
+      const prevValor = Number(current.valor_total || current.valor || 0)
+      if (prevValor > 0) { merged.valor = prevValor; merged.valor_total = prevValor }
+    }
     replaceOrder(merged)
     notifyPainelRefresh('order-delete')
     renderAll()
@@ -1716,12 +1741,21 @@ async function excluirBloco(blocoId, ocupadas) {
 }
 
 
+let _catalogModelsCache = null
+let _catalogModelsCacheTs = 0
+
 async function fetchCatalogModels() {
+  const now = Date.now()
+  if (_catalogModelsCache && now - _catalogModelsCacheTs < 5 * 60 * 1000) return _catalogModelsCache
   try {
-    const timeout = new Promise(resolve => setTimeout(() => resolve([]), 3000))
-    const models = await Promise.race([apiGet('/models'), timeout])
-    return Array.isArray(models) ? models : (Array.isArray(models?.models) ? models.models : [])
-  } catch (_) { return [] }
+    const timeout = new Promise(resolve => setTimeout(() => resolve(null), 3000))
+    const raw = await Promise.race([apiGet('/models'), timeout])
+    if (raw !== null) {
+      _catalogModelsCache = Array.isArray(raw) ? raw : (Array.isArray(raw?.models) ? raw.models : [])
+      _catalogModelsCacheTs = now
+    }
+    return _catalogModelsCache || []
+  } catch (_) { return _catalogModelsCache || [] }
 }
 
 function promptSelecionarModelos(currentSelected, allModels) {
@@ -1819,18 +1853,9 @@ function promptSelecionarModelos(currentSelected, allModels) {
 
     cancelBtn.addEventListener('click', () => { backdrop.remove(); resolve(null) })
     applyBtn.addEventListener('click', () => {
-      // Modelos que estão no catálogo e foram marcados
-      const catalogMatches = allModels
+      const result = allModels
         .filter(m => selected.has(String(m.id || '')))
         .map(m => ({ id: String(m.id || ''), name: String(m.nome || m.name || m.modelo || '') }))
-      const catalogMatchedIds = new Set(catalogMatches.map(m => m.id))
-      // Preserva modelos que estavam selecionados antes mas não existem mais no catálogo
-      // (evita apagar silenciosamente modelos de pedidos antigos)
-      const preserved = (currentSelected || []).filter(m => {
-        const id = String(m.id || '')
-        return id && selected.has(id) && !catalogMatchedIds.has(id)
-      })
-      const result = [...catalogMatches, ...preserved]
       backdrop.remove()
       resolve(result)
     })
@@ -2028,7 +2053,7 @@ async function editarPedido(ordem) {
         ? 0
         : parseFloat(valorVal.trim().replace(/\./g, '').replace(',', '.')) || 0
 
-    console.log('[ESD-DIAG] editarPedido: ordem.id=', ordem.id, 'valorAtual=', valorAtual, 'valorNum=', valorNum, 'cliente=', cliente, 'descricao=', descricao, 'modelos enviados=', JSON.stringify(selectedModels))
+    console.log('[ESD-DIAG] editarPedido: ordem.id=', ordem.id, 'valorAtual=', valorAtual, 'valorNum=', valorNum, 'cliente=', cliente, 'descricao=', descricao)
     if (valorNum > 0) saveValorCache(ordem.id, valorNum, { cliente, descricao })
     console.log('[ESD-DIAG] Cache após saveValorCache:', localStorage.getItem('esd_order_valores'))
     const row = await apiPatch('/agenda/orders/' + ordem.id, {
@@ -2038,7 +2063,6 @@ async function editarPedido(ordem) {
       valor_total: valorNum,
       modelos: selectedModels
     })
-    console.log('[ESD-DIAG] editarPedido: servidor retornou modelos=', JSON.stringify(row?.modelos))
     // Mescla valores do usuário sobre a resposta do servidor,
     // pois o backend pode não retornar os campos atualizados
     replaceOrder({ ...row, cliente, descricao, valor: valorNum, valor_total: valorNum, modelos: selectedModels })
@@ -2053,6 +2077,8 @@ async function editarPedido(ordem) {
 
 async function adicionarPedidoNaVaga(blocoId) {
   try {
+    // Pré-busca modelos em paralelo enquanto usuário digita o nome
+    fetchCatalogModels()
     const clienteVal = await ui().prompt({
       title: 'Adicionar pedido',
       message: 'Nome do cliente',
@@ -2086,6 +2112,7 @@ async function adicionarPedidoNaVaga(blocoId) {
       : parseFloat(valorVal.trim().replace(/\./g, '').replace(',', '.')) || 0
 
     saveValorCache(null, valorNum, { cliente, descricao })
+    console.log('[ESD-DIAG] adicionarPedidoNaVaga: enviando modelos=', JSON.stringify(selectedModels))
     const row = await apiPost('/agenda/blocos/' + blocoId + '/pedido', {
       cliente,
       descricao,
@@ -2093,7 +2120,7 @@ async function adicionarPedidoNaVaga(blocoId) {
       valor_total: valorNum,
       modelos: selectedModels
     })
-    console.log('[ESD-DIAG] adicionarPedidoNaVaga: enviado modelos=', JSON.stringify(selectedModels), '| servidor retornou modelos=', JSON.stringify(row?.modelos))
+    console.log('[ESD-DIAG] adicionarPedidoNaVaga: resposta servidor modelos=', JSON.stringify(row?.modelos))
     const newOrder = normalizeOrder({ ...row, cliente, descricao, valor: valorNum, valor_total: valorNum, modelos: selectedModels })
     state.orders.push(newOrder)
     if (newOrder.id) saveValorCache(newOrder.id, valorNum, { cliente, descricao })
@@ -2129,6 +2156,16 @@ window.handleCityChange = handleCityChange
 window.limparHistorico = limparHistorico
 window.limparAgenda = limparAgenda
 window.initAgenda = initAgenda
+
+window.addEventListener('message', function (e) {
+  if (!e.data || e.data.type !== 'estofaria-ptr-refresh') return
+  load()
+    .then(function () { renderBlocos() })
+    .catch(function () {})
+    .finally(function () {
+      try { window.parent.postMessage({ type: 'estofaria-ptr-done' }, '*') } catch (_) {}
+    })
+})
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initAgenda, { once: true })
