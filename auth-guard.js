@@ -16,6 +16,11 @@
 
   function clearSession() {
     try {
+      if (window.ESTOFARIA_AUTH && typeof window.ESTOFARIA_AUTH.clearSession === 'function') {
+        window.ESTOFARIA_AUTH.clearSession();
+      } else {
+        localStorage.removeItem('estofaria_auth_session_v1');
+      }
       localStorage.removeItem('auth_token');
       localStorage.removeItem('auth_user');
       localStorage.removeItem('token');
