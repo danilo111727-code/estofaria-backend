@@ -69,8 +69,10 @@ padding:10px 16px;
  font-size:13px;font-weight:600;color:#64748b;
  padding:8px 12px;
  background:#f1f5f9;border-radius:20px;
- white-space:nowrap;user-select:none;pointer-events:none;
+ white-space:nowrap;user-select:none;cursor:pointer;
+ transition:background .15s,color .15s;
 }
+.catalogo-lock-indicator:hover{ background:#e2e8f0; color:#334155; }
 
 .catalogo-info{
 background:#ffffff;

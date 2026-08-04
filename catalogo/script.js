@@ -892,7 +892,7 @@ function toggleEdit() {
 
   const toggle = el('toggle')
   if (toggle) {
-    toggle.textContent = editavel ? 'Tabela destrancada' : 'Tabela trancada'
+    toggle.textContent = editavel ? '✏️ Tabela editável' : '🔒 Tabela bloqueada'
   }
   exibir()
 }

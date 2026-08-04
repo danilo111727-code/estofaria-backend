@@ -108,7 +108,7 @@ window.addEventListener('load', updateTime);
 
   <button type="button" class="catalogo-action" onclick="exibir()">Exibir modelo</button>
   <div class="pdf-actions-inline">
-    <span id="toggle" class="catalogo-lock-indicator">🔒 Tabela bloqueada</span>
+    <span id="toggle" class="catalogo-lock-indicator" onclick="toggleEdit()">🔒 Tabela bloqueada</span>
     <button type="button" class="catalogo-action pdf-send-btn" onclick="sendPDF()">Enviar PDF</button>
   </div>
 </div>
@@ -131,7 +131,7 @@ window.addEventListener('load', updateTime);
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-<script src="script.js?v=20260510j"></script>
+<script src="script.js?v=20260804a"></script>
 <script src="../keyboard-dismiss.js"></script>
 </body>
 </html>
