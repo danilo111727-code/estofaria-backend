@@ -617,6 +617,7 @@ function buildLineChart(canvasId, currentInstance, labels, values, color, datase
       responsive: true,
       maintainAspectRatio: false,
       animation: { duration: 700 },
+      layout: { padding: { top: 28 } },
       scales: {
         x: { grid: { display: false }, ticks: { color: '#555' } },
         y: {
@@ -640,6 +641,18 @@ function buildLineChart(canvasId, currentInstance, labels, values, color, datase
               if (!asCurrency) return `${datasetLabel}: ${raw}`
               return `${datasetLabel}: ${Number(raw || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
             }
+          }
+        },
+        datalabels: {
+          display: true,
+          anchor: 'end',
+          align: 'top',
+          color: '#3b5ec6',
+          font: { size: 11, weight: '600' },
+          formatter(value) {
+            const cents = Math.round(value * 100)
+            const hasCents = Math.abs(cents) % 100 !== 0
+            return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: hasCents ? 2 : 0, maximumFractionDigits: hasCents ? 2 : 0 })
           }
         }
       }
@@ -683,7 +696,8 @@ function buildBarChart(canvasId, currentInstance, labels, values, color, dataset
               return `${datasetLabel}: ${Number(raw || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
             }
           }
-        }
+        },
+        datalabels: { display: false }
       }
     }
   })
@@ -823,7 +837,7 @@ function _sparkBar(canvasId, values) {
   _dashCharts[canvasId] = new Chart(canvas.getContext('2d'), {
     type: 'bar',
     data: { labels: values.map(() => ''), datasets: [{ data: values, backgroundColor: '#3b5ec6', borderRadius: 3, borderSkipped: false }] },
-    options: { responsive: false, plugins: { legend: { display: false }, tooltip: { enabled: false } }, scales: { x: { display: false }, y: { display: false, beginAtZero: true } }, animation: false }
+    options: { responsive: false, plugins: { legend: { display: false }, tooltip: { enabled: false }, datalabels: { display: false } }, scales: { x: { display: false }, y: { display: false, beginAtZero: true } }, animation: false }
   })
 }
 function _sparkLine(canvasId, values, fill) {
@@ -840,7 +854,7 @@ function _sparkLine(canvasId, values, fill) {
   _dashCharts[canvasId] = new Chart(ctx, {
     type: 'line',
     data: { labels: values.map(() => ''), datasets: [{ data: values, borderColor: '#3b5ec6', borderWidth: 2, pointRadius: fill ? 0 : 3, pointBackgroundColor: '#3b5ec6', fill: bg, tension: 0.4 }] },
-    options: { responsive: false, plugins: { legend: { display: false }, tooltip: { enabled: false } }, scales: { x: { display: false }, y: { display: false, beginAtZero: true } }, animation: false }
+    options: { responsive: false, plugins: { legend: { display: false }, tooltip: { enabled: false }, datalabels: { display: false } }, scales: { x: { display: false }, y: { display: false, beginAtZero: true } }, animation: false }
   })
 }
 function _sparkDonut(canvasId, value, total) {
@@ -849,7 +863,7 @@ function _sparkDonut(canvasId, value, total) {
   _dashCharts[canvasId] = new Chart(canvas.getContext('2d'), {
     type: 'doughnut',
     data: { datasets: [{ data: [Math.max(value, 0), Math.max(total - value, 0)], backgroundColor: ['#3b5ec6', '#e8ecf5'], borderWidth: 0 }] },
-    options: { responsive: false, cutout: '70%', plugins: { legend: { display: false }, tooltip: { enabled: false } }, animation: false }
+    options: { responsive: false, cutout: '70%', plugins: { legend: { display: false }, tooltip: { enabled: false }, datalabels: { display: false } }, animation: false }
   })
 }
 function buildDashboardCharts(orders) {
