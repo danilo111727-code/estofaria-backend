@@ -79,9 +79,6 @@ body { margin:0; font-family:Arial,sans-serif; background:#f2f2f2; }
     </div>
   </div>
 
-  <div class="fin-section-title" id="fin-semana-titulo">Resumo da semana</div>
-  <div id="fin-semana-list"></div>
-
   <div class="fin-section-title">Ações rápidas</div>
   <div class="fin-acoes-grid">
     <button class="fin-acao-btn" onclick="abrirModal('receber')">
@@ -369,83 +366,6 @@ function renderPainel(){
   document.getElementById('fin-total-pagar').textContent    = money(totalP)
   document.getElementById('fin-saldo-previsto').textContent = money(saldo)
   document.getElementById('fin-saldo-previsto').className   = 'fin-resumo-valor '+(saldo>=0?'blue':'red')
-
-  // Semana — próximos 7 dias
-  const hoje   = new Date(); hoje.setHours(0,0,0,0)
-  const semFim = new Date(hoje); semFim.setDate(semFim.getDate()+6); semFim.setHours(23,59,59,999)
-
-  const [d0,d1] = [
-    hoje.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}),
-    semFim.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})
-  ]
-  document.getElementById('fin-semana-titulo').textContent = `Resumo da semana — ${d0} a ${d1}`
-
-  const brutos = [
-    ...receber.filter(c=>computeStatus(c,'receber')!=='recebido').map(c=>({...c,_tipo:'receber',_nome:c.descricao||c.cliente||''})),
-    ...pagar.filter(c=>computeStatus(c,'pagar')!=='pago').map(c=>({...c,_tipo:'pagar',_nome:c.descricao||c.fornecedor||''}))
-  ].filter(item=>{
-    const d=new Date(String(item.dataVencimento).substring(0,10)+'T00:00:00')
-    return d>=hoje && d<=semFim
-  }).sort((a,b)=>a.dataVencimento.localeCompare(b.dataVencimento))
-
-  renderSemana(brutos)
-}
-
-function renderSemana(brutos){
-  // Agrupar parcelas pelo padrão "Nome (N/Total)"
-  const grupoMap = new Map()
-  const lista    = []
-  for(const item of brutos){
-    const p = parseParcela(item._nome)
-    const chave = p ? `${item._tipo}|||${p.base}` : null
-    if(p && chave){
-      if(!grupoMap.has(chave)){
-        const g = {...item, _nome:p.base, _isGrupo:true, _grupoItens:[], valor:0}
-        grupoMap.set(chave, g)
-        lista.push(g)
-      }
-      const g = grupoMap.get(chave)
-      g._grupoItens.push(item)
-      g.valor = g._grupoItens.reduce((a,c)=>a+Number(c.valor),0)
-      // Data = próxima parcela
-      g.dataVencimento = g._grupoItens[0].dataVencimento
-    } else {
-      lista.push(item)
-    }
-  }
-
-  const el = document.getElementById('fin-semana-list')
-  if(!lista.length){
-    el.innerHTML = `<div class="fin-semana-vazio">
-      <span class="material-icons" style="color:#4a67a1">event_available</span>
-      Nenhum vencimento esta semana
-    </div>`
-    return
-  }
-
-  el.innerHTML = lista.map(item=>{
-    const st    = computeStatus(item, item._tipo)
-    const hoje2 = new Date(); hoje2.setHours(0,0,0,0)
-    const dvenc = new Date(String(item.dataVencimento).substring(0,10)+'T00:00:00')
-    const dias  = Math.round((dvenc-hoje2)/86400000)
-    const atrasado = st==='atrasado'
-    const dotCls   = atrasado ? 'orange' : item._tipo==='receber' ? 'green' : 'red'
-    const valCls   = atrasado ? 'orange' : item._tipo==='receber' ? 'green' : 'red'
-    const metaTxt  = atrasado ? 'Atrasado' : dias===0 ? 'Vence hoje' : `Em ${dias} dia${dias!==1?'s':''}`
-    // IDs para marcar em lote
-    const ids = item._isGrupo ? item._grupoItens.map(i=>i.id).join(',') : item.id
-    const tipo= item._tipo
-
-    return `<div class="fin-semana-item">
-      <span class="fin-semana-dot ${dotCls}"></span>
-      <div class="fin-semana-info">
-        <div class="fin-semana-nome">${escHtml(item._nome)}${item._isGrupo ? `&nbsp;<span style="font-size:10px;background:#eef0fa;color:#4a67a1;border-radius:99px;padding:1px 5px;font-weight:700">${item._grupoItens.length}×</span>` : ''}</div>
-        <div class="fin-semana-meta">${fmtDate(item.dataVencimento)} · ${metaTxt}</div>
-      </div>
-      <span class="fin-semana-valor ${valCls}">${money(Number(item.valor))}</span>
-      <button class="fin-semana-check" onclick="marcarSemana(${JSON.stringify(ids)},${JSON.stringify(tipo)})" title="Marcar como pago">✓</button>
-    </div>`
-  }).join('')
 }
 
 // ══════════════════════════════════════════════════════════
