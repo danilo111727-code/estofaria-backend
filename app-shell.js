@@ -8,6 +8,7 @@
     'itens-personalizacao': { path:'/itens-personalizacao/', content:'/itens-personalizacao/__content.html?v='+CV, title:'Itens para personalização' },
     'vendedor':             { path:'/vendedor/',             content:'/vendedor/__content.html?v='+CV,             title:'Vendedor' },
     'agenda':               { path:'/agenda/',               content:'/agenda/__content.html?v='+CV,               title:'Agenda' },
+    'financeiro':           { path:'/financeiro/',           content:'/financeiro/__content.html?v='+CV,           title:'Financeiro' },
     'configuracao':         { path:'/configuracao/',         content:'/configuracao/__content.html?v='+CV,         title:'Configuração' },
     'assinatura':           { path:'/assinatura/',           content:'/assinatura/__content.html?v='+CV,           title:'Assinatura' },
     'master':               { path:'/master/',               content:'/master/__content.html?v='+CV,               title:'Master' }

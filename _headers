@@ -74,3 +74,12 @@
 
 /master/__content.html
   Cache-Control: no-cache, must-revalidate
+
+/financeiro/
+  Cache-Control: no-cache, must-revalidate
+
+/financeiro/__content.html
+  Cache-Control: no-cache, must-revalidate
+
+/financeiro/style.css
+  Cache-Control: no-cache, must-revalidate
