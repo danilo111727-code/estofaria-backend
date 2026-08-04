@@ -253,7 +253,7 @@ function renderPlan(cfg){
   subscriptionConfig = cfg || {}
   const selectedPlan = syncPlanSelection(cfg?.default_plan_code || cfg?.plan_code || getSelectedPlanCode())
   const td = Number(cfg?.trial_days || 0)
-  $('trialSummary').textContent = td >= 30 ? `${Math.round(td/30)} ${Math.round(td/30) === 1 ? 'mês' : 'meses'} grátis` : `${td} dias grátis`
+  $('trialSummary').textContent = td >= 30 ? '2 meses grátis com suporte incluso' : `${td} dias grátis`
   $('providerSummary').textContent = cfg?.payment_provider || 'manual'
   $('supportSummary').textContent = cfg?.support_contact || 'Atendimento comercial'
   if($('planNote') && cfg?.notes){
