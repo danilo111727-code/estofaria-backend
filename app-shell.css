@@ -101,7 +101,14 @@ body{
   to  {opacity:1}
 }
 .nav::-webkit-scrollbar{display:none}
-.btn-nav-sair{background:#c0392b;cursor:pointer;}
+.header-right{display:flex;align-items:center;gap:10px;}
+.header-btn-sair{
+  background:rgba(255,255,255,.15);
+  border:1px solid rgba(255,255,255,.5);
+  color:white;border-radius:20px;
+  padding:4px 14px;font-size:13px;
+  cursor:pointer;white-space:nowrap;
+}
 .hidden{display:none !important}
 @media (max-width:780px){
   .shell-main{max-width:100%}

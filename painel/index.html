@@ -26,7 +26,10 @@
 <body>
 <div class="header">
   <div>Estofaria Digital</div>
-  <div id="time"></div>
+  <div class="header-right">
+    <div id="time"></div>
+    <button type="button" class="header-btn-sair" onclick="doLogout()">Sair</button>
+  </div>
 </div>
 <div class="nav">
   <a class="btn" data-module="painel" href="/painel/">📊 Painel</a>
@@ -38,7 +41,6 @@
   <a class="btn" data-module="agenda" href="/agenda/">📅 Agenda</a>
   <a class="btn" data-module="configuracao" href="/configuracao/">⚙️ Configuração</a>
   <a class="btn" data-module="assinatura" href="/assinatura/">💳 Assinatura</a>
-  <button type="button" class="btn btn-nav-sair" onclick="doLogout()">🚪 Sair</button>
 </div>
 <main class="shell-main">
   <div id="shellLoading" class="shell-loading">Carregando tela...</div>
