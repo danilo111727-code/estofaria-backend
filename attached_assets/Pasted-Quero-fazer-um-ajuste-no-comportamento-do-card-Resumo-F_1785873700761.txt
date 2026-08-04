@@ -1,0 +1,66 @@
+Quero fazer um ajuste no comportamento do card "Resumo Financeiro da Semana".
+
+Atualmente o card é ocultado quando não existem contas cadastradas ou quando não há movimentações na semana. Não quero esse comportamento.
+
+O card deve seguir exatamente o mesmo padrão do card "Resumo da Semana" da Produção.
+
+Ele deve permanecer sempre visível no Painel, independentemente de existirem ou não contas cadastradas.
+
+Também quero organizar as informações da seguinte forma:
+
+🔴 Contas vencidas
+- Quantidade de contas vencidas
+- Valor total vencido
+
+🟠 Contas que vencem nesta semana
+- Quantidade de contas
+- Valor total das contas que ainda irão vencer nesta semana (não incluir contas já vencidas)
+
+🟢 Contas a receber nesta semana
+- Quantidade de contas
+- Valor total a receber nesta semana
+
+Quando não houver nenhuma conta cadastrada, ou quando não existirem contas para o período da semana, o card deve exibir normalmente:
+
+🔴 Contas vencidas
+• 0 contas • R$ 0,00
+
+🟠 Contas que vencem nesta semana
+• 0 contas • R$ 0,00
+
+🟢 Contas a receber nesta semana
+• 0 contas • R$ 0,00
+
+Não utilizar mensagens como:
+
+- "Nenhum lançamento"
+- "Sem dados"
+- "Nenhuma movimentação"
+
+Também não ocultar o card em nenhuma situação.
+
+O layout do Painel deve permanecer sempre fixo, evitando que os cartões apareçam ou desapareçam conforme existam dados. Isso deixa a interface mais previsível, organizada e profissional.
+
+O card deve seguir exatamente o mesmo padrão visual do "Resumo da Semana" da Produção:
+
+- mesmo tamanho;
+- mesma largura;
+- mesma estrutura;
+- mesmo espaçamento;
+- mesma tipografia;
+- mesmas bordas;
+- mesma identidade visual do Estofaria Digital.
+
+O comportamento também deve ser idêntico ao do resumo da Produção: mesmo quando todos os indicadores estiverem zerados, o card continua sendo exibido.
+
+Além disso, o card deve ser atualizado automaticamente sempre que ocorrer qualquer alteração no módulo Financeiro, incluindo:
+
+- criação de uma conta;
+- edição;
+- exclusão;
+- marcar como paga;
+- marcar como recebida.
+
+Não altere nenhuma lógica financeira nem os cálculos existentes.
+
+Apenas ajuste a renderização e o comportamento do card para que ele permaneça sempre visível, atualizado automaticamente e apresente separadamente as contas vencidas das contas que ainda vencerão nesta semana.
