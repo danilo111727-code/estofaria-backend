@@ -44,7 +44,7 @@ window.addEventListener('load', updateTime);
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Catálogo</title>
-<link rel="stylesheet" href="style.css?v=20260510l">
+<link rel="stylesheet" href="style.css?v=20260804a">
 <script src="../config.js"></script>
 <script src="../auth-guard.js"></script>
 <link rel="stylesheet" href="../mobile-fixes.css">
@@ -107,9 +107,8 @@ window.addEventListener('load', updateTime);
   </select>
 
   <button type="button" class="catalogo-action" onclick="exibir()">Exibir modelo</button>
-  <div class="pdf-actions-inline pdf-actions-inline-triple">
-    <button type="button" class="catalogo-action pdf-lock-btn" id="toggle" onclick="toggleEdit()">Tabela trancada</button>
-    <button type="button" class="catalogo-action pdf-generate-btn" onclick="exportPDF()">Visualizar PDF</button>
+  <div class="pdf-actions-inline">
+    <span id="toggle" class="catalogo-lock-indicator">🔒 Tabela bloqueada</span>
     <button type="button" class="catalogo-action pdf-send-btn" onclick="sendPDF()">Enviar PDF</button>
   </div>
 </div>

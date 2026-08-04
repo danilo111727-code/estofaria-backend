@@ -60,10 +60,16 @@ padding:10px 16px;
  padding:10px 12px;
 }
 
-.pdf-actions-inline .pdf-generate-btn,
-.pdf-actions-inline .pdf-send-btn,
-.pdf-actions-inline .pdf-lock-btn{
+.pdf-actions-inline .pdf-send-btn{
  min-width:0;
+}
+
+.catalogo-lock-indicator{
+ display:inline-flex;align-items:center;gap:5px;
+ font-size:13px;font-weight:600;color:#64748b;
+ padding:8px 12px;
+ background:#f1f5f9;border-radius:20px;
+ white-space:nowrap;user-select:none;pointer-events:none;
 }
 
 .catalogo-info{
