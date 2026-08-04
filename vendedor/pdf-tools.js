@@ -294,69 +294,127 @@ window.VendedorPDF = (function(){
     const logoFormat = /data:image\/jpe?g/i.test(logoDataUrl) ? 'JPEG' : 'PNG'
     const doc = new jsPDF({ unit:'mm', format:'a4' })
     const emitidoEm = quote.created_at || new Date().toLocaleString('pt-BR')
-    const pageWidth = 210
-    const pageHeight = 297
+    const W = 210
+    const H = 297
     const margin = 14
+    const lw = W - margin * 2
     const [pr, pg, pb] = parseHex(template.primaryColor)
     const [sr, sg, sb] = parseHex(template.secondaryColor)
-    let y = margin
+    let y = 0
 
+    // ── CABEÇALHO ─────────────────────────────────────────────────────────────
+    const headerH = 46
     doc.setFillColor(pr, pg, pb)
-    doc.rect(0, 0, pageWidth, 30, 'F')
+    doc.rect(0, 0, W, headerH, 'F')
 
+    const logoSize = 28
+    const logoY = (headerH - logoSize) / 2
     if(logoDataUrl){
-      try{ doc.addImage(logoDataUrl, logoFormat, margin, 6, 18, 18) }catch(_){
-        try{ doc.addImage(logoDataUrl, logoFormat === 'PNG' ? 'JPEG' : 'PNG', margin, 6, 18, 18) }catch(__){}
+      try{ doc.addImage(logoDataUrl, logoFormat, margin, logoY, logoSize, logoSize) }catch(_){
+        try{ doc.addImage(logoDataUrl, logoFormat === 'PNG' ? 'JPEG' : 'PNG', margin, logoY, logoSize, logoSize) }catch(__){}
       }
     }
+    const textX = logoDataUrl ? margin + logoSize + 5 : margin
 
-    doc.setTextColor(255,255,255)
-    doc.setFont('helvetica','bold')
-    doc.setFontSize(18)
-    doc.text(template.companyName || 'Estofaria', logoDataUrl ? 38 : margin, 14)
-    doc.setFont('helvetica','normal')
+    doc.setTextColor(255, 255, 255)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(20)
+    doc.text(template.companyName || 'Estofaria', textX, 22)
+    doc.setFont('helvetica', 'normal')
     doc.setFontSize(10)
-    doc.text(template.subtitle || '', logoDataUrl ? 38 : margin, 21)
-    doc.text('Emitido em: ' + emitidoEm, pageWidth - margin, 14, { align:'right' })
+    doc.setTextColor(200, 215, 240)
+    doc.text(template.subtitle || 'Proposta comercial personalizada', textX, 31)
 
-    y = 38
-    doc.setTextColor(20,20,20)
-    doc.setFillColor(sr, sg, sb)
+    // Data discreta no canto superior direito
+    doc.setFontSize(8)
+    doc.setTextColor(170, 190, 225)
+    doc.text('Emitido em: ' + emitidoEm, W - margin, 10, { align:'right' })
 
+    y = headerH + 8
+
+    const ensureSpace = (amount = 12) => {
+      if(y + amount > H - 24){ doc.addPage(); y = 18 }
+    }
+
+    // ── CARTÃO DE IDENTIFICAÇÃO ────────────────────────────────────────────────
     const hasExtra = !!(quote.telefone || quote.endereco)
-    const clientBoxH = hasExtra ? 28 : 18
-    doc.roundedRect(margin, y, pageWidth - margin * 2, clientBoxH, 3, 3, 'F')
-    doc.setFont('helvetica','bold')
-    doc.setFontSize(16)
-    doc.text(template.documentTitle || 'Documento', margin + 4, y + 7)
-    doc.setFont('helvetica','normal')
-    doc.setFontSize(10)
-    doc.text('Cliente: ' + quote.cliente, margin + 4, y + 13)
-    doc.text('Status: ' + (quote.status === 'pedido' ? 'Pedido' : 'Orçamento'), pageWidth - margin - 4, y + 13, { align:'right' })
+    const infoH = hasExtra ? 34 : 26
+    doc.setFillColor(sr, sg, sb)
+    doc.roundedRect(margin, y, lw, infoH, 3, 3, 'F')
+
+    // Label "CLIENTE"
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7.5)
+    doc.setTextColor(140, 140, 150)
+    doc.text('CLIENTE', margin + 4, y + 6)
+
+    // Nome do cliente em destaque
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(14)
+    doc.setTextColor(pr, pg, pb)
+    doc.text(String(quote.cliente || 'Cliente'), margin + 4, y + 13)
+
     if(hasExtra){
       const extraParts = []
       if(quote.telefone) extraParts.push('Tel: ' + quote.telefone)
-      if(quote.endereco) extraParts.push('End: ' + quote.endereco)
-      doc.setFontSize(9)
+      if(quote.endereco) extraParts.push(quote.endereco)
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(8.5)
+      doc.setTextColor(90, 90, 100)
       doc.text(extraParts.join('   '), margin + 4, y + 20)
     }
 
-    y += clientBoxH + 8
-    doc.setFont('helvetica','bold')
-    doc.setFontSize(11)
-    doc.text('Resumo dos modelos', margin, y)
-    y += 6
+    // Coluna direita: data · validade · nº
+    const rx = W - margin - 4
+    const ry = y + 5
+    const quoteNum = quote.id ? String(quote.id) : ''
 
-    const ensureSpace = (amount = 12) => {
-      if(y + amount > pageHeight - 24){
-        doc.addPage()
-        y = 18
-      }
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7.5)
+    doc.setTextColor(140, 140, 150)
+    doc.text('DATA', rx, ry, { align:'right' })
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9)
+    doc.setTextColor(40, 40, 50)
+    doc.text(String(emitidoEm).split(' ')[0] || emitidoEm, rx, ry + 5, { align:'right' })
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7.5)
+    doc.setTextColor(140, 140, 150)
+    doc.text('VALIDADE', rx, ry + 11, { align:'right' })
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9)
+    doc.setTextColor(40, 40, 50)
+    doc.text('7 dias', rx, ry + 16, { align:'right' })
+
+    if(quoteNum){
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(7.5)
+      doc.setTextColor(140, 140, 150)
+      doc.text('Nº ORÇAMENTO', rx, ry + 22, { align:'right' })
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(9)
+      doc.setTextColor(40, 40, 50)
+      doc.text('#' + quoteNum, rx, ry + 27, { align:'right' })
     }
 
+    y += infoH + 10
+
+    // ── SEÇÃO: PRODUTOS ───────────────────────────────────────────────────────
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9)
+    doc.setTextColor(pr, pg, pb)
+    doc.text('PRODUTOS / SERVIÇOS', margin, y)
+    doc.setDrawColor(pr, pg, pb)
+    doc.setLineWidth(0.5)
+    doc.line(margin, y + 1.8, margin + 52, y + 1.8)
+    y += 7
+
     if(!quote.modelos.length){
-      doc.setFont('helvetica','normal')
-      doc.text('Nenhum modelo informado.', margin, y)
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(10)
+      doc.setTextColor(140, 140, 140)
+      doc.text('Nenhum produto informado.', margin, y)
       y += 8
     }
 
@@ -364,194 +422,233 @@ window.VendedorPDF = (function(){
       const modelImageDataUrl = resolveModelImageDataUrl(m)
       const modelImageFormat = /data:image\/jpe?g/i.test(modelImageDataUrl) ? 'JPEG' : 'PNG'
       const hasMetragem = Number(m.metragem || 0) > 0
-      const boxHeight = modelImageDataUrl ? 28 : (hasMetragem ? 18 : 12)
-      const textX = modelImageDataUrl ? margin + 29 : margin + 3
+      const subtotal = calcModelSubtotal(m)
+      const hasImg = !!modelImageDataUrl
+      const imgW = 26, imgH = 26
 
-      ensureSpace(boxHeight + 10)
-      doc.setDrawColor(225)
-      doc.roundedRect(margin, y, pageWidth - margin * 2, boxHeight, 2, 2)
+      // Cabeçalho do produto (strip colorida)
+      ensureSpace(20)
+      const stripH = 10
+      doc.setFillColor(pr, pg, pb)
+      doc.roundedRect(margin, y, lw, stripH, 2, 2, 'F')
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(10.5)
+      doc.setTextColor(255, 255, 255)
+      doc.text(String(m.modelo || ('Produto ' + (idx + 1))), margin + 4, y + 7)
+      doc.text(money(subtotal), W - margin - 4, y + 7, { align:'right' })
+      y += stripH + 2
 
-      if(modelImageDataUrl){
+      // Corpo do produto — foto à esquerda se disponível
+      const cx = hasImg ? margin + imgW + 6 : margin + 4
+      const cw = lw - (hasImg ? imgW + 6 : 4)
+
+      if(hasImg){
+        ensureSpace(imgH + 4)
         try{
-          doc.addImage(modelImageDataUrl, modelImageFormat, margin + 2, y + 2, 24, 24)
+          doc.addImage(modelImageDataUrl, modelImageFormat, margin + 2, y + 1, imgW, imgH)
         }catch(_){
-          try{
-            doc.addImage(modelImageDataUrl, modelImageFormat === 'PNG' ? 'JPEG' : 'PNG', margin + 2, y + 2, 24, 24)
-          }catch(__){}
+          try{ doc.addImage(modelImageDataUrl, modelImageFormat === 'PNG' ? 'JPEG' : 'PNG', margin + 2, y + 1, imgW, imgH) }catch(__){}
         }
       }
 
-      doc.setFont('helvetica','bold')
-      doc.setFontSize(10)
-      doc.setTextColor(20,20,20)
-      doc.text(String(m.modelo || 'Modelo ' + (idx + 1)), textX, y + 5)
-
-      doc.setFont('helvetica','normal')
+      // Metragem + valor base
+      doc.setFont('helvetica', 'normal')
       doc.setFontSize(9)
-      if(hasMetragem) doc.text('Metragem: ' + m.metragem + 'm', textX, y + 10)
-      doc.text('Valor base: ' + money(m.preco || 0), textX, y + (hasMetragem ? 15 : 10))
+      doc.setTextColor(80, 80, 90)
+      const metValStr = [
+        hasMetragem ? 'Metragem: ' + m.metragem + 'm' : '',
+        'Valor base: ' + money(m.preco || 0)
+      ].filter(Boolean).join('   ·   ')
+      doc.text(metValStr, cx, y + 6)
 
-      const subtotal = calcModelSubtotal(m)
-      doc.setFont('helvetica','bold')
-      doc.text('Subtotal: ' + money(subtotal), pageWidth - margin - 4, y + 7, { align:'right' })
-
-      y += boxHeight + 2
-
+      // Descrição
       const descStr = String(m.descricao || m.description || '').trim()
+      let dy = y + 12
       if(descStr){
-        ensureSpace(8)
-        doc.setFont('helvetica','normal')
+        doc.setFont('helvetica', 'normal')
         doc.setFontSize(8)
-        doc.setTextColor(80,80,80)
-        doc.splitTextToSize(descStr, pageWidth - margin * 2 - 6).forEach(line => {
-          ensureSpace(5); doc.text(line, margin + 4, y); y += 4
+        doc.setTextColor(110, 110, 120)
+        doc.splitTextToSize(descStr, cw - 4).forEach(line => {
+          ensureSpace(5); doc.text(line, cx, dy); dy += 4
         })
-        y += 1
+        dy += 1
       }
 
+      if(hasImg) y = Math.max(dy, y + imgH + 4)
+      else y = dy
+
+      // Itens incluídos no modelo
       const incl = Array.isArray(m.itens_incluidos) ? m.itens_incluidos.filter(Boolean) : []
       if(incl.length){
         ensureSpace(6)
-        doc.setFont('helvetica','bold')
+        doc.setFont('helvetica', 'bold')
         doc.setFontSize(8)
-        doc.setTextColor(74,103,161)
-        doc.text('Incluso: ' + incl.join(' / '), margin + 4, y)
-        y += 5
-        doc.setTextColor(20,20,20)
+        doc.setTextColor(pr, pg, pb)
+        doc.splitTextToSize('Incluso: ' + incl.join(' / '), lw - 8).forEach(line => {
+          doc.text(line, margin + 4, y); y += 4.5
+        })
+        doc.setTextColor(20, 20, 20)
       }
 
+      // Personalizações
       if(Array.isArray(m.itens) && m.itens.length){
         m.itens.forEach(item => {
           ensureSpace(6)
-          doc.setFont('helvetica','normal')
-          doc.setFontSize(9)
-          doc.setTextColor(80,80,80)
           const isIncluido = item.incluido_no_modelo === true
-          const itemLabel = '  + ' + String(item.nome || '') + (isIncluido ? ' (incluído)' : '')
-          doc.text(itemLabel, margin + 4, y + 4)
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(9)
+          doc.setTextColor(65, 65, 75)
+          doc.text('+ ' + String(item.nome || '') + (isIncluido ? ' (incluído)' : ''), margin + 4, y)
           if(!isIncluido){
-            doc.text(money(item.valor || 0), pageWidth - margin - 4, y + 4, { align:'right' })
+            doc.setFont('helvetica', 'bold')
+            doc.setTextColor(40, 40, 50)
+            doc.text(money(item.valor || 0), W - margin - 4, y, { align:'right' })
           }
-          y += 6
+          y += 5.5
         })
       }
 
+      // Observação do modelo
       const obsModelo = String(m.observacao || m.obs || '').trim()
       if(obsModelo){
-        ensureSpace(10)
-        doc.setFont('helvetica','italic')
+        ensureSpace(8)
+        doc.setFont('helvetica', 'italic')
         doc.setFontSize(8)
-        doc.setTextColor(100,100,100)
-        doc.splitTextToSize('Obs: ' + obsModelo, pageWidth - margin * 2 - 6).forEach(line => {
-          ensureSpace(5)
-          doc.text(line, margin + 4, y + 4)
-          y += 4.5
+        doc.setTextColor(130, 130, 130)
+        doc.splitTextToSize('Obs: ' + obsModelo, lw - 8).forEach(line => {
+          ensureSpace(5); doc.text(line, margin + 4, y); y += 4.5
         })
-        doc.setTextColor(20,20,20)
       }
 
+      // Separador entre produtos
       y += 4
+      if(idx < quote.modelos.length - 1){
+        doc.setDrawColor(225, 228, 240)
+        doc.setLineWidth(0.3)
+        doc.line(margin, y, W - margin, y)
+        y += 5
+      }
     })
 
-    ensureSpace(16)
+    // ── TOTAL ─────────────────────────────────────────────────────────────────
+    ensureSpace(32)
+    y += 6
+
+    const qPayload = quoteInput.payload || {}
+    const totalAvista = Number(qPayload.total_avista || 0) || quote.total
+    const totalCartao = Number(qPayload.total_cartao || 0)
+    const showCartao  = totalCartao > 0 && Math.abs(totalCartao - totalAvista) > 0.01
+    const totalBlockH = showCartao ? 26 : 16
+
     doc.setFillColor(pr, pg, pb)
-    doc.roundedRect(margin, y, pageWidth - margin * 2, 12, 2, 2, 'F')
-    doc.setTextColor(255,255,255)
-    doc.setFont('helvetica','bold')
-    doc.setFontSize(11)
-    doc.text('Total geral: ' + money(quote.total), pageWidth - margin - 4, y + 8, { align:'right' })
-    doc.text(quote.status === 'pedido' ? 'PEDIDO CONFIRMADO' : 'ORÇAMENTO', margin + 4, y + 8)
-    y += 18
-
-    doc.setTextColor(20,20,20)
-
-    if(quote.observacao){
-      ensureSpace(18)
-      doc.setFont('helvetica','bold')
+    doc.roundedRect(margin, y, lw, totalBlockH, 3, 3, 'F')
+    doc.setTextColor(255, 255, 255)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(13)
+    doc.text('Total à vista', margin + 5, y + (showCartao ? 10 : 10))
+    doc.text(money(totalAvista), W - margin - 5, y + (showCartao ? 10 : 10), { align:'right' })
+    if(showCartao){
+      doc.setFont('helvetica', 'normal')
       doc.setFontSize(10)
-      doc.text('Observação do pedido', margin, y)
-      y += 5
-      doc.setFont('helvetica','normal')
+      doc.setTextColor(200, 215, 240)
+      doc.text('Total no cartão', margin + 5, y + 20)
+      doc.text(money(totalCartao), W - margin - 5, y + 20, { align:'right' })
+    }
+    y += totalBlockH + 10
+
+    doc.setTextColor(20, 20, 20)
+
+    // ── OBSERVAÇÃO DO PEDIDO ──────────────────────────────────────────────────
+    if(quote.observacao){
+      ensureSpace(20)
+      doc.setFillColor(248, 249, 252)
+      doc.setDrawColor(225, 228, 240)
+      doc.setLineWidth(0.3)
+      const obsLines = doc.splitTextToSize(quote.observacao, lw - 8)
+      const obsBoxH = 14 + obsLines.length * 4.5
+      doc.roundedRect(margin, y, lw, obsBoxH, 2, 2, 'FD')
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8.5)
+      doc.setTextColor(80, 80, 90)
+      doc.text('Observações', margin + 4, y + 6)
+      doc.setFont('helvetica', 'normal')
       doc.setFontSize(9)
-      const obsLines = doc.splitTextToSize(quote.observacao, pageWidth - margin * 2)
-      obsLines.forEach(line => {
-        ensureSpace(5)
-        doc.text(line, margin, y)
-        y += 4.5
-      })
-      y += 4
+      doc.setTextColor(60, 60, 70)
+      let oy = y + 11
+      obsLines.forEach(line => { doc.text(line, margin + 4, oy); oy += 4.5 })
+      y += obsBoxH + 6
     }
 
+    // ── NOTAS, CONDIÇÕES E PIX ────────────────────────────────────────────────
     if(template.notesText){
-      ensureSpace(18)
-      doc.setFont('helvetica','bold')
-      doc.setFontSize(10)
+      ensureSpace(16)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(9)
+      doc.setTextColor(80, 80, 90)
       doc.text(template.notesTitle || 'Observações', margin, y)
       y += 5
-      doc.setFont('helvetica','normal')
-      doc.setFontSize(9)
-      const notesLines = doc.splitTextToSize(template.notesText, pageWidth - margin * 2)
-      notesLines.forEach(line => {
-        ensureSpace(5)
-        doc.text(line, margin, y)
-        y += 4.5
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(8.5)
+      doc.setTextColor(100, 100, 110)
+      doc.splitTextToSize(template.notesText, lw).forEach(line => {
+        ensureSpace(5); doc.text(line, margin, y); y += 4.5
       })
-      y += 4
+      y += 3
     }
 
     if(template.termsText){
-      ensureSpace(18)
-      doc.setFont('helvetica','bold')
-      doc.setFontSize(10)
+      ensureSpace(16)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(9)
+      doc.setTextColor(80, 80, 90)
       doc.text('Condições', margin, y)
       y += 5
-      doc.setFont('helvetica','normal')
-      doc.setFontSize(9)
-      const termsLines = doc.splitTextToSize(template.termsText, pageWidth - margin * 2)
-      termsLines.forEach(line => {
-        ensureSpace(5)
-        doc.text(line, margin, y)
-        y += 4.5
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(8.5)
+      doc.setTextColor(100, 100, 110)
+      doc.splitTextToSize(template.termsText, lw).forEach(line => {
+        ensureSpace(5); doc.text(line, margin, y); y += 4.5
       })
-      y += 4
+      y += 3
     }
 
     if(template.showPix && template.pixText){
-      ensureSpace(18)
-      doc.setFont('helvetica','bold')
-      doc.setFontSize(10)
+      ensureSpace(16)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(9)
+      doc.setTextColor(80, 80, 90)
       doc.text('Pagamento / PIX', margin, y)
       y += 5
-      doc.setFont('helvetica','normal')
-      doc.setFontSize(9)
-      const pixLines = doc.splitTextToSize(template.pixText, pageWidth - margin * 2)
-      pixLines.forEach(line => {
-        ensureSpace(5)
-        doc.text(line, margin, y)
-        y += 4.5
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(8.5)
+      doc.setTextColor(100, 100, 110)
+      doc.splitTextToSize(template.pixText, lw).forEach(line => {
+        ensureSpace(5); doc.text(line, margin, y); y += 4.5
       })
-      y += 4
+      y += 3
     }
 
+    // ── VALIDADE ──────────────────────────────────────────────────────────────
     if(quote.status !== 'pedido'){
-      ensureSpace(10)
-      doc.setFont('helvetica','normal')
-      doc.setFontSize(9)
-      doc.setTextColor(100,100,100)
-      doc.text('Orçamento válido por 7 dias', margin, y)
+      ensureSpace(8)
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(8.5)
+      doc.setTextColor(160, 160, 165)
+      doc.text('Proposta valida por 7 dias a partir da data de emissao.', margin, y)
       y += 6
     }
 
+    // ── RODAPÉ ────────────────────────────────────────────────────────────────
     const totalPages = doc.getNumberOfPages()
     for(let i = 1; i <= totalPages; i++){
       doc.setPage(i)
       doc.setFontSize(8)
-      doc.setTextColor(150,150,150)
-      doc.setFont('helvetica','normal')
+      doc.setTextColor(160, 160, 160)
+      doc.setFont('helvetica', 'normal')
       if(template.footerText){
-        doc.text(template.footerText, margin, pageHeight - 8)
+        doc.text(template.footerText, margin, H - 8)
       }
-      doc.text('Página ' + i + ' de ' + totalPages, pageWidth - margin, pageHeight - 8, { align:'right' })
+      doc.text('Pagina ' + i + ' de ' + totalPages, W - margin, H - 8, { align:'right' })
     }
 
     return doc
@@ -608,7 +705,9 @@ window.VendedorPDF = (function(){
     buildPdf,
     openPdfPreview,
     downloadQuotePdf,
-    shareQuotePdf
+    shareQuotePdf,
+    parseHex,
+    resolveModelImageDataUrl
   }
 })()
 
@@ -640,6 +739,7 @@ window.VendedorPDF = (function(){
     const cliente  = quoteInput.cliente || 'Cliente'
     const dataStr  = payload.created_at_local || quoteInput.created_at || new Date().toLocaleDateString('pt-BR')
     const tipo     = quoteInput.status || 'orcamento'
+    const quoteId  = quoteInput.id ? String(quoteInput.id) : ''
 
     const subtotal = modelos.reduce((t, m) => {
       const base  = Number(m.preco || 0)
@@ -651,147 +751,304 @@ window.VendedorPDF = (function(){
     const totalCartao   = Number(payload.total_cartao   || 0) || (subtotal * 1.10)
     const totalNfAvista = Number(payload.total_nf_avista|| 0) || (subtotal * 1.10)
     const totalNfCartao = Number(payload.total_nf_cartao|| 0) || (subtotal * 1.20)
+    const showCartao    = totalCartao > 0 && Math.abs(totalCartao - totalAvista) > 0.01
 
     const doc    = new jsPDF({ unit:'mm', format:'a4' })
     const W      = 210
-    const margin = 18
+    const H      = 297
+    const margin = 16
     const lw     = W - margin * 2
-    let y        = 14
+    let y        = 0
 
     const ensureSpace = (need) => {
-      if(y + need > 278){ doc.addPage(); y = 14 }
+      if(y + need > H - 24){ doc.addPage(); y = 18 }
     }
 
-    const divider = (light) => {
-      doc.setDrawColor(light ? 210 : 160, light ? 210 : 160, light ? 210 : 160)
-      doc.setLineWidth(0.3)
-      doc.line(margin, y, W - margin, y)
-      y += 6
-    }
-
-    const rowLR = (left, right, bold, sz) => {
+    const rowLR = (left, right, bold, sz, colorR) => {
       ensureSpace(6)
       doc.setFont('helvetica', bold ? 'bold' : 'normal')
       doc.setFontSize(sz || 10)
-      doc.setTextColor(30, 30, 30)
+      doc.setTextColor(colorR || 30, colorR || 30, colorR || 30)
       doc.text(String(left), margin, y)
       doc.text(String(right), W - margin, y, { align:'right' })
       y += 6
     }
 
-    const textLine = (txt, indent, color, sz) => {
-      ensureSpace(5)
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(sz || 9)
-      doc.setTextColor(color || 80, color || 80, color || 80)
-      doc.text(String(txt), margin + (indent || 0), y)
-      y += 4.5
-    }
+    // ── CABEÇALHO ─────────────────────────────────────────────────────────────
+    const logo     = localTemplate?.logo || ''
+    const compName = localTemplate?.companyName || localTemplate?.empresa?.nome || 'Estofaria'
+    const subtitle = localTemplate?.subtitle || 'Proposta comercial personalizada'
+    const PRIMARY  = localTemplate?.primaryColor || '#4c64a8'
+    const [pr, pg, pb] = window.VendedorPDF.parseHex(PRIMARY)
 
-    // Logo
-    const logo = localTemplate?.logo || ''
+    const headerH = 46
+    doc.setFillColor(pr, pg, pb)
+    doc.rect(0, 0, W, headerH, 'F')
+
+    const logoSize = 28
+    const logoY    = (headerH - logoSize) / 2
     if(logo){
       try{
-        const imgW = 52
-        const imgX = (W - imgW) / 2
-        doc.addImage(logo, /jpe?g/i.test(logo) ? 'JPEG' : 'PNG', imgX, y, imgW, 16)
-        y += 22
-      }catch(_){ y += 4 }
+        doc.addImage(logo, /jpe?g/i.test(logo) ? 'JPEG' : 'PNG', margin, logoY, logoSize, logoSize)
+      }catch(_){ }
+    }
+    const textX = logo ? margin + logoSize + 5 : margin
+
+    doc.setTextColor(255, 255, 255)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(20)
+    doc.text(compName, textX, 22)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(10)
+    doc.setTextColor(200, 215, 240)
+    doc.text(subtitle, textX, 31)
+    doc.setFontSize(8)
+    doc.setTextColor(170, 190, 225)
+    doc.text('Emitido em: ' + dataStr, W - margin, 10, { align:'right' })
+
+    y = headerH + 8
+
+    // ── CARTÃO DE IDENTIFICAÇÃO ────────────────────────────────────────────────
+    const hasExtra = !!(payload.telefone || quoteInput.telefone || payload.endereco || quoteInput.endereco)
+    const infoH    = hasExtra ? 34 : 26
+    doc.setFillColor(240, 243, 252)
+    doc.roundedRect(margin, y, lw, infoH, 3, 3, 'F')
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7.5)
+    doc.setTextColor(140, 140, 150)
+    doc.text('CLIENTE', margin + 4, y + 6)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(14)
+    doc.setTextColor(pr, pg, pb)
+    doc.text(cliente, margin + 4, y + 13)
+
+    if(hasExtra){
+      const ep = []
+      const tel = payload.telefone || quoteInput.telefone
+      const end = payload.endereco || quoteInput.endereco
+      if(tel) ep.push('Tel: ' + tel)
+      if(end) ep.push(end)
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(8.5)
+      doc.setTextColor(90, 90, 100)
+      doc.text(ep.join('   '), margin + 4, y + 20)
     }
 
-    // Cliente
+    const rx = W - margin - 4
+    const ry = y + 5
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(11)
-    doc.setTextColor(30, 30, 30)
-    doc.text('Cliente: ' + cliente, margin, y)
-    y += 10
-
-    // Modelos
-    modelos.forEach(m => {
-      const header = String(m.modelo || 'Modelo') + (Number(m.metragem) > 0 ? ' — ' + m.metragem + 'm' : '')
-      ensureSpace(16)
+    doc.setFontSize(7.5)
+    doc.setTextColor(140, 140, 150)
+    doc.text('DATA', rx, ry, { align:'right' })
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9)
+    doc.setTextColor(40, 40, 50)
+    doc.text(String(dataStr).split(' ')[0] || dataStr, rx, ry + 5, { align:'right' })
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7.5)
+    doc.setTextColor(140, 140, 150)
+    doc.text('VALIDADE', rx, ry + 11, { align:'right' })
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9)
+    doc.setTextColor(40, 40, 50)
+    doc.text('7 dias', rx, ry + 16, { align:'right' })
+    if(quoteId){
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(7.5)
+      doc.setTextColor(140, 140, 150)
+      doc.text('Nº ORÇAMENTO', rx, ry + 22, { align:'right' })
       doc.setFont('helvetica', 'bold')
-      doc.setFontSize(11)
-      doc.setTextColor(20, 20, 20)
-      doc.text(header, margin, y)
-      y += 6
+      doc.setFontSize(9)
+      doc.setTextColor(40, 40, 50)
+      doc.text('#' + quoteId, rx, ry + 27, { align:'right' })
+    }
 
+    y += infoH + 10
+
+    // ── SEÇÃO: PRODUTOS ───────────────────────────────────────────────────────
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9)
+    doc.setTextColor(pr, pg, pb)
+    doc.text('PRODUTOS / SERVIÇOS', margin, y)
+    doc.setDrawColor(pr, pg, pb)
+    doc.setLineWidth(0.5)
+    doc.line(margin, y + 1.8, margin + 52, y + 1.8)
+    y += 7
+
+    modelos.forEach((m, idx) => {
+      const modelImageDataUrl = window.VendedorPDF.resolveModelImageDataUrl(m)
+      const modelImageFormat  = /data:image\/jpe?g/i.test(modelImageDataUrl) ? 'JPEG' : 'PNG'
+      const hasImg     = !!modelImageDataUrl
+      const hasMetragem = Number(m.metragem || 0) > 0
+      const mSubtotal  = Number(m.preco || 0) + (Array.isArray(m.itens) ? m.itens.reduce((s, i) => s + Number(i.valor || 0), 0) : 0)
+      const imgW = 26, imgH = 26
+
+      // Cabeçalho do produto
+      ensureSpace(20)
+      const stripH = 10
+      doc.setFillColor(pr, pg, pb)
+      doc.roundedRect(margin, y, lw, stripH, 2, 2, 'F')
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(10.5)
+      doc.setTextColor(255, 255, 255)
+      const mName = String(m.modelo || 'Modelo') + (hasMetragem ? ' — ' + m.metragem + 'm' : '')
+      doc.text(mName, margin + 4, y + 7)
+      doc.text(fmt(mSubtotal), W - margin - 4, y + 7, { align:'right' })
+      y += stripH + 2
+
+      // Foto
+      const cx = hasImg ? margin + imgW + 5 : margin + 4
+      const cw = lw - (hasImg ? imgW + 5 : 4)
+      if(hasImg){
+        ensureSpace(imgH + 4)
+        try{
+          doc.addImage(modelImageDataUrl, modelImageFormat, margin + 2, y + 1, imgW, imgH)
+        }catch(_){
+          try{ doc.addImage(modelImageDataUrl, modelImageFormat === 'PNG' ? 'JPEG' : 'PNG', margin + 2, y + 1, imgW, imgH) }catch(__){}
+        }
+      }
+
+      // Valor base
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(9)
+      doc.setTextColor(80, 80, 90)
+      doc.text('Valor base: ' + fmt(m.preco || 0), cx, y + 6)
+
+      // Descrição
       const desc = String(m.descricao || m.description || '').trim()
+      let dy = y + 12
       if(desc){
-        doc.splitTextToSize(desc, lw).forEach(line => textLine(line, 0, 90, 9))
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(8)
+        doc.setTextColor(110, 110, 120)
+        doc.splitTextToSize(desc, cw - 4).forEach(line => {
+          ensureSpace(5); doc.text(line, cx, dy); dy += 4
+        })
+        dy += 1
       }
       if(m.espuma){
-        textLine('Espuma ' + m.espuma, 0, 90, 9)
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(8)
+        doc.setTextColor(110, 110, 120)
+        doc.text('Espuma: ' + m.espuma, cx, dy)
+        dy += 5
       }
 
+      if(hasImg) y = Math.max(dy, y + imgH + 4)
+      else y = dy
+
+      // Itens incluídos
       const inclP2 = Array.isArray(m.itens_incluidos) ? m.itens_incluidos.filter(Boolean) : []
       if(inclP2.length){
         ensureSpace(6)
         doc.setFont('helvetica', 'bold')
         doc.setFontSize(8)
-        doc.setTextColor(74, 103, 161)
-        doc.splitTextToSize('Incluso: ' + inclP2.join(' / '), lw).forEach(line => {
-          ensureSpace(5); doc.text(line, margin, y); y += 4.5
+        doc.setTextColor(pr, pg, pb)
+        doc.splitTextToSize('Incluso: ' + inclP2.join(' / '), lw - 8).forEach(line => {
+          doc.text(line, margin + 4, y); y += 4.5
         })
-        doc.setTextColor(20, 20, 20)
       }
 
-      y += 2
-
-      divider(true)
-
-      rowLR('Modelo base', fmt(m.preco || 0))
+      // Personalizações
       if(Array.isArray(m.itens)){
         m.itens.forEach(item => {
+          ensureSpace(6)
           const isIncluido = item.incluido_no_modelo === true
-          rowLR(
-            String(item.nome || '') + (isIncluido ? ' (incluído)' : ''),
-            isIncluido ? '—' : fmt(item.valor || 0)
-          )
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(9)
+          doc.setTextColor(65, 65, 75)
+          doc.text('+ ' + String(item.nome || '') + (isIncluido ? ' (incluído)' : ''), margin + 4, y)
+          if(!isIncluido){
+            doc.setFont('helvetica', 'bold')
+            doc.setTextColor(40, 40, 50)
+            doc.text(fmt(item.valor || 0), W - margin - 4, y, { align:'right' })
+          }
+          y += 5.5
         })
       }
 
+      // Obs do modelo
       const obsM = String(m.observacao || m.obs || '').trim()
       if(obsM){
         ensureSpace(8)
         doc.setFont('helvetica', 'italic')
         doc.setFontSize(8)
-        doc.setTextColor(100, 100, 100)
-        doc.splitTextToSize('Obs: ' + obsM, lw).forEach(line => textLine(line, 0, 100, 8))
-        doc.setTextColor(20, 20, 20)
+        doc.setTextColor(130, 130, 130)
+        doc.splitTextToSize('Obs: ' + obsM, lw - 8).forEach(line => {
+          ensureSpace(5); doc.text(line, margin + 4, y); y += 4.5
+        })
       }
 
-      y += 2
+      y += 4
+      if(idx < modelos.length - 1){
+        doc.setDrawColor(225, 228, 240)
+        doc.setLineWidth(0.3)
+        doc.line(margin, y, W - margin, y)
+        y += 5
+      }
     })
 
-    // Bloco de totais
-    ensureSpace(50)
-    divider(true)
-    rowLR('Subtotal', fmt(subtotal), true, 10)
-    y += 2
-    rowLR('Total à vista',        fmt(totalAvista))
-    rowLR('Total cartão',          fmt(totalCartao))
-    rowLR('Nota fiscal à vista',   fmt(totalNfAvista))
-    rowLR('Nota fiscal cartão',    fmt(totalNfCartao))
-
-    // Data e validade
-    y += 2
-    divider(true)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(10)
-    doc.setTextColor(100, 100, 100)
-    doc.text('Data: ' + dataStr, margin, y)
+    // ── TOTAIS ────────────────────────────────────────────────────────────────
+    ensureSpace(40)
     y += 6
-    if(tipo !== 'pedido'){
-      doc.text('Orçamento válido por 7 dias', margin, y)
-      y += 8
+
+    // Bloco principal: à vista
+    const mainBlockH = showCartao ? 26 : 16
+    doc.setFillColor(pr, pg, pb)
+    doc.roundedRect(margin, y, lw, mainBlockH, 3, 3, 'F')
+    doc.setTextColor(255, 255, 255)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(13)
+    doc.text('Total à vista', margin + 5, y + (showCartao ? 10 : 10))
+    doc.text(fmt(totalAvista), W - margin - 5, y + (showCartao ? 10 : 10), { align:'right' })
+    if(showCartao){
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(10)
+      doc.setTextColor(200, 215, 240)
+      doc.text('Total no cartão', margin + 5, y + 20)
+      doc.text(fmt(totalCartao), W - margin - 5, y + 20, { align:'right' })
+    }
+    y += mainBlockH + 6
+
+    // Valores com nota fiscal (discretos)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8.5)
+    doc.setTextColor(110, 110, 120)
+    rowLR('Nota fiscal à vista', fmt(totalNfAvista), false, 8.5)
+    rowLR('Nota fiscal cartão',  fmt(totalNfCartao), false, 8.5)
+    y += 4
+
+    // ── OBSERVAÇÃO GERAL ─────────────────────────────────────────────────────
+    const obsGeral = String(payload.observacao || quoteInput.observacao || '').trim()
+    if(obsGeral){
+      ensureSpace(20)
+      doc.setFillColor(248, 249, 252)
+      doc.setDrawColor(225, 228, 240)
+      doc.setLineWidth(0.3)
+      const oLines = doc.splitTextToSize(obsGeral, lw - 8)
+      const oBoxH  = 14 + oLines.length * 4.5
+      doc.roundedRect(margin, y, lw, oBoxH, 2, 2, 'FD')
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8.5)
+      doc.setTextColor(80, 80, 90)
+      doc.text('Observações', margin + 4, y + 6)
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(9)
+      doc.setTextColor(60, 60, 70)
+      let oy = y + 11
+      oLines.forEach(line => { doc.text(line, margin + 4, oy); oy += 4.5 })
+      y += oBoxH + 6
     }
 
-    // Extras do template (complementos)
+    // ── EXTRAS DO TEMPLATE ────────────────────────────────────────────────────
     ;(localTemplate?.extras || []).forEach(ex => {
       ensureSpace(14)
       if(ex.type === 'divider'){
-        divider(false)
+        doc.setDrawColor(200, 200, 210)
+        doc.setLineWidth(0.3)
+        doc.line(margin, y, W - margin, y)
+        y += 6
       } else if(ex.type === 'signature'){
         const sigW = W * 0.55
         const sigX = (W - sigW) / 2
@@ -804,25 +1061,34 @@ window.VendedorPDF = (function(){
         y += 13
       } else if(ex.type === 'text'){
         doc.setFont('helvetica', 'normal')
-        doc.setFontSize(10)
-        doc.setTextColor(50, 50, 50)
+        doc.setFontSize(9.5)
+        doc.setTextColor(60, 60, 70)
         doc.splitTextToSize(String(ex.text || ''), lw).forEach(line => {
-          ensureSpace(5)
-          doc.text(line, margin, y)
-          y += 5
+          ensureSpace(5); doc.text(line, margin, y); y += 5
         })
         y += 2
       }
     })
 
-    // Rodapé com numeração
+    // ── VALIDADE ──────────────────────────────────────────────────────────────
+    if(tipo !== 'pedido'){
+      ensureSpace(8)
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(8.5)
+      doc.setTextColor(160, 160, 165)
+      doc.text('Proposta valida por 7 dias a partir da data de emissao.', margin, y)
+      y += 6
+    }
+
+    // ── RODAPÉ ────────────────────────────────────────────────────────────────
     const totalPages = doc.getNumberOfPages()
     for(let i = 1; i <= totalPages; i++){
       doc.setPage(i)
       doc.setFontSize(8)
       doc.setTextColor(180, 180, 180)
-      doc.text('Página ' + i + ' de ' + totalPages, W - margin, 290, { align:'right' })
-      doc.text(tipo === 'pedido' ? 'Pedido de serviço' : 'Orçamento comercial', margin, 290)
+      doc.setFont('helvetica', 'normal')
+      doc.text('Obrigado pela preferencia!', margin, H - 8)
+      doc.text('Pagina ' + i + ' de ' + totalPages, W - margin, H - 8, { align:'right' })
     }
 
     return doc
