@@ -1,0 +1,93 @@
+Integração com os PDFs
+
+Esta funcionalidade não é apenas um cadastro.
+
+Quero que, após o usuário clicar em Salvar configurações, todas essas informações sejam utilizadas automaticamente na geração dos PDFs.
+
+PDF de Orçamento
+
+Ao gerar um orçamento, utilizar automaticamente:
+
+* Logo da empresa
+* Nome fantasia
+* Razão social
+* CNPJ
+* Endereço
+* Cidade/Estado
+* CEP
+* Telefone
+* WhatsApp
+* E-mail
+* Site
+* Instagram
+* Validade do orçamento
+* Mensagem inicial
+* Rodapé
+* Informações adicionais
+
+Todos esses dados devem ser inseridos automaticamente no PDF.
+
+⸻
+
+PDF de Pedido
+
+Ao gerar um pedido, utilizar automaticamente:
+
+* Logo da empresa
+* Nome fantasia
+* Razão social
+* CNPJ
+* Endereço
+* Cidade/Estado
+* CEP
+* Telefone
+* WhatsApp
+* E-mail
+* Site
+* Instagram
+
+Além disso, utilizar automaticamente as configurações escolhidas pelo usuário para exibir ou ocultar:
+
+* Data do pedido
+* Data prevista de entrega
+* Meio de fechamento do pedido
+* Forma de pagamento
+* Valor de entrada
+* Saldo restante
+* Quantidade de parcelas
+* Nome do vendedor
+
+Também inserir automaticamente:
+
+* Mensagem inicial
+* Observações finais
+* Rodapé
+* Garantia
+* Informações adicionais
+* Termo de venda
+* Termo de entrega
+* Assinaturas (cliente, empresa e local/data), conforme as opções escolhidas.
+
+⸻
+
+Persistência
+
+As configurações devem ficar salvas por empresa.
+
+Sempre que um PDF for gerado, o sistema deverá carregar automaticamente essas configurações.
+
+O usuário configura apenas uma vez.
+
+⸻
+
+Objetivo
+
+Não quero uma tela apenas para armazenar informações.
+
+Quero que ela seja a fonte oficial de todas as informações institucionais utilizadas nos PDFs de Orçamento e Pedido.
+
+Após clicar em Salvar configurações, os próximos PDFs já deverão ser gerados utilizando essas configurações, sem necessidade de qualquer ação adicional do usuário.
+
+⸻
+
+Essa abordagem deixa o recurso completo: o usuário configura uma única vez e, a partir daí, todos os PDFs passam a refletir automaticamente a identidade visual e as regras comerciais da empresa.
