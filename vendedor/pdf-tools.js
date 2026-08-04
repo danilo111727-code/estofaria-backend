@@ -63,82 +63,48 @@ window.VendedorPDF = (function(){
     let previewWindow = window._pendingPdfWindow || null
     window._pendingPdfWindow = null
 
-    // Verifica se uma janela é um popup válido e distinto da janela corrente.
-    // window.open() pode retornar a própria janela em alguns ambientes (iOS Safari
-    // dentro de iframe, popup bloqueado, etc.) — nunca escrever sobre ela.
+    // Retorna true APENAS se w é uma janela aberta distinta de toda a hierarquia
+    // da aplicação principal. É o único portão que autoriza document.write().
     function isSafePopup(w){
       if(!w || w.closed) return false
       try{ return w !== window && w !== window.top && w !== window.parent }catch(_){ return false }
     }
 
-    // Usa a janela pré-aberta se ainda for válida; caso contrário tenta abrir uma nova.
+    // Fallback: abre a URL do PDF diretamente sem document.write()
+    function openFallback(reason){
+      console.error('[PDF] ' + reason + ' — usando fallback: abrindo URL do PDF em nova aba.')
+      const opened = window.open(url, '_blank', 'noopener')
+      if(!opened){
+        console.error('[PDF] Fallback window.open(url) também foi bloqueado pelo navegador.')
+      }
+      setTimeout(() => { try{ URL.revokeObjectURL(url) }catch(_){} }, 60000)
+      return { ok:true, mode:'fallback-open', fileName }
+    }
+
+    // Tenta usar a janela pré-aberta; se inválida, tenta abrir uma nova.
     if(!isSafePopup(previewWindow)){
       if(previewWindow !== null){
-        // Havia uma janela pré-aberta mas não é segura (mesma janela ou fechada)
         console.error(
-          '[PDF] A janela pré-aberta não é um popup válido (pode ser a janela principal ' +
-          'ou foi bloqueada pelo navegador). Tentando window.open() direto.',
+          '[PDF] A janela pré-aberta não passou na validação (é a janela principal, ' +
+          'foi fechada, ou o popup foi bloqueado). Tentando window.open() direto.',
           { previewWindow }
         )
       }
       previewWindow = window.open('', '_blank')
     }
 
-    // Segunda verificação — o segundo window.open() também pode falhar ou retornar
-    // a janela corrente se o navegador bloquear popups.
+    // ── PORTÃO EXPLÍCITO ────────────────────────────────────────────────────────
+    // document.write() SÓ pode ser executado se isSafePopup() confirmar,
+    // imediatamente antes da chamada, que a janela é distinta da aplicação.
+    // Qualquer outro resultado activa o fallback — sem excepções.
     if(!isSafePopup(previewWindow)){
-      if(previewWindow === null){
-        console.error(
-          '[PDF] Popup bloqueado pelo navegador (window.open retornou null). ' +
-          'Usando fallback: abrindo a URL do PDF diretamente via _blank.'
-        )
-      } else {
-        console.error(
-          '[PDF] window.open() retornou a janela principal ou um contexto inválido — ' +
-          'document.write() NÃO será executado para evitar apagar a aplicação. ' +
-          'Usando fallback: abrindo a URL do PDF diretamente.',
-          { returnedWindow: previewWindow, currentWindow: window }
-        )
-        // Fechar a janela inválida SE não for a janela corrente nem o pai,
-        // para não deixar abas fantasma.
-        try{
-          if(previewWindow !== window && previewWindow !== window.top && previewWindow !== window.parent){
-            previewWindow.close()
-          }
-        }catch(_){}
-      }
-      previewWindow = null
+      const reason = previewWindow === null
+        ? 'Popup bloqueado pelo navegador (window.open retornou null)'
+        : 'window.open() retornou a janela principal ou um contexto inválido — document.write() não será executado'
+      return openFallback(reason)
     }
 
-    if(!previewWindow){
-      // Fallback seguro: abre a URL do blob diretamente sem document.write()
-      const opened = window.open(url, '_blank', 'noopener')
-      if(!opened){
-        console.error(
-          '[PDF] Fallback window.open(url) também foi bloqueado. ' +
-          'O PDF não pôde ser aberto automaticamente.'
-        )
-      }
-      setTimeout(() => {
-        try{ URL.revokeObjectURL(url) }catch(_){ }
-      }, 60000)
-      return { ok:true, mode:'fallback-open', fileName }
-    }
-
-    // Última barreira: nunca chamar document.write() na janela principal.
-    // Este bloco não deveria ser alcançado após as verificações acima,
-    // mas garante a proteção caso isSafePopup tenha sido enganado.
-    if(previewWindow === window || previewWindow === window.top || previewWindow === window.parent){
-      console.error(
-        '[PDF] ERRO CRÍTICO: previewWindow ainda aponta para a janela principal após ' +
-        'todas as verificações. document.write() abortado. Usando fallback direto.',
-        { previewWindow }
-      )
-      window.open(url, '_blank', 'noopener')
-      setTimeout(() => { try{ URL.revokeObjectURL(url) }catch(_){} }, 60000)
-      return { ok:true, mode:'fallback-critical-guard', fileName }
-    }
-
+    // A partir daqui previewWindow é uma janela válida e distinta da aplicação.
     const safeTitle = escapeHtml(title || fileName || 'PDF')
     const safeFileNameText = escapeHtml(fileName || 'documento.pdf')
 
