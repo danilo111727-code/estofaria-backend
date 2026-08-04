@@ -25,7 +25,10 @@
 </head>
 <body>
 <div class="header">
-  <div>Estofaria Digital</div>
+  <div class="header-brand-col">
+    <div>Estofaria Digital</div>
+    <div id="headerSub" class="header-sub"></div>
+  </div>
   <div class="header-right">
     <div id="time"></div>
     <button type="button" class="header-btn-sair" onclick="doLogout()">Sair</button>
@@ -57,6 +60,24 @@
   }
   updateTime();
   setInterval(updateTime, 1000);
+})();
+
+(function(){
+  function readUser(){
+    try{ return JSON.parse(localStorage.getItem('auth_user') || 'null'); }catch(_){ return null; }
+  }
+  var user = readUser();
+  var company = localStorage.getItem('company_name') ||
+    localStorage.getItem('empresa_nome') ||
+    localStorage.getItem('estofaria_company_name') ||
+    (user && (user.company_name || user.empresa)) || '';
+  var role = localStorage.getItem('role') ||
+    localStorage.getItem('user_role') ||
+    (user && user.role) || '';
+  var sub = document.getElementById('headerSub');
+  if(sub && (company || role)){
+    sub.textContent = (company && role) ? company + ' · ' + role : (company || role);
+  }
 })();
 
 function doLogout(){
