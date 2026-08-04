@@ -26,7 +26,7 @@ if(window.self === window.top){
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Precificação</title>
-<link rel="stylesheet" href="precificacao.css?v=20260716f">
+<link rel="stylesheet" href="precificacao.css?v=20260804a">
 <script src="../config.js"></script>
 <script src="../auth-guard.js"></script>
 <link rel="stylesheet" href="../mobile-fixes.css">
@@ -135,6 +135,14 @@ if(window.self === window.top){
     </button>
   </div>
   <p class="helper-note">Adicione apenas materiais que compõem o custo real do modelo.</p>
+  <div id="custoLivreForm" class="mat-add-row" style="display:none;margin-top:8px">
+    <input id="custoLivreDesc" type="text" placeholder="Descrição (ex.: Frete, Instalação)" style="flex:2;min-width:140px">
+    <input id="custoLivreValor" type="text" inputmode="decimal" placeholder="R$ 0,00" style="flex:1;min-width:90px" oninput="formatCurrency(this)">
+    <input type="hidden" id="custoLivreEditIdx" value="">
+    <button type="button" class="btn-add-material" onclick="confirmarCustoLivre()">✓ Confirmar</button>
+    <button type="button" onclick="cancelarCustoLivre()" style="background:#94a3b8;color:#fff;border:none;padding:8px 12px;border-radius:8px;cursor:pointer;font-weight:600;font-size:14px;white-space:nowrap">✕</button>
+  </div>
+  <button type="button" id="btnAddCustoLivre" class="btn-custo-livre" onclick="toggleCustoLivreForm()">＋ Custo livre</button>
   <div class="table-scroll" style="margin-top:10px">
     <table class="materiais-table">
       <thead>
@@ -337,7 +345,7 @@ document.getElementById('app').style.opacity = '1';
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-<script src="precificacao.js?v=20260716f"></script>
+<script src="precificacao.js?v=20260804a"></script>
 <script src="../keyboard-dismiss.js"></script>
 </body>
 </html>

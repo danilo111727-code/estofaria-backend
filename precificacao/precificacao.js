@@ -478,22 +478,96 @@ function renderMateriais(){
     return
   }
 
+  const SVG_DELETE = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`
+  const SVG_EDIT  = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`
   materiaisModelo.forEach((m,i)=>{
     const tr = document.createElement('tr')
-    tr.innerHTML = `
-      <td>${escapeHtml(m.material_name)}</td>
-      <td>${escapeHtml(m.unit)}</td>
-      <td>${formatQty(m.quantity)}</td>
-      <td>${formatBRLFromCents(m.unit_price_cents)}</td>
-      <td>${formatBRLFromCents(m.total_cents)}</td>
-      <td class="delete" onclick="deleteMaterial(${i})" title="Remover"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></td>
-    `
+    if(m.is_custo_livre){
+      tr.innerHTML = `
+        <td>${escapeHtml(m.material_name)}</td>
+        <td><span class="badge-custo-livre">Custo livre</span></td>
+        <td>—</td>
+        <td>—</td>
+        <td>${formatBRLFromCents(m.total_cents)}</td>
+        <td class="delete" style="display:flex;gap:6px;align-items:center;justify-content:flex-end">
+          <span onclick="editCustoLivre(${i})" title="Editar" style="cursor:pointer;color:#2563eb;display:flex">${SVG_EDIT}</span>
+          <span onclick="deleteMaterial(${i})" title="Remover" style="cursor:pointer;display:flex">${SVG_DELETE}</span>
+        </td>
+      `
+    } else {
+      tr.innerHTML = `
+        <td>${escapeHtml(m.material_name)}</td>
+        <td>${escapeHtml(m.unit)}</td>
+        <td>${formatQty(m.quantity)}</td>
+        <td>${formatBRLFromCents(m.unit_price_cents)}</td>
+        <td>${formatBRLFromCents(m.total_cents)}</td>
+        <td class="delete" onclick="deleteMaterial(${i})" title="Remover">${SVG_DELETE}</td>
+      `
+    }
     table.appendChild(tr)
   })
 
   updateResumo()
   renderMaterialSelect()
 }
+
+// ── Custo livre ────────────────────────────────────────────
+function toggleCustoLivreForm(){
+  const form = document.getElementById('custoLivreForm')
+  const btn  = document.getElementById('btnAddCustoLivre')
+  if(!form) return
+  form.style.display = 'flex'
+  if(btn) btn.style.display = 'none'
+  setTimeout(()=>{ const d=document.getElementById('custoLivreDesc'); if(d) d.focus() }, 50)
+}
+
+function cancelarCustoLivre(){
+  const form = document.getElementById('custoLivreForm')
+  const btn  = document.getElementById('btnAddCustoLivre')
+  if(form) form.style.display = 'none'
+  if(btn)  btn.style.display  = ''
+  const d = document.getElementById('custoLivreDesc')
+  const v = document.getElementById('custoLivreValor')
+  const e = document.getElementById('custoLivreEditIdx')
+  if(d) d.value = ''
+  if(v) v.value = ''
+  if(e) e.value = ''
+}
+
+function confirmarCustoLivre(){
+  const desc     = (document.getElementById('custoLivreDesc')?.value || '').trim()
+  const valorStr = document.getElementById('custoLivreValor')?.value || ''
+  const editIdx  = Number(document.getElementById('custoLivreEditIdx')?.value ?? -1)
+  if(!desc){ ui().warning('Informe a descrição do custo.'); return }
+  const valueCents = parseCurrencyToCents(valorStr)
+  if(!(valueCents > 0)){ ui().warning('Informe um valor maior que zero.'); return }
+  const item = { is_custo_livre:true, material_name:desc, unit:'—', quantity:1, unit_price_cents:valueCents, total_cents:valueCents }
+  if(editIdx >= 0 && materiaisModelo[editIdx]){
+    materiaisModelo[editIdx] = item
+  } else {
+    materiaisModelo.push(item)
+  }
+  cancelarCustoLivre()
+  renderMateriais()
+  persistDraftState()
+}
+
+function editCustoLivre(i){
+  const m = materiaisModelo[i]
+  if(!m || !m.is_custo_livre) return
+  const form = document.getElementById('custoLivreForm')
+  const btn  = document.getElementById('btnAddCustoLivre')
+  const d    = document.getElementById('custoLivreDesc')
+  const v    = document.getElementById('custoLivreValor')
+  const e    = document.getElementById('custoLivreEditIdx')
+  if(d) d.value = m.material_name || ''
+  if(v) v.value = m.total_cents > 0 ? (m.total_cents/100).toFixed(2).replace('.',',') : ''
+  if(e) e.value = String(i)
+  if(form) form.style.display = 'flex'
+  if(btn)  btn.style.display  = 'none'
+  setTimeout(()=>{ if(d) d.focus() }, 50)
+}
+// ───────────────────────────────────────────────────────────
 
 const GAUGE_CIRC = 238.76
 

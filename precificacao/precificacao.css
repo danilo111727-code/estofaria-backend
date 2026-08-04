@@ -288,6 +288,18 @@ select{ flex:1; min-width:0; }
 .picker-tick{ color:transparent; font-size:13px; font-weight:900; transition:color .12s; }
 .picker-item.selected .picker-tick{ color:#fff; }
 
+/* ══ Custo livre ══ */
+.badge-custo-livre{
+  display:inline-block;background:#dbeafe;color:#1d4ed8;
+  border-radius:6px;padding:2px 7px;font-size:11px;font-weight:700;white-space:nowrap;
+}
+.btn-custo-livre{
+  background:transparent;border:1.5px dashed #94a3b8;color:#64748b;
+  border-radius:8px;padding:7px 14px;font-size:13px;font-weight:600;
+  cursor:pointer;margin-top:8px;transition:border-color .15s,color .15s;
+}
+.btn-custo-livre:hover{ border-color:#2563eb; color:#2563eb; }
+
 /* ══ Foco visível ══ */
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible{
   outline:none; box-shadow:0 0 0 3px rgba(63,95,163,.18);
