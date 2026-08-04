@@ -1466,8 +1466,9 @@ function renderBlocos() {
     const livres = Math.max(0, totalVagas - totalConsumidas)
     if (_proximaVaga === null && livres > 0) _proximaVaga = bloco.data_entrega
 
-    // Não renderiza blocos sem pedidos ativos (todos entregues/removidos)
-    if (ocupadas === 0) return
+    // Não renderiza blocos sem pedidos ativos E sem vagas disponíveis.
+    // Um bloco recém-criado com vagas mas sem pedidos ainda é válido e deve aparecer.
+    if (ocupadas === 0 && livres === 0) return
 
     const card = document.createElement('div')
     card.className = 'bloco-card'
