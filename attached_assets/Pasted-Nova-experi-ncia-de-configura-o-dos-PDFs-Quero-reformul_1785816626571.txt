@@ -1,0 +1,134 @@
+Nova experiência de configuração dos PDFs
+
+Quero reformular completamente a experiência de configuração dos documentos do sistema.
+
+O objetivo é tornar essa área extremamente simples e intuitiva para qualquer usuário.
+
+Tela inicial
+
+Manter apenas dois cartões:
+
+📄 PDF de Orçamento
+
+Botão:
+
+Editar PDF de orçamento
+
+📋 PDF de Pedido
+
+Botão:
+
+Editar PDF de pedido
+
+Não utilizar o conceito de “Modelo de PDF”.
+
+⸻
+
+Funcionamento
+
+Ao clicar em Editar PDF, não abrir uma nova página.
+
+Abrir apenas uma janela (modal).
+
+Essa janela deve funcionar como um pequeno assistente.
+
+Mostrar apenas uma informação por vez, evitando telas cheias de campos.
+
+Cada etapa possui:
+
+* título
+* descrição
+* campo
+* botão Próximo
+* botão Voltar
+
+Exibir também uma barra de progresso.
+
+Exemplo:
+
+Passo 3 de 18
+
+⸻
+
+Configuração do PDF de Orçamento
+
+Solicitar nesta ordem:
+
+1. Logo da empresa
+2. Nome fantasia
+3. Razão social
+4. CNPJ
+5. Endereço
+6. Telefone
+7. WhatsApp
+8. E-mail (opcional)
+9. Validade do orçamento
+10. Mensagem inicial
+11. Rodapé
+12. Pré-visualização
+13. Salvar configurações
+
+Essas informações serão utilizadas automaticamente em todos os PDFs de orçamento.
+
+⸻
+
+Configuração do PDF de Pedido
+
+Solicitar nesta ordem:
+
+1. Logo da empresa
+2. Nome fantasia
+3. Razão social
+4. CNPJ
+5. Endereço
+6. Telefone
+7. WhatsApp
+8. E-mail (opcional)
+9. Mensagem inicial
+
+Depois solicitar quais informações deverão aparecer automaticamente no PDF:
+
+10. Mostrar data do pedido
+11. Mostrar data prevista de entrega
+12. Mostrar forma de pagamento
+13. Mostrar valor de entrada
+14. Mostrar saldo restante
+15. Mostrar meio de fechamento do pedido
+
+Exemplos:
+
+* Loja
+* WhatsApp
+* Instagram
+* Site
+* Telefone
+
+16. Mostrar assinatura do cliente
+17. Mostrar assinatura da empresa
+18. Termo de venda
+
+Campo grande para digitação livre.
+
+19. Termo de entrega
+
+Campo grande para digitação livre.
+
+20. Pré-visualização
+
+Mostrar exatamente como ficará o PDF.
+
+21. Salvar configurações
+
+⸻
+
+Regras
+
+* Não alterar a lógica atual de geração dos PDFs.
+* Não alterar cálculos.
+* Não alterar integração com orçamento.
+* Não alterar integração com pedidos.
+* Apenas reformular a experiência de configuração.
+
+O objetivo é que qualquer usuário consiga configurar os documentos em poucos minutos, respondendo uma pergunta por vez, sem precisar navegar por telas complexas.
+
+Importante: utilizar o mesmo padrão visual do restante do Estofaria Digital, mantendo a interface limpa, moderna e totalmente voltada para dispositivos móveis.
