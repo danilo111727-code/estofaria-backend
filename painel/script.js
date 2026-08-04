@@ -610,7 +610,7 @@ function buildRankings(orders) {
       soldCount[nome] = (soldCount[nome] || 0) + 1
     })
   })
-  const soldEntries = Object.entries(soldCount).sort((a, b) => b[1] - a[1]).slice(0, 6)
+  const soldEntries = Object.entries(soldCount).sort((a, b) => b[1] - a[1]).slice(0, 10)
   return {
     soldLabels: soldEntries.length ? soldEntries.map(([label]) => label) : ['Sem dados'],
     soldValues: soldEntries.length ? soldEntries.map(([, value]) => value) : [0]
@@ -905,7 +905,51 @@ function renderFatMeses(orders) {
 }
 function renderRankings(orders) {
   const rankings = buildRankings(orders)
-  chartVendidosInstance = buildBarChart('chartVendidos', chartVendidosInstance, rankings.soldLabels, rankings.soldValues, 'rgba(144, 202, 249, 0.9)', 'Mais vendido', false)
+  if (!window.Chart) return
+  const canvas = el('chartVendidos')
+  if (!canvas) return
+  if (chartVendidosInstance) chartVendidosInstance.destroy()
+  animateChartCanvas('chartVendidos')
+  const hasData = rankings.soldLabels[0] !== 'Sem dados'
+  chartVendidosInstance = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: rankings.soldLabels,
+      datasets: [{
+        label: 'Vendas',
+        data: rankings.soldValues,
+        backgroundColor: 'rgba(144, 202, 249, 0.9)',
+        borderColor: 'rgba(144, 202, 249, 0.9)',
+        borderWidth: 1,
+        borderRadius: 6,
+        maxBarThickness: 56,
+        categoryPercentage: 0.72,
+        barPercentage: 0.88
+      }]
+    },
+    options: {
+      indexAxis: 'x',
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 700 },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: '#555', maxRotation: 35, minRotation: 0 } },
+        y: { beginAtZero: true, ticks: { color: '#555', precision: 0 }, grid: { color: '#e6e6e6' } }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label(ctx) { return `Vendas: ${ctx.raw}` } } },
+        datalabels: {
+          display: hasData,
+          anchor: 'end',
+          align: 'top',
+          color: '#334155',
+          font: { weight: '700', size: 12 },
+          formatter(value) { return value > 0 ? value : '' }
+        }
+      }
+    }
+  })
 }
 function getWeekDeliveries(orders) {
   const now = new Date()
