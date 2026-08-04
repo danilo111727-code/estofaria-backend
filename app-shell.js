@@ -181,6 +181,7 @@
         syncHeight(f);
         frameLoaded[code] = true;
         if(currentModule === code){
+          f.style.display = 'block';
           if(loading) loading.classList.add('hidden');
         }
       }, 220);
@@ -201,7 +202,9 @@
       Object.keys(framePool).forEach(function(k){
         if(framePool[k] !== nextF) framePool[k].style.display = 'none';
       });
-      nextF.style.display = 'block';
+      // Only show immediately if already loaded (cached); otherwise keep hidden
+      // until the load event reveals it, preventing the raw HTML flash.
+      if(isCached) nextF.style.display = 'block';
       scrollToTop();
       if(isCached){
         if(loading) loading.classList.add('hidden');
