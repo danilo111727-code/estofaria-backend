@@ -699,23 +699,14 @@ async function confirmarFinalizarPedido(){
     fecharFinalizarPedido()
     carregar()
 
-    // 4. Gerar PDF de Pedido
-    window._pendingPdfWindow = window.open('','_blank')
-    try{
-      await window.VendedorPDF.downloadQuotePdf(row, 'pedido')
-    }catch(pdfErr){
-      if(window._pendingPdfWindow){ window._pendingPdfWindow.close(); window._pendingPdfWindow = null }
-      console.error('PDF error:', pdfErr)
-    }
-
     if(agendaStatus.created)
-      alert('Pedido finalizado, registrado na agenda e PDF gerado ✅')
+      alert('Pedido finalizado e registrado na agenda ✅')
     else if(agendaStatus.reason==='already_exists')
-      alert('Pedido finalizado. Já estava na agenda e o PDF foi gerado ✅')
+      alert('Pedido finalizado. Já estava na agenda ✅')
     else if(agendaStatus.reason==='error')
-      alert('Pedido finalizado e PDF gerado, mas não consegui registrar na agenda.')
+      alert('Pedido finalizado, mas não consegui registrar na agenda.')
     else
-      alert('Pedido finalizado e PDF gerado ✅')
+      alert('Pedido finalizado ✅')
 
   }catch(e){
     console.error(e)
