@@ -932,9 +932,10 @@ function renderRankings(orders) {
       responsive: true,
       maintainAspectRatio: false,
       animation: { duration: 700 },
+      layout: { padding: { top: 24 } },
       scales: {
         x: { grid: { display: false }, ticks: { color: '#555', maxRotation: 35, minRotation: 0 } },
-        y: { beginAtZero: true, ticks: { color: '#555', precision: 0 }, grid: { color: '#e6e6e6' } }
+        y: { beginAtZero: true, grace: '15%', ticks: { color: '#555', precision: 0 }, grid: { color: '#e6e6e6' } }
       },
       plugins: {
         legend: { display: false },
