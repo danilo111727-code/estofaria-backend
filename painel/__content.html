@@ -44,7 +44,8 @@ setInterval(updateTime,1000);
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Painel</title>
-<link rel="stylesheet" href="style.css?v=20260625g">
+<link rel="stylesheet" href="style.css?v=20260804b">
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
 <script src="../config.js"></script>
 <script src="../auth-guard.js"></script>
   <link rel="stylesheet" href="../mobile-fixes.css">
@@ -76,6 +77,7 @@ setInterval(updateTime,1000);
     <span class="rs-periodo" id="rsPeriodo"></span>
   </div>
   <div class="rs-row" id="rsAtrasadosRow" onclick="openResumoModal('atrasados')" role="button" tabindex="0">
+    <div class="rs-icon rs-icon--red"><span class="material-icons">event_busy</span></div>
     <div class="rs-info">
       <div class="rs-label rs-label--red">Pedidos em atraso</div>
     </div>
@@ -87,6 +89,7 @@ setInterval(updateTime,1000);
   </div>
   <hr class="rs-divider">
   <div class="rs-row" id="rsEntregasRow" onclick="openResumoModal('entregas')" role="button" tabindex="0">
+    <div class="rs-icon rs-icon--green"><span class="material-icons">event_available</span></div>
     <div class="rs-info">
       <div class="rs-label rs-label--green">Pedidos com vencimento essa semana</div>
     </div>
@@ -98,32 +101,38 @@ setInterval(updateTime,1000);
   </div>
   <hr class="rs-divider">
   <div class="rs-row">
+    <div class="rs-icon rs-icon--red"><span class="material-icons">account_balance_wallet</span></div>
     <div class="rs-info">
       <div class="rs-label rs-label--red">Contas vencidas</div>
     </div>
     <div class="rs-right">
       <span class="rs-count rs-count--red" id="rsfVencidasCount">0</span>
       <span class="rs-unit" id="rsfVencidasVal">contas · R$ 0,00</span>
+      <span class="rs-arrow">›</span>
     </div>
   </div>
   <hr class="rs-divider">
   <div class="rs-row">
+    <div class="rs-icon rs-icon--orange"><span class="material-icons">credit_card</span></div>
     <div class="rs-info">
       <div class="rs-label rs-label--orange">Contas a pagar nesta semana</div>
     </div>
     <div class="rs-right">
       <span class="rs-count rs-count--orange" id="rsfPagarCount">0</span>
       <span class="rs-unit" id="rsfPagarVal">contas · R$ 0,00</span>
+      <span class="rs-arrow">›</span>
     </div>
   </div>
   <hr class="rs-divider">
   <div class="rs-row">
+    <div class="rs-icon rs-icon--green"><span class="material-icons">trending_up</span></div>
     <div class="rs-info">
       <div class="rs-label rs-label--green">Contas a receber nesta semana</div>
     </div>
     <div class="rs-right">
       <span class="rs-count rs-count--green" id="rsfReceberCount">0</span>
       <span class="rs-unit" id="rsfReceberVal">contas · R$ 0,00</span>
+      <span class="rs-arrow">›</span>
     </div>
   </div>
 </div>

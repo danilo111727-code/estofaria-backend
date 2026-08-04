@@ -207,6 +207,19 @@ border:none;
 border-top:1px solid #e8eaee;
 margin:0;
 }
+.rs-icon{
+width:36px;
+height:36px;
+border-radius:10px;
+display:flex;
+align-items:center;
+justify-content:center;
+flex-shrink:0;
+}
+.rs-icon .material-icons{ font-size:18px; }
+.rs-icon--red    { background:#fde8e8; color:#c0392b; }
+.rs-icon--green  { background:#e8f5eb; color:#1f8a4c; }
+.rs-icon--orange { background:#fff3e0; color:#c45e00; }
 
 /* ── Modal Resumo ── */
 .rs-modal-overlay{
