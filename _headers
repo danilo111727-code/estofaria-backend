@@ -47,6 +47,9 @@
 /vendedor/__content.html
   Cache-Control: no-cache, must-revalidate
 
+/configuracao/__content.html
+  Cache-Control: no-cache, must-revalidate
+
 
 /itens-personalizacao/
   Cache-Control: no-cache, must-revalidate
