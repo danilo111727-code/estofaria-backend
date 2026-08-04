@@ -3,6 +3,25 @@ const API = (window.API_BASE || '') + '/api'
 let chartVendidosInstance = null
 let chartFatMesesInstance = null
 
+// Registrar datalabels explicitamente — CDN disponibiliza window.ChartDataLabels
+// mas não chama Chart.register automaticamente em Chart.js v3/v4
+;(function () {
+  function tryRegisterDatalabels() {
+    if (!window.Chart || !window.ChartDataLabels) return
+    try { Chart.register(window.ChartDataLabels) } catch (_) {}
+    try {
+      if (Chart.defaults.plugins && Chart.defaults.plugins.datalabels) {
+        Chart.defaults.plugins.datalabels.display = false
+      }
+    } catch (_) {}
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', tryRegisterDatalabels, { once: true })
+  } else {
+    tryRegisterDatalabels()
+  }
+})()
+
 const CACHE_PREFIX = 'estofaria_painel_cache:'
 const TTL_SUMMARY = 30 * 1000
 const TTL_QUOTES = 60 * 1000
@@ -609,6 +628,7 @@ function buildLineChart(canvasId, currentInstance, labels, values, color, datase
   const canvas = el(canvasId)
   if (!canvas) return currentInstance
   if (currentInstance) currentInstance.destroy()
+  if (window.ChartDataLabels) { try { Chart.register(window.ChartDataLabels) } catch (_) {} }
   animateChartCanvas(canvasId)
   return new Chart(canvas, {
     type: 'line',
