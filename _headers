@@ -5,6 +5,9 @@
 /painel/index.html
   Cache-Control: no-cache, must-revalidate
 
+/painel/script.js
+  Cache-Control: no-cache, must-revalidate
+
 /precificacao/
   Cache-Control: no-cache, must-revalidate
 
