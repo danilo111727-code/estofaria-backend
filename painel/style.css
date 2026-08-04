@@ -173,6 +173,7 @@ font-weight:700;
 margin-bottom:2px;
 }
 .rs-label--red{ color:#c0392b; }
+.rs-label--orange{ color:#c45e00; }
 .rs-label--green{ color:#1f8a4c; }
 .rs-sub{
 font-size:12px;
@@ -190,6 +191,7 @@ font-weight:700;
 line-height:1;
 }
 .rs-count--red{ color:#c0392b; }
+.rs-count--orange{ color:#c45e00; }
 .rs-count--green{ color:#1f8a4c; }
 .rs-unit{
 font-size:13px;

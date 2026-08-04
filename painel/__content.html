@@ -99,7 +99,7 @@ setInterval(updateTime,1000);
 </div>
 
 <!-- Resumo da Semana — Financeiro -->
-<div class="card rs-card" id="rsFinCard" style="display:none">
+<div class="card rs-card" id="rsFinCard">
   <div class="rs-card-header">
     <h3 class="rs-card-title">Resumo da Semana — Financeiro</h3>
     <span class="rs-periodo" id="rsfPeriodo"></span>
@@ -109,28 +109,28 @@ setInterval(updateTime,1000);
       <div class="rs-label rs-label--red">Contas vencidas</div>
     </div>
     <div class="rs-right">
-      <span class="rs-count rs-count--red" id="rsfVencidasCount">—</span>
-      <span class="rs-unit" id="rsfVencidasVal"></span>
+      <span class="rs-count rs-count--red" id="rsfVencidasCount">0</span>
+      <span class="rs-unit" id="rsfVencidasVal">contas · R$ 0,00</span>
     </div>
   </div>
   <hr class="rs-divider">
   <div class="rs-row">
     <div class="rs-info">
-      <div class="rs-label rs-label--red">A pagar nesta semana</div>
+      <div class="rs-label rs-label--orange">Contas que vencem nesta semana</div>
     </div>
     <div class="rs-right">
-      <span class="rs-count rs-count--red" id="rsfPagarCount">—</span>
-      <span class="rs-unit" id="rsfPagarVal"></span>
+      <span class="rs-count rs-count--orange" id="rsfPagarCount">0</span>
+      <span class="rs-unit" id="rsfPagarVal">contas · R$ 0,00</span>
     </div>
   </div>
   <hr class="rs-divider">
   <div class="rs-row">
     <div class="rs-info">
-      <div class="rs-label rs-label--green">A receber nesta semana</div>
+      <div class="rs-label rs-label--green">Contas a receber nesta semana</div>
     </div>
     <div class="rs-right">
-      <span class="rs-count rs-count--green" id="rsfReceberCount">—</span>
-      <span class="rs-unit" id="rsfReceberVal"></span>
+      <span class="rs-count rs-count--green" id="rsfReceberCount">0</span>
+      <span class="rs-unit" id="rsfReceberVal">contas · R$ 0,00</span>
     </div>
   </div>
 </div>
@@ -228,11 +228,6 @@ setInterval(updateTime,1000);
     const receber = load('fin_receber_v1')
     const pagar   = load('fin_pagar_v1')
 
-    const card = document.getElementById('rsFinCard')
-    if(!card) return
-    if(!receber.length && !pagar.length){ card.style.display='none'; return }
-    card.style.display=''
-
     const hoje   = new Date(); hoje.setHours(0,0,0,0)
     const semFim = new Date(hoje); semFim.setDate(semFim.getDate()+6); semFim.setHours(23,59,59,999)
 
@@ -240,45 +235,48 @@ setInterval(updateTime,1000);
     const d1 = semFim.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})
     set('rsfPeriodo', d0+' – '+d1)
 
-    // Contas vencidas (ambos os tipos)
+    // Contas vencidas (ambos os tipos — dataVencimento < hoje e não concluída)
     const vencidas = [
       ...receber.filter(c=>finStatus(c,'receber')==='atrasado'),
       ...pagar.filter(c=>finStatus(c,'pagar')==='atrasado')
     ]
     const totVenc = vencidas.reduce((a,c)=>a+Number(c.valor),0)
-    set('rsfVencidasCount', vencidas.length || '0')
-    set('rsfVencidasVal',   vencidas.length ? money(totVenc) : 'em dia')
+    set('rsfVencidasCount', vencidas.length)
+    set('rsfVencidasVal',   'contas · '+money(totVenc))
 
-    // A pagar esta semana (pendente, não atrasado)
+    // Contas que vencem nesta semana (pagar — pendente, não vencida, vence em até 6 dias)
     const pagarSem = pagar.filter(c=>{
-      const st = finStatus(c,'pagar')
-      if(st==='pago'||st==='atrasado') return false
+      if(finStatus(c,'pagar')!=='pendente') return false
       const d = new Date(String(c.dataVencimento).substring(0,10)+'T00:00:00')
       return d>=hoje && d<=semFim
     })
     const totPagar = pagarSem.reduce((a,c)=>a+Number(c.valor),0)
-    set('rsfPagarCount', pagarSem.length || '0')
-    set('rsfPagarVal',   pagarSem.length ? money(totPagar) : '')
+    set('rsfPagarCount', pagarSem.length)
+    set('rsfPagarVal',   'contas · '+money(totPagar))
 
-    // A receber esta semana (pendente, não atrasado)
+    // Contas a receber nesta semana (receber — pendente, não vencida, vence em até 6 dias)
     const receberSem = receber.filter(c=>{
-      const st = finStatus(c,'receber')
-      if(st==='recebido'||st==='atrasado') return false
+      if(finStatus(c,'receber')!=='pendente') return false
       const d = new Date(String(c.dataVencimento).substring(0,10)+'T00:00:00')
       return d>=hoje && d<=semFim
     })
     const totReceber = receberSem.reduce((a,c)=>a+Number(c.valor),0)
-    set('rsfReceberCount', receberSem.length || '0')
-    set('rsfReceberVal',   receberSem.length ? money(totReceber) : '')
+    set('rsfReceberCount', receberSem.length)
+    set('rsfReceberVal',   'contas · '+money(totReceber))
   }
 
   render()
+  // Atualiza quando o módulo Financeiro grava no localStorage
   window.addEventListener('storage', function(e){
     if(e.key==='fin_receber_v1'||e.key==='fin_pagar_v1') render()
   })
-  // Refresca ao ganhar foco (caso o usuário venha do módulo Financeiro)
+  // Atualiza ao voltar para o Painel vindo do Financeiro
   window.addEventListener('focus', render)
   document.addEventListener('visibilitychange', function(){ if(!document.hidden) render() })
+  // Atualiza via postMessage (mesmo protocolo que o script.js já usa)
+  window.addEventListener('message', function(e){
+    if(e.data&&(e.data.type==='estofaria-notify-painel'||e.data.type==='estofaria-fin-updated')) render()
+  })
 })()
 </script>
 </body>
