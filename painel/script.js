@@ -653,7 +653,7 @@ function buildLineChart(canvasId, currentInstance, labels, values, color, datase
         }
       },
       plugins: {
-        legend: { display: true, labels: { color: '#666', boxWidth: 20 } },
+        legend: { display: false },
         tooltip: {
           callbacks: {
             label(context) {
@@ -664,7 +664,7 @@ function buildLineChart(canvasId, currentInstance, labels, values, color, datase
           }
         },
         datalabels: {
-          display: true,
+          display(context) { return Number(context.dataset.data[context.dataIndex] || 0) > 0 },
           anchor: 'end',
           align: 'top',
           color: '#3b5ec6',
