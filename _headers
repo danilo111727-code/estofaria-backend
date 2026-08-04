@@ -47,8 +47,6 @@
 /vendedor/__content.html
   Cache-Control: no-cache, must-revalidate
 
-/vendedor/modelos-pdf.html
-  Cache-Control: no-cache, must-revalidate
 
 /itens-personalizacao/
   Cache-Control: no-cache, must-revalidate
