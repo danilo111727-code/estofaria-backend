@@ -1087,7 +1087,7 @@ window.VendedorPDF = (function(){
       doc.setFontSize(8)
       doc.setTextColor(180, 180, 180)
       doc.setFont('helvetica', 'normal')
-      doc.text('Obrigado pela preferencia!', margin, H - 8)
+      doc.text(localTemplate?.footerText || localTemplate?.rodape || 'Obrigado pela preferencia!', margin, H - 8)
       doc.text('Pagina ' + i + ' de ' + totalPages, W - margin, H - 8, { align:'right' })
     }
 
@@ -1172,9 +1172,9 @@ window.VendedorPDF = (function(){
     field('Cliente',  cliente)
     field('Endereço', payload.endereco       || quoteInput.endereco)
     field('Telefone', payload.telefone       || quoteInput.telefone)
-    field('Data do pedido',       dataStr)
-    field('Data de entrega',      payload.data_entrega    || quoteInput.data_entrega)
-    field('Meio de fechamento',   payload.meio_fechamento || quoteInput.meio_fechamento)
+    if(localTemplate?.showDataPedido !== false)   field('Data do pedido',     dataStr)
+    if(localTemplate?.showDataEntrega !== false)  field('Data de entrega',    payload.data_entrega    || quoteInput.data_entrega)
+    if(localTemplate?.showMeioFechamento !== false) field('Meio de fechamento', payload.meio_fechamento || quoteInput.meio_fechamento)
 
     // Produtos
     modelos.forEach((m, idx) => {
