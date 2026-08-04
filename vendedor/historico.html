@@ -31,6 +31,69 @@ body { margin:0; font-family: Arial, sans-serif; background:#f2f2f2;}
  font-size:15px;
  text-align:center;
 }
+
+/* ── Modal Finalizar Pedido ─────────────────────────────────── */
+#fpOverlay{
+  display:none;position:fixed;inset:0;z-index:2000;
+  background:rgba(0,0,0,.45);align-items:flex-end;justify-content:center;
+}
+#fpOverlay.open{ display:flex }
+.fp-sheet{
+  background:#fff;border-radius:20px 20px 0 0;
+  width:100%;max-width:640px;max-height:92vh;
+  overflow-y:auto;padding:0 0 32px;
+  box-shadow:0 -4px 32px rgba(0,0,0,.18);
+}
+.fp-handle{
+  width:40px;height:4px;background:#ddd;border-radius:4px;
+  margin:14px auto 0;
+}
+.fp-head{
+  padding:16px 18px 8px;
+  border-bottom:1px solid #eef0f6;
+}
+.fp-head h2{ margin:0 0 2px;font-size:17px;color:#2d3a5e }
+.fp-total-line{
+  font-size:13px;color:#666;
+}
+.fp-total-line strong{ color:#4c64a8 }
+.fp-section{
+  padding:14px 18px 0;
+}
+.fp-section-title{
+  font-size:11px;font-weight:700;letter-spacing:.7px;
+  color:#9aa3bf;text-transform:uppercase;margin:0 0 8px;
+}
+.fp-row{
+  display:grid;grid-template-columns:1fr 1fr;gap:10px;
+}
+.fp-col{ display:flex;flex-direction:column }
+.fp-sheet label{
+  font-size:12px;color:#666;margin-bottom:3px;display:block;font-weight:600;
+}
+.fp-sheet input,.fp-sheet select,.fp-sheet textarea{
+  width:100%;box-sizing:border-box;
+  padding:9px 11px;
+  border:1px solid #d8def1;border-radius:10px;
+  font-size:14px;font-family:inherit;
+  background:#fff;color:#222;
+  margin-bottom:0;
+}
+.fp-sheet textarea{ min-height:60px;resize:vertical }
+.fp-sheet input[readonly]{background:#f4f6fb;color:#777}
+.fp-actions{
+  display:grid;grid-template-columns:1fr 1fr;gap:10px;
+  padding:18px 18px 0;
+}
+.fp-btn-confirm{
+  background:#4c64a8;color:#fff;border:none;
+  padding:13px;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;
+}
+.fp-btn-confirm:disabled{ opacity:.6 }
+.fp-btn-cancel{
+  background:#f0f2fa;color:#4c64a8;border:none;
+  padding:13px;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;
+}
 </style>
 <script>
 function updateTime(){
@@ -115,6 +178,72 @@ setInterval(updateTime,1000);
       </button>
     </div>
     <button class="sheet_cancel" onclick="fechar()">Cancelar</button>
+  </div>
+</div>
+
+<!-- ── Modal Finalizar Pedido ──────────────────────────────────── -->
+<div id="fpOverlay" onclick="if(event.target===this)fecharFinalizarPedido()">
+  <div class="fp-sheet" onclick="event.stopPropagation()">
+    <div class="fp-handle"></div>
+    <div class="fp-head">
+      <h2>Finalizar Pedido</h2>
+      <div class="fp-total-line">Total do orçamento: <strong id="fpTotalDisplay">—</strong></div>
+    </div>
+
+    <div class="fp-section">
+      <div class="fp-section-title">Pedido</div>
+      <div class="fp-row">
+        <div class="fp-col">
+          <label>Data do pedido</label>
+          <input type="date" id="fpDataPedido">
+        </div>
+        <div class="fp-col">
+          <label>Data prevista de entrega</label>
+          <input type="date" id="fpDataEntrega">
+        </div>
+      </div>
+    </div>
+
+    <div class="fp-section" style="margin-top:12px">
+      <div class="fp-section-title">Comercial</div>
+      <label>Meio de fechamento</label>
+      <input type="text" id="fpMeioFechamento" placeholder="Ex: Presencial, WhatsApp, Instagram...">
+    </div>
+
+    <div class="fp-section" style="margin-top:12px">
+      <div class="fp-section-title">Pagamento</div>
+      <label>Forma de pagamento</label>
+      <input type="text" id="fpFormaPagamento" placeholder="Ex: PIX, Cartão, Dinheiro...">
+      <div class="fp-row" style="margin-top:8px">
+        <div class="fp-col">
+          <label>Valor de entrada</label>
+          <input type="text" id="fpValorEntrada" placeholder="R$ 0,00" inputmode="decimal" oninput="fpRecalcSaldo()">
+        </div>
+        <div class="fp-col">
+          <label>Saldo restante</label>
+          <input type="text" id="fpSaldoRestante" placeholder="Calculado automaticamente" readonly>
+        </div>
+      </div>
+      <div style="margin-top:8px">
+        <label>Parcelamento</label>
+        <input type="text" id="fpParcelamento" placeholder="Ex: 3× sem juros">
+      </div>
+      <div style="margin-top:8px">
+        <label>Observação de pagamento <span style="font-weight:400;color:#aaa">(opcional)</span></label>
+        <textarea id="fpObsPagamento" placeholder="Ex: Entrada no ato, restante na entrega..."></textarea>
+      </div>
+    </div>
+
+    <div class="fp-section" style="margin-top:12px">
+      <div class="fp-section-title">Responsável</div>
+      <label>Nome do vendedor</label>
+      <input type="text" id="fpNomeVendedor" placeholder="Vendedor responsável">
+    </div>
+
+    <div class="fp-actions">
+      <button class="fp-btn-confirm" id="fpConfirmBtn" onclick="confirmarFinalizarPedido()">Finalizar Pedido</button>
+      <button class="fp-btn-cancel" onclick="fecharFinalizarPedido()">Cancelar</button>
+    </div>
   </div>
 </div>
 
@@ -397,37 +526,190 @@ async function excluir(){
   }
 }
 
-async function converter(){
-  if(!selecionado) return
-  try{
-    const res = await fetch((window.API_BASE||'') + '/api/quotes/'+selecionado+'/convert-to-order', { method:'POST' })
-    if(!res.ok) throw new Error('Falha ao converter ('+res.status+')')
-    const row = await res.json()
+function converter(){
+  abrirFinalizarPedido()
+}
 
+/* ══════════════════════════════════════════════════════════════
+   MODAL — FINALIZAR PEDIDO
+   ══════════════════════════════════════════════════════════════ */
+
+function fpGetLoggedUserName(){
+  try{
+    const u = window.EstofariaAuth?.user || JSON.parse(localStorage.getItem('auth_user')||'{}')
+    return String(u.nome || u.name || u.email || u.username || '').trim()
+  }catch(_){ return '' }
+}
+
+let fpTotalValue = 0
+
+function fpRecalcSaldo(){
+  const raw = String(document.getElementById('fpValorEntrada')?.value||'').replace(/[^\d,]/g,'').replace(',','.')
+  const entrada = parseFloat(raw) || 0
+  const saldo = Math.max(0, fpTotalValue - entrada)
+  const el = document.getElementById('fpSaldoRestante')
+  if(el) el.value = saldo > 0 ? saldo.toLocaleString('pt-BR',{minimumFractionDigits:2}) : ''
+}
+
+async function abrirFinalizarPedido(){
+  if(!selecionado) return
+  fechar()
+
+  // Load quote total and show in modal
+  fpTotalValue = 0
+  try{
+    const q = await getSelecionado()
+    fpTotalValue = Number(q.total_cents||0) / 100
+    const el = document.getElementById('fpTotalDisplay')
+    if(el) el.textContent = fpTotalValue.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})
+  }catch(_){
+    const el = document.getElementById('fpTotalDisplay')
+    if(el) el.textContent = '—'
+  }
+
+  // Suggest next agenda delivery date
+  let sugestaoEntrega = ''
+  try{
+    const [config, orders] = await Promise.all([
+      agendaApi('/agenda/config').catch(()=>({prazo_dias:7,vagas_semana:5,tipo_dias:'corrido'})),
+      agendaApi('/agenda/orders').catch(()=>[])
+    ])
+    const slot = getSlotDatesByIndex(getActiveAgendaOrders(orders).length, config)
+    sugestaoEntrega = slot.ent
+  }catch(_){}
+
+  // Pre-fill fields
+  const today = new Date().toISOString().split('T')[0]
+  document.getElementById('fpDataPedido').value    = today
+  document.getElementById('fpDataEntrega').value   = sugestaoEntrega
+  document.getElementById('fpNomeVendedor').value  = fpGetLoggedUserName()
+  document.getElementById('fpValorEntrada').value  = ''
+  document.getElementById('fpSaldoRestante').value = ''
+  ;['fpMeioFechamento','fpFormaPagamento'].forEach(id=>{
+    const el = document.getElementById(id); if(el) el.value = ''
+  })
+  ;['fpParcelamento','fpObsPagamento'].forEach(id=>{
+    const el = document.getElementById(id); if(el) el.value = ''
+  })
+
+  document.getElementById('fpOverlay').classList.add('open')
+}
+
+function fecharFinalizarPedido(){
+  document.getElementById('fpOverlay').classList.remove('open')
+}
+
+async function confirmarFinalizarPedido(){
+  if(!selecionado) return
+
+  const dataPedido     = document.getElementById('fpDataPedido')?.value     || ''
+  const dataEntrega    = document.getElementById('fpDataEntrega')?.value    || ''
+  const meioFechamento = document.getElementById('fpMeioFechamento')?.value || ''
+  const formaPagamento = document.getElementById('fpFormaPagamento')?.value || ''
+  const parcelamento   = document.getElementById('fpParcelamento')?.value.trim()  || ''
+  const obsPagamento   = document.getElementById('fpObsPagamento')?.value.trim()  || ''
+  const nomeVendedor   = document.getElementById('fpNomeVendedor')?.value.trim()  || ''
+
+  const entradaRaw = String(document.getElementById('fpValorEntrada')?.value||'').replace(/[^\d,]/g,'').replace(',','.')
+  const valorEntrada  = parseFloat(entradaRaw) || 0
+  const saldoRaw  = String(document.getElementById('fpSaldoRestante')?.value||'').replace(/[^\d,]/g,'').replace(',','.')
+  const saldoRestante = parseFloat(saldoRaw)  || 0
+
+  const btn = document.getElementById('fpConfirmBtn')
+  if(btn){ btn.disabled = true; btn.textContent = 'Finalizando...' }
+
+  try{
+    // 1. Converter orçamento em pedido
+    const convertRes = await fetch((window.API_BASE||'') + '/api/quotes/'+selecionado+'/convert-to-order', { method:'POST' })
+    if(!convertRes.ok) throw new Error('Falha ao converter ('+convertRes.status+')')
+    let row = await convertRes.json()
+
+    // 2. Persistir campos do pedido via PATCH (best-effort)
+    const extraPayload = {
+      ...((row.payload)||{}),
+      data_pedido:     dataPedido    || null,
+      data_entrega:    dataEntrega   || null,
+      meio_fechamento: meioFechamento || null,
+      forma_pagamento: formaPagamento || null,
+      valor_entrada:   valorEntrada  || null,
+      saldo_restante:  saldoRestante || null,
+      qtd_parcelas:    parcelamento  || null,
+      obs_pagamento:   obsPagamento  || null,
+      nome_vendedor:   nomeVendedor  || null
+    }
+    try{
+      const patchRes = await fetch((window.API_BASE||'') + '/api/quotes/'+row.id, {
+        method:'PATCH',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ payload: extraPayload })
+      })
+      if(patchRes.ok) row = await patchRes.json()
+      else row = { ...row, payload: extraPayload }
+    }catch(_){
+      row = { ...row, payload: extraPayload }
+    }
+
+    // 3. Registrar na agenda com a data de entrega escolhida
     let agendaStatus = { created:false, reason:'not_attempted' }
     try{
-      agendaStatus = await registrarPedidoNaAgenda(row)
-    }catch(agendaError){
-      console.error('Falha ao registrar na agenda:', agendaError)
-      agendaStatus = { created:false, reason:'error', error: agendaError }
+      const quoteId = String(row?.id || '')
+      const orders  = await agendaApi('/agenda/orders').catch(()=>[])
+      const config  = await agendaApi('/agenda/config').catch(()=>({prazo_dias:7,vagas_semana:5,tipo_dias:'corrido'}))
+      const quoteRef = `quote:${quoteId}`
+      const existing = (Array.isArray(orders)?orders:[]).find(r=>
+        String(r?.source_quote_id||'')=== quoteId || String(r?.tecido||'')===quoteRef)
+      if(existing){
+        agendaStatus = { created:false, reason:'already_exists', row:existing }
+      }else{
+        const slot = getSlotDatesByIndex(getActiveAgendaOrders(orders).length, config)
+        const base = {
+          prod_date: slot.prod,
+          ent_date:  dataEntrega || slot.ent,
+          cliente:   String(row?.cliente||row?.payload?.cliente||'Cliente').trim()||'Cliente',
+          descricao: buildAgendaDescricaoFromQuote(row),
+          tecido:    quoteRef,
+          qtd:       getAgendaQuantidadeFromQuote(row),
+          tecido_comprado: false,
+          status: 'pendente'
+        }
+        try{
+          const ar = await agendaApi('/agenda/orders',{ method:'POST', body:JSON.stringify({...base,source_quote_id:quoteId}) })
+          agendaStatus = { created:true, row:ar, mode:'source_quote_id' }
+        }catch(e1){
+          const ar = await agendaApi('/agenda/orders',{ method:'POST', body:JSON.stringify(base) })
+          agendaStatus = { created:true, row:ar, mode:'fallback_tecido' }
+        }
+      }
+    }catch(agErr){
+      agendaStatus = { created:false, reason:'error', error:agErr }
     }
 
-    fechar()
+    fecharFinalizarPedido()
     carregar()
-    await window.VendedorPDF.downloadQuotePdf(row, 'pedido')
 
-    if(agendaStatus.created){
-      alert('Convertido em pedido, registrado automaticamente na agenda e PDF gerado ✅')
-    }else if(agendaStatus.reason === 'already_exists'){
-      alert('Convertido em pedido. Este pedido já estava registrado na agenda e o PDF foi gerado ✅')
-    }else if(agendaStatus.reason === 'error'){
-      alert('Convertido em pedido e PDF gerado, mas não consegui registrar automaticamente na agenda.')
-    }else{
-      alert('Convertido em pedido e PDF gerado ✅')
+    // 4. Gerar PDF de Pedido
+    window._pendingPdfWindow = window.open('','_blank')
+    try{
+      await window.VendedorPDF.downloadQuotePdf(row, 'pedido')
+    }catch(pdfErr){
+      if(window._pendingPdfWindow){ window._pendingPdfWindow.close(); window._pendingPdfWindow = null }
+      console.error('PDF error:', pdfErr)
     }
+
+    if(agendaStatus.created)
+      alert('Pedido finalizado, registrado na agenda e PDF gerado ✅')
+    else if(agendaStatus.reason==='already_exists')
+      alert('Pedido finalizado. Já estava na agenda e o PDF foi gerado ✅')
+    else if(agendaStatus.reason==='error')
+      alert('Pedido finalizado e PDF gerado, mas não consegui registrar na agenda.')
+    else
+      alert('Pedido finalizado e PDF gerado ✅')
+
   }catch(e){
     console.error(e)
-    alert('Não consegui converter no servidor.')
+    alert('Não consegui finalizar o pedido: ' + (e.message||e))
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = 'Finalizar Pedido' }
   }
 }
 
