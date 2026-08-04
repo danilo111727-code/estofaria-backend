@@ -34,14 +34,26 @@ body { margin:0; font-family: Arial, sans-serif; background:#f2f2f2;}
 
 /* ── Modal Finalizar Pedido ─────────────────────────────────── */
 #fpOverlay{
-  display:none;position:fixed;inset:0;z-index:2000;
-  background:rgba(0,0,0,.45);align-items:flex-end;justify-content:center;
+  /* Sempre display:flex — toggling display:none→flex quebra align-items no Safari/iOS */
+  display:flex;
+  position:fixed;top:0;left:0;right:0;bottom:0;
+  z-index:2000;
+  background:rgba(0,0,0,.45);
+  align-items:flex-end;justify-content:center;
+  /* Esconder com visibility preserva o layout flex para quando abrir */
+  visibility:hidden;pointer-events:none;
 }
-#fpOverlay.open{ display:flex }
+#fpOverlay.open{
+  visibility:visible;pointer-events:auto;
+}
 .fp-sheet{
   background:#fff;border-radius:20px 20px 0 0;
-  width:100%;max-width:640px;max-height:92vh;
-  overflow-y:auto;padding:0 0 32px;
+  width:100%;max-width:640px;
+  /* dvh: respeita a barra de endereço do Safari móvel */
+  max-height:92vh;max-height:92dvh;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+  padding:0 0 32px;
   box-shadow:0 -4px 32px rgba(0,0,0,.18);
 }
 .fp-handle{

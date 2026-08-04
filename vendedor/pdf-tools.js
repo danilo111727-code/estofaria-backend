@@ -63,9 +63,18 @@ window.VendedorPDF = (function(){
     let previewWindow = window._pendingPdfWindow || null
     window._pendingPdfWindow = null
 
-    if(!previewWindow || previewWindow.closed){
+    // Segurança: no iOS/Safari, window.open() capturado após awaits pode retornar
+    // a própria janela corrente. Escrever sobre ela apaga a página (tela branca).
+    function isSafePopup(w){
+      if(!w || w.closed) return false
+      try{ return w !== window && w !== window.top && w !== window.parent }catch(_){ return false }
+    }
+
+    if(!isSafePopup(previewWindow)){
       previewWindow = window.open('', '_blank')
     }
+    // Segunda verificação após o segundo window.open
+    if(!isSafePopup(previewWindow)) previewWindow = null
 
     if(!previewWindow){
       window.open(url, '_blank', 'noopener')
