@@ -7,7 +7,7 @@ margin:0;
 .container{
 max-width:760px;
 margin:auto;
-padding:16px;
+padding:10px 12px;
 }
 
 .cabecalho{
@@ -28,13 +28,9 @@ align-items:center;
 
 .actions_grid{
 display:grid;
-grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,0.95fr);
+grid-template-columns:1.2fr 1fr;
 gap:10px;
-margin-top:12px;
-}
-
-.actions_grid > :first-child{
-  min-width:0;
+margin-top:10px;
 }
 
 .btn_topo{
@@ -49,16 +45,21 @@ h1{color:#4c64a8}
 
 .bloco{
 background:white;
-padding:16px;
-margin-top:16px;
+padding:12px;
+margin-top:10px;
 border-radius:12px;
 box-shadow:0 3px 8px rgba(0,0,0,0.08)
 }
 
+.bloco h2{
+margin:0 0 8px;
+font-size:15px;
+}
+
 select,input,textarea{
 width:100%;
-padding:10px;
-margin-bottom:10px;
+padding:8px 10px;
+margin-bottom:6px;
 border:1px solid #d8def1;
 border-radius:10px;
 box-sizing:border-box;
@@ -238,10 +239,6 @@ margin:0;
 @media (max-width: 640px){
   .actions_grid{
     grid-template-columns:1fr 1fr;
-  }
-
-  .actions_grid > :first-child{
-    grid-column:1 / -1;
   }
 }
 

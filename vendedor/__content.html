@@ -43,7 +43,7 @@ setInterval(updateTime,1000);
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Vendedor</title>
-<link rel="stylesheet" href="style.css?v=20260510k">
+<link rel="stylesheet" href="style.css?v=20260804a">
 <script src="../config.js"></script>
 <script src="../auth-guard.js"></script>
   <link rel="stylesheet" href="../mobile-fixes.css">
@@ -108,7 +108,7 @@ setInterval(updateTime,1000);
 <label>Observação</label>
 <textarea id="observacao" placeholder="Digite alguma observação do pedido..." rows="3" style="width:100%;box-sizing:border-box;resize:vertical;font-family:inherit;font-size:inherit;padding:8px;border:1px solid #ccc;border-radius:6px;"></textarea>
 
-<button id="sellerAddModelBtn" onclick="addModelo()">Adicionar modelo</button>
+<button id="sellerAddModelBtn" onclick="addModelo()">Adicionar ao orçamento</button>
 </div>
 
 <div class="bloco">
@@ -138,16 +138,15 @@ setInterval(updateTime,1000);
 
 <div class="actions_grid">
   <button id="sellerSaveQuoteBtn" onclick="salvar()" data-loading-text="Salvando...">Salvar orçamento</button>
-  <button id="sellerPdfBtn" onclick="baixarPdfAtual()" data-loading-text="Visualizando PDF...">Visualizar PDF</button>
-  <button id="sellerShareBtn" onclick="enviarPdfAtual()" data-loading-text="Preparando envio...">Enviar PDF</button>
+  <button id="sellerShareBtn" onclick="enviarPdfAtual()" data-loading-text="Preparando envio..." class="action-secondary">Enviar PDF</button>
 </div>
 </div>
 
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-<script src="pdf-tools.js?v=20260510k"></script>
-<script src="script.js?v=20260510k"></script>
+<script src="pdf-tools.js?v=20260804a"></script>
+<script src="script.js?v=20260804a"></script>
 <script src="../keyboard-dismiss.js"></script>
 </body>
 </html>
