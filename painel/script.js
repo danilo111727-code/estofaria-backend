@@ -1,6 +1,7 @@
 const API = (window.API_BASE || '') + '/api'
 
 let chartVendidosInstance = null
+let chartFatMesesInstance = null
 
 const CACHE_PREFIX = 'estofaria_painel_cache:'
 const TTL_SUMMARY = 30 * 1000
@@ -603,6 +604,48 @@ function animateChartCanvas(id) {
   void node.offsetWidth
   node.classList.add('chart-enter')
 }
+function buildLineChart(canvasId, currentInstance, labels, values, color, datasetLabel, asCurrency = false) {
+  if (!window.Chart) return currentInstance
+  const canvas = el(canvasId)
+  if (!canvas) return currentInstance
+  if (currentInstance) currentInstance.destroy()
+  animateChartCanvas(canvasId)
+  return new Chart(canvas, {
+    type: 'line',
+    data: { labels, datasets: [{ label: datasetLabel, data: values, borderColor: color, backgroundColor: 'rgba(59,94,198,0.08)', borderWidth: 2, pointRadius: 4, pointBackgroundColor: color, fill: true, tension: 0.4 }] },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 700 },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: '#555' } },
+        y: {
+          beginAtZero: true,
+          ticks: {
+            color: '#555',
+            callback(value) {
+              if (!asCurrency) return value
+              return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0, maximumFractionDigits: 0 })
+            }
+          },
+          grid: { color: '#e6e6e6' }
+        }
+      },
+      plugins: {
+        legend: { display: true, labels: { color: '#666', boxWidth: 20 } },
+        tooltip: {
+          callbacks: {
+            label(context) {
+              const raw = context?.raw
+              if (!asCurrency) return `${datasetLabel}: ${raw}`
+              return `${datasetLabel}: ${Number(raw || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+            }
+          }
+        }
+      }
+    }
+  })
+}
 function buildBarChart(canvasId, currentInstance, labels, values, color, datasetLabel, asCurrency = false) {
   if (!window.Chart) return currentInstance
   const canvas = el(canvasId)
@@ -764,6 +807,16 @@ function _getYearMonths(orders) {
   })
   return months
 }
+function _getAllYearMonthsRev(orders) {
+  const year = new Date().getFullYear()
+  const months = Array.from({ length: 12 }, (_, i) => ({ m: i, rev: 0 }))
+  getAllBillableOrders(orders).forEach(order => {
+    const d = orderCreationDate(order)
+    if (!d || d.getFullYear() !== year) return
+    months[d.getMonth()].rev += Math.max(0, getAgendaOrderRevenueCents(order))
+  })
+  return months
+}
 function _sparkBar(canvasId, values) {
   const canvas = el(canvasId); if (!canvas || !window.Chart) return
   _destroyDashChart(canvasId)
@@ -809,6 +862,12 @@ function buildDashboardCharts(orders) {
   _sparkLine('dashChartPedidosAno', yearMonths.map(m => m.count), false)
   _sparkDonut('dashChartFatMes', curRev, Math.max(avgMonthRev * 1.5, curRev, 1))
   _sparkLine('dashChartFatAno', yearMonths.map(m => m.rev), true)
+}
+function renderFatMeses(orders) {
+  const meses = _getAllYearMonthsRev(orders)
+  const labels = MONTHS_PT.map(m => m.slice(0, 3))
+  const values = meses.map(m => m.rev / 100)
+  chartFatMesesInstance = buildLineChart('chartFatMeses', chartFatMesesInstance, labels, values, 'rgba(59,94,198,0.9)', 'Faturamento', true)
 }
 function renderRankings(orders) {
   const rankings = buildRankings(orders)
@@ -935,6 +994,7 @@ async function loadSecondaryData() {
   updateSummaryWithAgenda(latestSummaryData, latestOrdersData, latestQuotesData)
   updateAgendaInfo(orders, config)
   updateFeriadoInfo(holidays)
+  renderFatMeses(latestOrdersData)
   renderRankings(latestOrdersData)
   updateResumoSemana(latestOrdersData)
 }
