@@ -405,7 +405,9 @@ async function seedMateriaisPadrao(){
 refreshUnits()
 
 function _initMateriaisData(){
-  renderMaterials()
+  renderMaterials().then(function(){
+    try{ window.parent.postMessage({ type: 'estofaria-content-ready' }, '*') }catch(_){}
+  })
   seedMateriaisPadrao().then(seeded=>{ if(seeded) renderMaterials() })
 }
 

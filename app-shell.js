@@ -22,7 +22,6 @@
   var frameLoaded  = {};   // code -> bool (true once the iframe's load event fired)
   var currentModule = null;
   var resizeTimers  = {};
-  var bootstrapping = true; // true only during the initial page load; cleared after first frame loads
 
   function scrollToTop(){
     try { window.scrollTo({ top:0, behavior:'instant' }); } catch(_){}
@@ -183,8 +182,17 @@
         frameLoaded[code] = true;
         if(currentModule === code){
           f.style.display = 'block';
-          bootstrapping = false;
-          if(loading) loading.classList.add('hidden');
+          // 'material' defers the loading hide until materiais.js signals via
+          // estofaria-content-ready (after renderMaterials resolves).
+          // All other modules hide loading immediately as before.
+          if(code !== 'material'){
+            if(loading) loading.classList.add('hidden');
+          } else {
+            // Safety fallback: force-hide after 5 s if the signal never arrives.
+            setTimeout(function(){
+              if(loading) loading.classList.add('hidden');
+            }, 5000);
+          }
         }
       }, 220);
     });
@@ -204,10 +212,10 @@
       Object.keys(framePool).forEach(function(k){
         if(framePool[k] !== nextF) framePool[k].style.display = 'none';
       });
-      // During bootstrap keep the iframe hidden until its load event fires (prevents
-      // raw-HTML flash on first page open). After bootstrap, use the original
-      // immediate-reveal behaviour so tab switching is unchanged.
-      if(isCached || !bootstrapping) nextF.style.display = 'block';
+      // Only reveal immediately for already-loaded (cached) frames.
+      // Uncached frames stay hidden until their load event fires, preventing the
+      // raw-HTML flash on any first visit to a module.
+      if(isCached) nextF.style.display = 'block';
       scrollToTop();
       if(isCached){
         if(loading) loading.classList.add('hidden');
@@ -252,8 +260,11 @@
     if(!e || !e.data) return;
     var f = currentModule && framePool[currentModule];
     var t = e.data.type;
-    if(t === 'estofaria-shell-height' || t === 'estofaria-content-ready'){
+    if(t === 'estofaria-shell-height'){
       if(f) syncHeight(f);
+    }
+    if(t === 'estofaria-content-ready'){
+      if(f){ f.style.display = 'block'; syncHeight(f); }
       if(loading) loading.classList.add('hidden');
     }
     if(t === 'estofaria-scroll-top') scrollToTop();
