@@ -38,6 +38,7 @@
   <a class="btn" data-module="agenda" href="/agenda/">📅 Agenda</a>
   <a class="btn" data-module="configuracao" href="/configuracao/">⚙️ Configuração</a>
   <a class="btn" data-module="assinatura" href="/assinatura/">💳 Assinatura</a>
+  <button type="button" class="btn btn-nav-sair" onclick="doLogout()">🚪 Sair</button>
 </div>
 <main class="shell-main">
   <div id="shellLoading" class="shell-loading">Carregando tela...</div>
@@ -55,6 +56,20 @@
   updateTime();
   setInterval(updateTime, 1000);
 })();
+
+function doLogout(){
+  try {
+    if(window.ESTOFARIA_AUTH && typeof window.ESTOFARIA_AUTH.clearSession === 'function'){
+      window.ESTOFARIA_AUTH.clearSession();
+    } else {
+      localStorage.removeItem('estofaria_auth_session_v1');
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('auth_user');
+      localStorage.removeItem('token');
+    }
+  } catch(_){}
+  window.location.href = '/login/';
+}
 </script>
 <script src="../pull-to-refresh.js"></script>
 <script src="../app-shell.js?v=20260804c"></script>
