@@ -18,10 +18,11 @@
 
   // Multi-frame pool — one iframe per module, kept alive after first load.
   // Subsequent tab switches are instant (just display:none <-> display:block).
-  var framePool   = {};   // code -> <iframe>
-  var frameLoaded = {};   // code -> bool (true once the iframe's load event fired)
+  var framePool    = {};   // code -> <iframe>
+  var frameLoaded  = {};   // code -> bool (true once the iframe's load event fired)
   var currentModule = null;
   var resizeTimers  = {};
+  var bootstrapping = true; // true only during the initial page load; cleared after first frame loads
 
   function scrollToTop(){
     try { window.scrollTo({ top:0, behavior:'instant' }); } catch(_){}
@@ -182,6 +183,7 @@
         frameLoaded[code] = true;
         if(currentModule === code){
           f.style.display = 'block';
+          bootstrapping = false;
           if(loading) loading.classList.add('hidden');
         }
       }, 220);
@@ -202,9 +204,10 @@
       Object.keys(framePool).forEach(function(k){
         if(framePool[k] !== nextF) framePool[k].style.display = 'none';
       });
-      // Only show immediately if already loaded (cached); otherwise keep hidden
-      // until the load event reveals it, preventing the raw HTML flash.
-      if(isCached) nextF.style.display = 'block';
+      // During bootstrap keep the iframe hidden until its load event fires (prevents
+      // raw-HTML flash on first page open). After bootstrap, use the original
+      // immediate-reveal behaviour so tab switching is unchanged.
+      if(isCached || !bootstrapping) nextF.style.display = 'block';
       scrollToTop();
       if(isCached){
         if(loading) loading.classList.add('hidden');
