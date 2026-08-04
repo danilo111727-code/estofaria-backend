@@ -1,5 +1,11 @@
 body{font-family:Arial;background:#f4f4f4;margin:0;padding:20px;}
 
+/* ── Skeleton loading ────────────────────────────────────── */
+.mat-skeleton{border-radius:12px;background:#f0f4ff;padding:16px;margin-bottom:10px;animation:mat-pulse 1.4s ease-in-out infinite;}
+.mat-skeleton-line{height:13px;border-radius:6px;background:#dde4f5;margin-bottom:8px;}
+.mat-skeleton-line:last-child{margin-bottom:0;}
+@keyframes mat-pulse{0%,100%{opacity:1}50%{opacity:.45}}
+
 .card{background:white;padding:18px;border-radius:12px;margin-bottom:20px;box-shadow:0 2px 8px rgba(0,0,0,0.08);}
 
 .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;}

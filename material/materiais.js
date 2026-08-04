@@ -256,9 +256,13 @@ async function loadBlockMeta(){
 
 // ── renderizar cards (dentro do fullscreen) ──────────────────
 
+const _MAT_SKEL='<div class="mat-skeleton"><div class="mat-skeleton-line" style="width:55%"></div><div class="mat-skeleton-line" style="width:38%"></div></div>'
 async function renderMaterials(){
   const container=document.getElementById('materialsContainer')
   if(!container) return
+
+  if(!container.querySelector('.mat-card'))
+    container.innerHTML=_MAT_SKEL.repeat(4)
 
   let materials=[]
   try{ materials=await apiGet('/materials') }catch(e){
@@ -382,9 +386,9 @@ function filterTable(){ renderMaterials() }
 
 async function seedMateriaisPadrao(){
   try{
-    if(localStorage.getItem(SEED_FLAG)) return
+    if(localStorage.getItem(SEED_FLAG)) return false
     const existing=await apiGet('/materials')
-    if(Array.isArray(existing)&&existing.length>0){ localStorage.setItem(SEED_FLAG,'1'); return }
+    if(Array.isArray(existing)&&existing.length>0){ localStorage.setItem(SEED_FLAG,'1'); return false }
     const BATCH=10
     for(let i=0;i<MATERIAIS_PADRAO.length;i+=BATCH){
       const batch=MATERIAIS_PADRAO.slice(i,i+BATCH)
@@ -392,7 +396,8 @@ async function seedMateriaisPadrao(){
     }
     saveLastUpdate()
     localStorage.setItem(SEED_FLAG,'1')
-  }catch(_){}
+    return true
+  }catch(_){ return false }
 }
 
 // ── init ─────────────────────────────────────────────────────
@@ -401,7 +406,7 @@ refreshUnits()
 
 function _initMateriaisData(){
   renderMaterials()
-  seedMateriaisPadrao().then(()=>renderMaterials())
+  seedMateriaisPadrao().then(seeded=>{ if(seeded) renderMaterials() })
 }
 
 // Se auth-guard já concluiu (shell estava no cache), inicializar agora.
