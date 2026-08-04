@@ -32,10 +32,24 @@
 
     /* Modal */
     .modal-overlay {
-      position: fixed; inset: 0; background: rgba(0,0,0,.48);
-      z-index: 9000; display: none; align-items: flex-end; justify-content: center;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,.48);
+      z-index: 9000;
+      display: none;
+      visibility: hidden;
+      opacity: 0;
+      pointer-events: none;
+      align-items: flex-end;
+      justify-content: center;
+      transition: opacity .18s ease;
     }
-    .modal-overlay.open { display: flex; }
+    .modal-overlay.open {
+      display: flex;
+      visibility: visible;
+      opacity: 1;
+      pointer-events: auto;
+    }
     .modal-sheet {
       background: white; width: 100%; max-width: 520px;
       border-radius: 20px 20px 0 0; max-height: 92vh; overflow-y: auto;
@@ -130,7 +144,7 @@
       <div class="pdf-type-desc">Proposta comercial enviada ao cliente</div>
       <span class="pdf-type-badge unconfigured" id="badgeOrcamento">Não configurado</span>
     </div>
-    <button onclick="openWizard('orcamento')" style="white-space:nowrap;flex-shrink:0">Editar</button>
+    <button onclick="openWizard('orcamento')" data-wizard="orcamento" style="white-space:nowrap;flex-shrink:0">Editar</button>
   </div>
 
   <div class="pdf-type-card">
@@ -140,7 +154,7 @@
       <div class="pdf-type-desc">Documento interno de produção e entrega</div>
       <span class="pdf-type-badge unconfigured" id="badgePedido">Não configurado</span>
     </div>
-    <button onclick="openWizard('pedido')" style="white-space:nowrap;flex-shrink:0">Editar</button>
+    <button onclick="openWizard('pedido')" data-wizard="pedido" style="white-space:nowrap;flex-shrink:0">Editar</button>
   </div>
 </div>
 
@@ -501,9 +515,22 @@ function escHtml(s){
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
 }
 
+// Expose functions globally (needed when page runs inside iframe)
+window.openWizard  = openWizard
+window.closeWizard = closeWizard
+window.wizBack     = wizBack
+window.wizNext     = wizNext
+window.onLogo      = onLogo
+window.clearLogo   = clearLogo
+
+// Attach Editar button listeners (belt-and-suspenders alongside onclick)
+document.querySelectorAll('[data-wizard]').forEach(function(btn){
+  btn.addEventListener('click', function(){ openWizard(btn.getAttribute('data-wizard')) })
+})
+
 // Close on backdrop tap
-document.getElementById('wizardOverlay').addEventListener('click', e=>{
-  if(e.target===document.getElementById('wizardOverlay')) closeWizard()
+document.getElementById('wizardOverlay').addEventListener('click', function(e){
+  if(e.target === document.getElementById('wizardOverlay')) closeWizard()
 })
 
 window.addEventListener('load', refreshBadges)
