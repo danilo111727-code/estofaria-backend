@@ -43,7 +43,7 @@ setInterval(updateTime,1000);
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Vendedor</title>
-<link rel="stylesheet" href="style.css?v=20260804a">
+<link rel="stylesheet" href="style.css?v=20260805a">
 <script src="../config.js"></script>
 <script src="../auth-guard.js"></script>
   <link rel="stylesheet" href="../mobile-fixes.css">
@@ -126,6 +126,62 @@ setInterval(updateTime,1000);
 <div id="listaItens"></div>
 </div>
 
+<div class="bloco" id="bloco-info-pedido">
+<h2>Informações do Pedido</h2>
+
+<div class="info-ped-row">
+  <div class="info-ped-col">
+    <label>Data do pedido</label>
+    <input type="date" id="dataPedido">
+  </div>
+  <div class="info-ped-col">
+    <label>Data prevista de entrega</label>
+    <input type="date" id="dataEntrega">
+  </div>
+</div>
+
+<label>Meio de fechamento</label>
+<select id="meioFechamento">
+  <option value="">Selecione...</option>
+  <option value="Presencial">Presencial</option>
+  <option value="WhatsApp">WhatsApp</option>
+  <option value="Instagram">Instagram</option>
+  <option value="Site">Site</option>
+  <option value="Telefone">Telefone</option>
+  <option value="Outro">Outro</option>
+</select>
+
+<label>Forma de pagamento</label>
+<select id="formaPagamento">
+  <option value="">Selecione...</option>
+  <option value="PIX">PIX</option>
+  <option value="Dinheiro">Dinheiro</option>
+  <option value="Cartão">Cartão</option>
+  <option value="Boleto">Boleto</option>
+  <option value="Transferência">Transferência</option>
+</select>
+
+<div class="info-ped-row">
+  <div class="info-ped-col">
+    <label>Valor de entrada</label>
+    <input type="text" id="valorEntrada" placeholder="R$ 0,00" inputmode="decimal">
+  </div>
+  <div class="info-ped-col">
+    <label>Saldo restante</label>
+    <input type="text" id="saldoRestante" placeholder="Calculado automaticamente" readonly style="background:#f4f6fb;color:#666">
+  </div>
+</div>
+
+<label>Número de parcelas</label>
+<input type="number" id="numeroParcelas" placeholder="Ex: 3" min="1" max="60" style="width:auto;max-width:160px">
+
+<label>Observação de pagamento <span style="font-weight:normal;font-size:12px;color:#999">(opcional)</span></label>
+<textarea id="obsPagamento" placeholder="Ex: Entrada no ato, restante na entrega..." rows="2" style="min-height:60px"></textarea>
+
+<label>Nome do vendedor</label>
+<input type="text" id="nomeVendedor" placeholder="Vendedor responsável">
+</div>
+
 <div class="bloco">
 <h2>Orçamento</h2>
 <div id="orcamento"></div>
@@ -144,8 +200,8 @@ setInterval(updateTime,1000);
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-<script src="pdf-tools.js?v=20260804a"></script>
-<script src="script.js?v=20260804a"></script>
+<script src="pdf-tools.js?v=20260805a"></script>
+<script src="script.js?v=20260805a"></script>
 <script src="../keyboard-dismiss.js"></script>
 </body>
 </html>

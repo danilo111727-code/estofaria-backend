@@ -104,6 +104,31 @@ function escapeHtml(text){
     .replace(/'/g, '&#039;')
 }
 
+function getLoggedUserName(){
+  try{
+    const u = window.EstofariaAuth?.user || JSON.parse(localStorage.getItem('auth_user') || '{}')
+    return String(u.nome || u.name || u.email || u.username || '').trim()
+  }catch(_){ return '' }
+}
+
+function isAdminUser(){
+  try{
+    const u = window.EstofariaAuth?.user || JSON.parse(localStorage.getItem('auth_user') || '{}')
+    const r = String(u.role || '').toLowerCase()
+    return r === 'admin' || r === 'master'
+  }catch(_){ return false }
+}
+
+function atualizarSaldoRestante(){
+  const totalCents = modelos.reduce((sum, m) => sum + subtotalCents(m), 0)
+  const total = centsToReais(totalCents)
+  const entradaRaw = String(document.getElementById('valorEntrada')?.value || '').replace(/[^\d,]/g,'').replace(',','.')
+  const entrada = parseFloat(entradaRaw) || 0
+  const saldo = Math.max(0, total - entrada)
+  const sr = document.getElementById('saldoRestante')
+  if(sr) sr.value = saldo > 0 ? saldo.toLocaleString('pt-BR', { minimumFractionDigits:2 }) : ''
+}
+
 function getToken(){
   try{
     return window.ESTOFARIA_HTTP && typeof window.ESTOFARIA_HTTP.getToken === 'function'
@@ -1123,6 +1148,7 @@ function calc(){
 
   if(vista) vista.innerText = moeda(total)
   if(cartao) cartao.innerText = moeda(total * 1.10)
+  atualizarSaldoRestante()
 }
 
 function addModelo(){
@@ -1222,6 +1248,20 @@ function buildDraftQuote(status = 'orcamento'){
   const endereco    = document.getElementById('endereco')?.value.trim()   || ''
   const observacao  = document.getElementById('observacao')?.value.trim() || ''
 
+  // ── Informações do Pedido ─────────────────────────────────────────────────
+  const dataPedido       = document.getElementById('dataPedido')?.value        || ''
+  const dataEntrega      = document.getElementById('dataEntrega')?.value       || ''
+  const meioFechamento   = document.getElementById('meioFechamento')?.value    || ''
+  const formaPagamento   = document.getElementById('formaPagamento')?.value    || ''
+  const nomeVendedor     = document.getElementById('nomeVendedor')?.value.trim() || ''
+  const numeroParcelas   = parseInt(document.getElementById('numeroParcelas')?.value || '0', 10) || null
+  const obsPagamento     = document.getElementById('obsPagamento')?.value.trim()  || ''
+
+  const entradaRaw = String(document.getElementById('valorEntrada')?.value || '').replace(/[^\d,]/g,'').replace(',','.')
+  const valorEntrada   = parseFloat(entradaRaw) || 0
+  const saldoRaw   = String(document.getElementById('saldoRestante')?.value || '').replace(/[^\d,]/g,'').replace(',','.')
+  const saldoRestante  = parseFloat(saldoRaw) || 0
+
   const payloadModelos = modelos.map(model => {
     const subtotal_modelo_cents = subtotalCents(model)
     const modeloRef = modelosDisponiveis.find(md => String(md.id) === String(model.model_id) || md.name === model.modelo)
@@ -1273,6 +1313,16 @@ function buildDraftQuote(status = 'orcamento'){
         vista: total,
         cartao: Number((total * 1.10).toFixed(2))
       },
+      // ── Informações do Pedido ────────────────────────────────────────────
+      data_pedido:          dataPedido    || null,
+      data_entrega:         dataEntrega   || null,
+      meio_fechamento:      meioFechamento || null,
+      forma_pagamento:      formaPagamento || null,
+      valor_entrada:        valorEntrada  || null,
+      saldo_restante:       saldoRestante || null,
+      qtd_parcelas:         numeroParcelas || null,
+      obs_pagamento:        obsPagamento  || null,
+      nome_vendedor:        nomeVendedor  || null,
       created_at_local: new Date().toLocaleString('pt-BR')
     }
   }
@@ -1299,6 +1349,29 @@ function limparFormularioAposSalvar(){
   if(previewManual)  previewManual.innerText = ''
   if(listaItens)   listaItens.innerHTML = ''
   if(orcamento)    orcamento.innerHTML  = ''
+
+  // ── Resetar campos de Informações do Pedido ──────────────────────────────
+  const dataPedido     = document.getElementById('dataPedido')
+  const dataEntrega    = document.getElementById('dataEntrega')
+  const meioFechamento = document.getElementById('meioFechamento')
+  const formaPagamento = document.getElementById('formaPagamento')
+  const valorEntrada   = document.getElementById('valorEntrada')
+  const saldoRestante  = document.getElementById('saldoRestante')
+  const numeroParcelas = document.getElementById('numeroParcelas')
+  const obsPagamento   = document.getElementById('obsPagamento')
+
+  if(dataEntrega)    dataEntrega.value    = ''
+  if(meioFechamento) meioFechamento.value = ''
+  if(formaPagamento) formaPagamento.value = ''
+  if(valorEntrada)   valorEntrada.value   = ''
+  if(saldoRestante)  saldoRestante.value  = ''
+  if(numeroParcelas) numeroParcelas.value = ''
+  if(obsPagamento)   obsPagamento.value   = ''
+
+  // Recolocar data de hoje e nome do vendedor
+  if(dataPedido) dataPedido.value = new Date().toISOString().split('T')[0]
+  const nv = document.getElementById('nomeVendedor')
+  if(nv) nv.value = getLoggedUserName()
 
   const modeloSelect = document.getElementById('modelo')
   const metragemRapida = document.getElementById('metragemRapida')
@@ -1427,6 +1500,7 @@ async function init(){
 
   updateModeloAtivo()
   calc()
+  initInfoPedido()
 
   await loadModelosReais()
   calcManual()
@@ -1461,6 +1535,30 @@ async function init(){
       refreshItemSelect(true)
     }
   })
+}
+
+function initInfoPedido(){
+  // Data do pedido: hoje
+  const dp = document.getElementById('dataPedido')
+  if(dp && !dp.value){
+    dp.value = new Date().toISOString().split('T')[0]
+  }
+
+  // Nome do vendedor: usuário logado (somente admin pode editar)
+  const nv = document.getElementById('nomeVendedor')
+  if(nv){
+    if(!nv.value) nv.value = getLoggedUserName()
+    if(!isAdminUser()){
+      nv.readOnly = true
+      nv.style.background = '#f4f6fb'
+      nv.style.color = '#666'
+      nv.title = 'Preenchido automaticamente com seu nome'
+    }
+  }
+
+  // Saldo restante: recalcula quando entrada muda
+  const ve = document.getElementById('valorEntrada')
+  if(ve) ve.addEventListener('input', atualizarSaldoRestante)
 }
 
 window.addModelo = addModelo
