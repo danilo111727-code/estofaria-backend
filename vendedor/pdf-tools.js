@@ -135,6 +135,13 @@ window.VendedorPDF = (function(){
     return { ok:true, mode:'preview', fileName }
   }
 
+  function loadPdfConfig(type){
+    try{
+      const arr = JSON.parse(localStorage.getItem('pdf_config_v1') || '[]')
+      return Array.isArray(arr) ? (arr.find(c => c.type === type) || null) : null
+    }catch(_){ return null }
+  }
+
   function defaultTemplate(type){
     const pedido = type === 'pedido'
     return {
@@ -290,7 +297,9 @@ window.VendedorPDF = (function(){
     const quote = normalizeQuote(quoteInput, override.type)
     const recordOverride = getQuotePdfOverride(quoteInput)
     const template = { ...defaultTemplate(quote.status), ...(templateInput || {}), ...(recordOverride || {}), ...(override || {}) }
-    const logoDataUrl = resolveLogoDataUrl(template)
+    const cfg = loadPdfConfig(quote.status) || {}
+    const hasCfg = !!(cfg.nomeFantasia || cfg.logo)
+    const logoDataUrl = (cfg.logo && cfg.logo.trim()) ? cfg.logo.trim() : resolveLogoDataUrl(template)
     const logoFormat = /data:image\/jpe?g/i.test(logoDataUrl) ? 'JPEG' : 'PNG'
     const doc = new jsPDF({ unit:'mm', format:'a4' })
     const emitidoEm = quote.created_at || new Date().toLocaleString('pt-BR')
@@ -316,14 +325,29 @@ window.VendedorPDF = (function(){
     }
     const textX = logoDataUrl ? margin + logoSize + 5 : margin
 
+    const cfgName     = cfg.nomeFantasia || template.companyName || 'Estofaria'
+    const cfgSubline  = cfg.razaoSocial  || (cfg.nomeFantasia ? '' : (template.subtitle || ''))
+    const cfgContact  = [cfg.cnpj, cfg.telefone || cfg.whatsapp, cfg.email].filter(Boolean).join('   ·   ')
+    const headerLines = [cfgSubline, cfgContact].filter(Boolean).length
+
     doc.setTextColor(255, 255, 255)
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(20)
-    doc.text(template.companyName || 'Estofaria', textX, 22)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(10)
-    doc.setTextColor(200, 215, 240)
-    doc.text(template.subtitle || 'Proposta comercial personalizada', textX, 31)
+    doc.setFontSize(headerLines >= 2 ? 16 : 20)
+    const nameY = headerLines >= 2 ? 16 : 22
+    doc.text(cfgName, textX, nameY)
+
+    if(cfgSubline){
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(9)
+      doc.setTextColor(200, 215, 240)
+      doc.text(cfgSubline, textX, nameY + 7)
+    }
+    if(cfgContact){
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(7.5)
+      doc.setTextColor(170, 190, 225)
+      doc.text(cfgContact, textX, nameY + (cfgSubline ? 14 : 7))
+    }
 
     // Data discreta no canto superior direito
     doc.setFontSize(8)
@@ -385,7 +409,7 @@ window.VendedorPDF = (function(){
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(9)
     doc.setTextColor(40, 40, 50)
-    doc.text('7 dias', rx, ry + 16, { align:'right' })
+    doc.text(String(cfg.validadeOrcamento || '7 dias'), rx, ry + 16, { align:'right' })
 
     if(quoteNum){
       doc.setFont('helvetica', 'normal')
@@ -399,6 +423,77 @@ window.VendedorPDF = (function(){
     }
 
     y += infoH + 10
+
+    // ── MENSAGEM INICIAL ──────────────────────────────────────────────────────
+    if(cfg.mensagemInicial){
+      ensureSpace(20)
+      const miLines = doc.splitTextToSize(String(cfg.mensagemInicial), lw - 8)
+      const miH = 10 + miLines.length * 4.5
+      doc.setFillColor(245, 247, 252)
+      doc.setDrawColor(pr, pg, pb)
+      doc.setLineWidth(0.4)
+      doc.roundedRect(margin, y, lw, miH, 2, 2, 'FD')
+      doc.setFont('helvetica', 'italic')
+      doc.setFontSize(9)
+      doc.setTextColor(60, 70, 100)
+      let miY = y + 6
+      miLines.forEach(line => { ensureSpace(5); doc.text(line, margin + 4, miY); miY += 4.5 })
+      y = miY + 4
+    }
+
+    // ── INFO DO PEDIDO (toggles) ──────────────────────────────────────────────
+    if(quote.status === 'pedido'){
+      const qPayload = quoteInput.payload || {}
+      const infoRows = []
+      if(cfg.showDataPedido !== false && quote.created_at)
+        infoRows.push(['Data do pedido', String(quote.created_at).split(' ')[0] || quote.created_at])
+      if(cfg.showDataEntrega !== false){
+        const de = qPayload.data_entrega || qPayload.dataEntrega || ''
+        if(de) infoRows.push(['Data de entrega', de])
+      }
+      if(cfg.showMeioFechamento !== false){
+        const mf = qPayload.meio_fechamento || qPayload.meioFechamento || ''
+        if(mf) infoRows.push(['Meio de fechamento', mf])
+      }
+      if(cfg.showFormaPagamento !== false){
+        const fp = qPayload.forma_pagamento || qPayload.formaPagamento || ''
+        if(fp) infoRows.push(['Forma de pagamento', fp])
+      }
+      if(cfg.showValorEntrada !== false){
+        const ve = qPayload.valor_entrada || qPayload.valorEntrada || 0
+        if(ve) infoRows.push(['Valor de entrada', money(ve)])
+      }
+      if(cfg.showSaldoRestante !== false){
+        const sr = qPayload.saldo_restante || qPayload.saldoRestante || 0
+        if(sr) infoRows.push(['Saldo restante', money(sr)])
+      }
+      if(cfg.showQuantidadeParcelas !== false){
+        const qp = qPayload.qtd_parcelas || qPayload.quantidade_parcelas || qPayload.quantidadeParcelas || ''
+        if(qp) infoRows.push(['Qtd. parcelas', String(qp)])
+      }
+      if(cfg.showNomeVendedor !== false){
+        const nv = qPayload.nome_vendedor || qPayload.nomeVendedor || ''
+        if(nv) infoRows.push(['Vendedor', nv])
+      }
+      if(infoRows.length){
+        ensureSpace(infoRows.length * 6 + 8)
+        const irH = infoRows.length * 6 + 6
+        doc.setFillColor(sr, sg, sb)
+        doc.roundedRect(margin, y, lw, irH, 2, 2, 'F')
+        let iry = y + 6
+        infoRows.forEach(([label, val]) => {
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(8.5)
+          doc.setTextColor(100, 100, 110)
+          doc.text(label + ':', margin + 4, iry)
+          doc.setFont('helvetica', 'bold')
+          doc.setTextColor(40, 40, 50)
+          doc.text(val, W - margin - 4, iry, { align:'right' })
+          iry += 6
+        })
+        y = iry + 4
+      }
+    }
 
     // ── SEÇÃO: PRODUTOS ───────────────────────────────────────────────────────
     doc.setFont('helvetica', 'bold')
@@ -579,53 +674,80 @@ window.VendedorPDF = (function(){
       y += obsBoxH + 6
     }
 
-    // ── NOTAS, CONDIÇÕES E PIX ────────────────────────────────────────────────
-    if(template.notesText){
+    // ── SEÇÕES DO CFG (quando configuradas) ──────────────────────────────────
+    const renderSection = (title, text) => {
+      if(!text) return
       ensureSpace(16)
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(9)
       doc.setTextColor(80, 80, 90)
-      doc.text(template.notesTitle || 'Observações', margin, y)
+      doc.text(title, margin, y)
       y += 5
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(8.5)
       doc.setTextColor(100, 100, 110)
-      doc.splitTextToSize(template.notesText, lw).forEach(line => {
+      doc.splitTextToSize(String(text), lw).forEach(line => {
         ensureSpace(5); doc.text(line, margin, y); y += 4.5
       })
       y += 3
     }
 
-    if(template.termsText){
-      ensureSpace(16)
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(9)
-      doc.setTextColor(80, 80, 90)
-      doc.text('Condições', margin, y)
-      y += 5
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(8.5)
-      doc.setTextColor(100, 100, 110)
-      doc.splitTextToSize(template.termsText, lw).forEach(line => {
-        ensureSpace(5); doc.text(line, margin, y); y += 4.5
-      })
-      y += 3
-    }
+    if(hasCfg){
+      // Pedido: observações finais, garantia, info adicionais, termos, assinaturas
+      if(quote.status === 'pedido'){
+        renderSection('Observações finais', cfg.observacoesFinais)
+        renderSection('Garantia', cfg.garantia)
+        renderSection('Informações adicionais', cfg.infoAdicionais)
+        renderSection('Termos de venda', cfg.termoVenda)
+        renderSection('Termos de entrega', cfg.termoEntrega)
 
-    if(template.showPix && template.pixText){
-      ensureSpace(16)
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(9)
-      doc.setTextColor(80, 80, 90)
-      doc.text('Pagamento / PIX', margin, y)
-      y += 5
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(8.5)
-      doc.setTextColor(100, 100, 110)
-      doc.splitTextToSize(template.pixText, lw).forEach(line => {
-        ensureSpace(5); doc.text(line, margin, y); y += 4.5
-      })
-      y += 3
+        const showSigCli = cfg.showAssinaturaCliente !== false && cfg.showAssinaturaCliente
+        const showSigEmp = cfg.showAssinaturaEmpresa !== false && cfg.showAssinaturaEmpresa
+        const showLD    = cfg.showLocalData !== false && cfg.showLocalData
+        if(showSigCli || showSigEmp || showLD){
+          ensureSpace(30)
+          y += 6
+          const sigW = showSigCli && showSigEmp ? (lw - 10) / 2 : lw - 8
+          const sigH = 18
+          if(showLD){
+            doc.setFont('helvetica', 'normal')
+            doc.setFontSize(8)
+            doc.setTextColor(120, 120, 120)
+            doc.text('Local e data: ____________________________________', margin, y)
+            y += 10
+          }
+          if(showSigCli){
+            const x1 = margin
+            doc.setDrawColor(180, 180, 190)
+            doc.setLineWidth(0.3)
+            doc.line(x1, y + sigH, x1 + sigW, y + sigH)
+            doc.setFont('helvetica', 'normal')
+            doc.setFontSize(8)
+            doc.setTextColor(100, 100, 110)
+            doc.text('Assinatura do cliente', x1 + sigW / 2, y + sigH + 5, { align:'center' })
+          }
+          if(showSigEmp){
+            const x2 = showSigCli ? margin + sigW + 10 : margin
+            const ew  = showSigCli ? sigW : lw - 8
+            doc.setDrawColor(180, 180, 190)
+            doc.setLineWidth(0.3)
+            doc.line(x2, y + sigH, x2 + ew, y + sigH)
+            doc.setFont('helvetica', 'normal')
+            doc.setFontSize(8)
+            doc.setTextColor(100, 100, 110)
+            doc.text(cfg.nomeFantasia || 'Empresa', x2 + ew / 2, y + sigH + 5, { align:'center' })
+          }
+          if(showSigCli || showSigEmp) y += sigH + 10
+        }
+      } else {
+        // Orçamento: info adicionais
+        renderSection('Informações adicionais', cfg.infoAdicionais)
+      }
+    } else {
+      // Sem cfg: mantém seções do template (legado)
+      renderSection(template.notesTitle || 'Observações', template.notesText)
+      renderSection('Condições', template.termsText)
+      if(template.showPix && template.pixText) renderSection('Pagamento / PIX', template.pixText)
     }
 
     // ── VALIDADE ──────────────────────────────────────────────────────────────
@@ -634,7 +756,7 @@ window.VendedorPDF = (function(){
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(8.5)
       doc.setTextColor(160, 160, 165)
-      doc.text('Proposta valida por 7 dias a partir da data de emissao.', margin, y)
+      doc.text('Proposta valida por ' + (cfg.validadeOrcamento || '7 dias') + ' a partir da data de emissao.', margin, y)
       y += 6
     }
 
@@ -645,9 +767,17 @@ window.VendedorPDF = (function(){
       doc.setFontSize(8)
       doc.setTextColor(160, 160, 160)
       doc.setFont('helvetica', 'normal')
-      if(template.footerText){
-        doc.text(template.footerText, margin, H - 8)
+      const footerMainText = cfg.rodape || template.footerText || ''
+      const footerContact  = [cfg.site, cfg.instagram].filter(Boolean).join('   ·   ')
+      if(footerContact){
+        doc.setFontSize(7.5)
+        doc.text(footerContact, margin, H - 13)
       }
+      if(footerMainText){
+        doc.setFontSize(8)
+        doc.text(footerMainText, margin, H - 8)
+      }
+      doc.setFontSize(8)
       doc.text('Pagina ' + i + ' de ' + totalPages, W - margin, H - 8, { align:'right' })
     }
 
