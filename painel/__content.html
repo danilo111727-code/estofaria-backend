@@ -96,14 +96,7 @@ setInterval(updateTime,1000);
       <span class="rs-arrow">›</span>
     </div>
   </div>
-</div>
-
-<!-- Resumo da Semana — Financeiro -->
-<div class="card rs-card" id="rsFinCard">
-  <div class="rs-card-header">
-    <h3 class="rs-card-title">Resumo da Semana — Financeiro</h3>
-    <span class="rs-periodo" id="rsfPeriodo"></span>
-  </div>
+  <hr class="rs-divider">
   <div class="rs-row">
     <div class="rs-info">
       <div class="rs-label rs-label--red">Contas vencidas</div>
@@ -230,10 +223,6 @@ setInterval(updateTime,1000);
 
     const hoje   = new Date(); hoje.setHours(0,0,0,0)
     const semFim = new Date(hoje); semFim.setDate(semFim.getDate()+6); semFim.setHours(23,59,59,999)
-
-    const d0 = hoje.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})
-    const d1 = semFim.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})
-    set('rsfPeriodo', d0+' – '+d1)
 
     // Contas vencidas (ambos os tipos — dataVencimento < hoje e não concluída)
     const vencidas = [
