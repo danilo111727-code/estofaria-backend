@@ -1,0 +1,101 @@
+Quero padronizar a navegação do módulo Vendedor para seguir exatamente o mesmo conceito utilizado no módulo Financeiro.
+
+OBJETIVO
+
+Eliminar a navegação baseada em botões "Histórico" e "Voltar" e substituir por duas abas fixas no topo do módulo.
+
+As abas serão:
+
+• Orçamento
+• Histórico
+
+A navegação deve funcionar exatamente como:
+
+Financeiro
+→ Painel | Agenda | Contas
+
+Ou seja, sem abrir outra página e sem botão voltar. Apenas alternar entre as duas abas mantendo o usuário dentro do módulo.
+
+-----------------------------------
+
+ABA ORÇAMENTO
+
+Deve conter exatamente tudo o que hoje existe na tela principal do Vendedor:
+
+• Dados do cliente
+• Configuração do modelo
+• Seleção de metragem
+• Observações
+• Itens do orçamento
+• Resumo
+• Botão "Adicionar ao orçamento"
+
+Nenhuma lógica deve ser alterada.
+
+-----------------------------------
+
+ABA HISTÓRICO
+
+Mover toda a tela atual de Histórico para esta aba.
+
+Manter:
+
+• Campo de pesquisa
+• Filtros (Todos / Orçamentos / Pedidos)
+• Lista de registros
+• Menu ⋮
+• Conversão em pedido
+• Visualizar PDF
+• Enviar PDF
+• Excluir
+
+Toda a lógica existente deve permanecer exatamente igual.
+
+-----------------------------------
+
+REMOVER
+
+Remover completamente:
+
+• Botão "Histórico"
+• Botão "Voltar"
+
+Eles deixam de existir.
+
+-----------------------------------
+
+PADRONIZAÇÃO
+
+A navegação deve ficar visualmente idêntica ao módulo Financeiro.
+
+Mesmo estilo.
+
+Mesmo espaçamento.
+
+Mesmo comportamento.
+
+Mesmo padrão visual.
+
+Mesmo funcionamento.
+
+-----------------------------------
+
+IMPORTANTE
+
+• Não alterar nenhuma lógica de orçamento.
+• Não alterar nenhuma lógica do histórico.
+• Não alterar geração de PDF.
+• Não alterar conversão em pedido.
+• Não alterar localStorage.
+• Não alterar IDs.
+• Não alterar APIs.
+• Não alterar cálculos.
+• Não alterar layout interno das telas.
+
+Apenas reorganizar a navegação para utilizar as abas:
+
+Orçamento | Histórico
+
+assim como já acontece no módulo Financeiro.
+
+Antes de modificar qualquer código, analise toda a estrutura atual para reaproveitar o máximo possível da implementação existente, evitando duplicação de código e mantendo o aplicativo leve e organizado.
