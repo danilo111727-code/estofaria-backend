@@ -30,7 +30,6 @@
     <div id="headerSub" class="header-sub"></div>
   </div>
   <div class="header-right">
-    <div id="time"></div>
     <button type="button" class="header-btn-sair" onclick="doLogout()">Sair</button>
   </div>
 </div>
@@ -52,15 +51,6 @@
   </div>
 </main>
 <script>
-(function(){
-  function updateTime(){
-    var now = new Date();
-    var el = document.getElementById('time');
-    if(el) el.innerText = now.toLocaleString();
-  }
-  updateTime();
-  setInterval(updateTime, 1000);
-})();
 
 (function(){
   function readUser(){
