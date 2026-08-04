@@ -119,6 +119,7 @@ setInterval(updateTime,1000);
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Histórico</title>
 <link rel="stylesheet" href="style.css?v=20260413-modern1">
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
 <script src="../config.js"></script>
 <script src="../auth-guard.js"></script>
   <link rel="stylesheet" href="../mobile-fixes.css">
@@ -163,28 +164,23 @@ setInterval(updateTime,1000);
   <div class="sheet" onclick="event.stopPropagation()">
     <div class="sheet_handle"></div>
     <div class="sheet_actions">
-      <button class="sheet_item" onclick="converter()">
-        <span class="sheet_icon">🔄</span>
+      <button class="sheet_item" id="menuBtnConverter" onclick="converter()">
+        <span class="material-icons sheet_icon">sync_alt</span>
         <span class="sheet_label">Converter em pedido</span>
         <span class="sheet_arrow">›</span>
       </button>
-      <button class="sheet_item" onclick="editar()">
-        <span class="sheet_icon">✏️</span>
-        <span class="sheet_label">Editar PDF</span>
-        <span class="sheet_arrow">›</span>
-      </button>
-      <button class="sheet_item" onclick="enviar()">
-        <span class="sheet_icon">📤</span>
-        <span class="sheet_label">Enviar PDF</span>
-        <span class="sheet_arrow">›</span>
-      </button>
       <button class="sheet_item" onclick="baixar()">
-        <span class="sheet_icon">👁️</span>
+        <span class="material-icons sheet_icon">visibility</span>
         <span class="sheet_label">Visualizar PDF</span>
         <span class="sheet_arrow">›</span>
       </button>
+      <button class="sheet_item" onclick="enviar()">
+        <span class="material-icons sheet_icon">send</span>
+        <span class="sheet_label">Enviar PDF</span>
+        <span class="sheet_arrow">›</span>
+      </button>
       <button class="sheet_item sheet_item--danger" onclick="excluir()">
-        <span class="sheet_icon">🗑️</span>
+        <span class="material-icons sheet_icon">delete</span>
         <span class="sheet_label">Excluir</span>
         <span class="sheet_arrow">›</span>
       </button>
@@ -310,7 +306,7 @@ async function carregar(){
       btn.addEventListener('click', (e) => {
         e.stopPropagation()
         e.preventDefault()
-        abrirMenu(e, o.id)
+        abrirMenu(e, o.id, o.status)
       })
       div.appendChild(card)
     })
@@ -324,9 +320,12 @@ async function carregar(){
   }
 }
 
-function abrirMenu(e,id){
+function abrirMenu(e, id, status){
   if(e) e.stopPropagation()
-  selecionado=id
+  selecionado = id
+  // Mostrar "Converter em pedido" apenas para orçamentos
+  const btnConverter = document.getElementById('menuBtnConverter')
+  if(btnConverter) btnConverter.style.display = (status === 'pedido') ? 'none' : ''
   document.querySelectorAll(".card_orcamento").forEach(c=>c.classList.remove("ativo"))
   let card=document.getElementById("card_"+id)
   if(card) card.classList.add("ativo")

@@ -330,7 +330,7 @@ transition:background .12s;
 .sheet_item:last-child{border-bottom:none;}
 .sheet_item:active{background:#f4f6fd;}
 
-.sheet_icon{font-size:20px;width:28px;text-align:center;flex-shrink:0;}
+.sheet_icon{font-size:20px;width:28px;text-align:center;flex-shrink:0;vertical-align:middle;line-height:1;}
 .sheet_label{flex:1;font-weight:500;}
 .sheet_arrow{color:#b0bdd6;font-size:18px;font-weight:700;}
 
