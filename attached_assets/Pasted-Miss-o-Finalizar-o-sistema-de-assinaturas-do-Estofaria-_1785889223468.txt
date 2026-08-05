@@ -1,0 +1,91 @@
+Missão — Finalizar o sistema de assinaturas do Estofaria Digital
+
+Você é o responsável por concluir a integração de produção do Estofaria Digital. Antes de alterar qualquer arquivo, faça um backup completo do projeto.
+
+Objetivo
+
+Deixar o sistema 100% pronto para receber assinantes reais em produção.
+
+Regras
+
+* Não altere nenhuma funcionalidade do app que não esteja relacionada ao sistema de assinaturas.
+* Preserve layout, UX e regras de negócio existentes.
+* Ao terminar, entregue um relatório completo de tudo o que foi alterado.
+* Corrija automaticamente qualquer problema encontrado durante a auditoria.
+
+Tarefas
+
+Stripe
+
+* Configurar a nova conta Stripe.
+* Criar os produtos:
+    * Plano Gestão — R$ 149,00/mês
+    * Plano Empresarial — R$ 399,00/mês
+* Ambos com 60 dias de teste gratuito.
+* Configurar checkout para os dois planos.
+* Configurar o webhook com os eventos:
+    * checkout.session.completed
+    * invoice.paid
+    * invoice.payment_failed
+    * customer.subscription.deleted
+    * customer.subscription.updated
+
+Backend
+
+Verificar toda a integração Stripe.
+
+Caso ainda exista apenas uma variável STRIPE_PRICE_ID, alterar o backend para suportar os dois planos corretamente, utilizando o Price ID correspondente ao plano selecionado.
+
+Não deixar nenhum valor hardcoded.
+
+Render
+
+Atualizar corretamente as variáveis de ambiente necessárias.
+
+Resend
+
+Verificar se o domínio de envio está corretamente configurado para produção.
+
+Testes
+
+Executar um teste completo:
+
+* Cadastro
+* Login
+* Recuperação de senha
+* Escolha de plano
+* Checkout Stripe
+* Trial de 60 dias
+* Webhook
+* Ativação da assinatura
+* Renovação
+* Cancelamento
+* Bloqueio por inadimplência
+
+Corrigir qualquer erro encontrado.
+
+Auditoria
+
+No final, verificar novamente:
+
+* Segurança
+* Banco PostgreSQL
+* Variáveis de ambiente
+* Stripe
+* Resend
+* Render
+* Webhooks
+* Fluxo completo
+
+Entrega
+
+Só considere a tarefa concluída quando:
+
+* O sistema estiver pronto para produção.
+* Não houver erros conhecidos.
+* Os dois planos funcionarem.
+* O checkout estiver operacional.
+* O relatório final indicar exatamente:
+    * O que foi alterado.
+    * O que foi configurado.
+    * O que ainda depende apenas de ações minhas nos painéis externos (caso exista algo).
