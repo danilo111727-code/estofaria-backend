@@ -343,8 +343,10 @@ async function iniciarCheckoutStripe(planCode){
       setNotice('warn', 'Não foi possível abrir o checkout. Tente novamente.')
     }
   }catch(e){
-    console.error(e)
-    setNotice('warn', e.message || 'Não foi possível abrir o checkout. Tente novamente.')
+    console.error('Checkout error', e)
+    const status = e.status ? ` (HTTP ${e.status})` : ''
+    const detail = e.payload?.message || e.payload?.error || e.message || 'Erro desconhecido'
+    setNotice('warn', `Erro ao abrir checkout${status}: ${detail}`)
   }
 }
 

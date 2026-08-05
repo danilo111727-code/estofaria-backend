@@ -191,7 +191,7 @@
 
     if(!response.ok){
       const message =
-        (data && typeof data === 'object' && (data.error || data.message)) ||
+        (data && typeof data === 'object' && (data.message || data.error)) ||
         (typeof data === 'string' && data.trim()) ||
         `Falha em ${String(url || '')} (${response.status})`
       const error = new Error(message)
