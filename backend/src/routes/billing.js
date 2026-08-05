@@ -218,14 +218,29 @@ router.post('/customer-portal', requireAuth, (req, res) => {
   res.json({ url: portalUrl, customer_portal_url: portalUrl })
 })
 
+function resolveStripePriceId(planCode) {
+  const normalized = String(planCode || '').toLowerCase()
+  if (normalized.includes('empresarial')) {
+    return process.env.STRIPE_PRICE_ID_EMPRESARIAL
+      || process.env.STRIPE_PRICE_ID
+      || ''
+  }
+  return process.env.STRIPE_PRICE_ID_GESTAO
+    || process.env.STRIPE_PRICE_ID
+    || ''
+}
+
 router.post('/stripe/create-checkout', requireAuth, async (req, res) => {
   if(!stripe) return res.status(503).json({ error:'stripe_not_configured', message:'Stripe não configurado.' })
   const store = readStore()
   const company = getCompanyFromSession(store, req)
   if(!company) return res.status(404).json({ error:'company_not_found', message:'Empresa não encontrada.' })
-  const priceId = process.env.STRIPE_PRICE_ID
-  if(!priceId) return res.status(503).json({ error:'price_not_configured', message:'Plano não configurado.' })
-  const frontendUrl = process.env.FRONTEND_URL || 'https://estofaria-digital.pages.dev'
+
+  const planCode = String(req.body?.plan_code || company.plan_code || 'gestao').toLowerCase()
+  const priceId = resolveStripePriceId(planCode)
+  if(!priceId) return res.status(503).json({ error:'price_not_configured', message:'Plano não configurado. Verifique STRIPE_PRICE_ID_GESTAO / STRIPE_PRICE_ID_EMPRESARIAL.' })
+
+  const frontendUrl = process.env.FRONTEND_URL || 'https://estofariadigital.com.br'
   try {
     const trialDays = Number(store.billingConfig?.trial_days || 60)
     const session = await stripe.checkout.sessions.create({
@@ -239,13 +254,16 @@ router.post('/stripe/create-checkout', requireAuth, async (req, res) => {
           end_behavior: { missing_payment_method: 'cancel' }
         }
       },
-      metadata: { company_id: String(company.id) },
+      metadata: {
+        company_id: String(company.id),
+        plan_code: planCode
+      },
       customer_email: company.owner_email || req.user?.email || undefined,
       success_url: `${frontendUrl}/assinatura/?sucesso=1`,
       cancel_url: `${frontendUrl}/assinatura/?cancelado=1`,
       locale: 'pt-BR'
     })
-    res.json({ url: session.url, session_id: session.id })
+    res.json({ url: session.url, session_id: session.id, plan_code: planCode })
   } catch(err) {
     res.status(500).json({ error:'stripe_error', message: err.message })
   }
