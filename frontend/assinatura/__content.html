@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<style>
+body { margin:0; font-family: Arial, sans-serif; background:#f2f2f2;}
+.header {
+ position:fixed; top:0; left:0;
+ width:100%;
+ background:#4a67a1; color:white;
+ padding:10px 18px;
+ display:flex; justify-content:space-between;
+ font-size:14px; z-index:1000;
+ box-sizing:border-box;
+}
+.nav {
+ margin-top:65px;
+ display:flex;
+ gap:12px;
+ padding:10px;
+ overflow-x:auto;
+ white-space:nowrap;
+}
+.btn {
+ flex:0 0 auto;
+ background:#4a67a1;
+ color:white;
+ padding:14px 22px;
+ border-radius:30px;
+ text-decoration:none;
+ box-shadow:0 4px 8px rgba(0,0,0,0.2);
+ font-size:15px;
+ text-align:center;
+}
+</style>
+<script>
+function updateTime(){
+ const now = new Date();
+ document.getElementById("time").innerText = now.toLocaleString();
+}
+setInterval(updateTime,1000);
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Assinatura</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../mobile-fixes.css">
+<script src="../config.js"></script>
+<script src="../auth-guard.js"></script>
+</head>
+<body>
+<div class="header">
+    <div>Estofaria Digital</div>
+    <div id="time"></div>
+</div>
+
+<div class="nav">
+    <a class="btn" href="../painel/">📊 Painel</a>
+    <a class="btn" href="../material/">🧵 Materiais</a>
+    <a class="btn" href="../precificacao/">💰 Precificação</a>
+    <a class="btn" href="../catalogo/">🛋️ Catálogo</a>
+    <a class="btn" href="../itens-personalizacao/">🎨 Itens para personalização</a>
+    <a class="btn" href="../vendedor/">🤝 Vendedor</a>
+    <a class="btn" href="../agenda/">📅 Agenda</a>
+    <a class="btn" href="../assinatura/">💳 Assinatura</a>
+</div>
+
+<div id="bannerAcesso" style="display:none"></div>
+
+<div class="container">
+  <section class="hero premium-hero">
+    <div class="hero-grid">
+      <div class="hero-copy">
+        <span id="planBadge" class="badge badge-dark">Escolha o plano ideal</span>
+        <h1 id="planName">Plano Gestão</h1>
+        <p>Escolha um plano profissional para vender melhor, organizar a operação e dar mais clareza à sua equipe em uma experiência mais premium.</p>
+        <div class="price" id="planPrice">R$ 149,00 <small>/ mês</small></div>
+        <p class="muted hero-note" id="planNote">Plano Gestão: até 2 acessos por empresa. Plano Empresarial: acessos ilimitados.</p>
+        <div class="actions">
+          <button type="button" class="cta-link" id="heroAssinarBtn">Assinar agora</button>
+          <button type="button" class="cta-link secondary" id="heroConsultorBtn">Falar com um consultor</button>
+        </div>
+        <div class="hero-highlights">
+          <div class="hero-highlight">
+            <strong>2 meses grátis com suporte</strong>
+            <span>Te acompanhamos durante os 2 meses para configurar tudo e criar o hábito de uso antes da primeira cobrança. Cartão necessário no cadastro.</span>
+          </div>
+          <div class="hero-highlight">
+            <strong>Equipe com controle</strong>
+            <span>Defina o que cada usuário pode acessar em poucos cliques.</span>
+          </div>
+          <div class="hero-highlight">
+            <strong>Escala sem perder organização</strong>
+            <span>Troque de plano quando sua operação crescer.</span>
+          </div>
+        </div>
+        <div class="side-chip-row hero-chip-row">
+          <span class="side-chip">Mensal</span>
+          <span class="side-chip">Sem fidelidade</span>
+          <span class="side-chip">Mentoria inclusa</span>
+          <span class="side-chip">Suporte comercial</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="plans-showcase">
+    <article class="plan-option selected" data-plan-card="gestao">
+      <div class="plan-topline">
+        <span class="plan-chip">Plano Gestão</span>
+        <span class="plan-mini-badge">Mais escolhido</span>
+      </div>
+      <div>
+        <h2>R$ 149,00 <span class="plan-period">/mês</span></h2>
+        <p>Ideal para o dono da empresa + 1 colaborador com controle simples, direto e profissional.</p>
+      </div>
+      <ul class="plan-list">
+        <li>Até 2 acessos ativos</li>
+        <li>Permissões por aba</li>
+        <li>Convites de equipe</li>
+      </ul>
+      <div class="plan-footer">
+        <span class="plan-footnote">Estrutura enxuta para operação do dia a dia</span>
+        <button type="button" class="checkout-plan-btn" data-checkout-plan="gestao">Assinar Gestão</button>
+      </div>
+    </article>
+
+    <article class="plan-option plan-option-premium" data-plan-card="empresarial">
+      <div class="plan-topline">
+        <span class="plan-chip plan-chip-alt">Plano Empresarial</span>
+        <span class="plan-mini-badge plan-mini-badge-dark">Escala total</span>
+      </div>
+      <div>
+        <h2>R$ 399,00 <span class="plan-period">/mês</span></h2>
+        <p>Para empresas com operação maior, múltiplos vendedores e equipe sem limite de acessos.</p>
+      </div>
+      <ul class="plan-list">
+        <li>Acessos ilimitados</li>
+        <li>Equipe sem limite por plano</li>
+        <li>Ideal para vários setores</li>
+      </ul>
+      <div class="plan-footer">
+        <span class="plan-footnote">Pensado para quem quer crescer com folga operacional</span>
+        <button type="button" class="checkout-plan-btn" data-checkout-plan="empresarial">Assinar Empresarial</button>
+      </div>
+    </article>
+  </section>
+
+  <div id="notice" class="notice" style="margin-bottom:4px"></div>
+
+  <div class="grid">
+    <section class="card">
+      <h2>Resumo do plano escolhido</h2>
+      <p class="section-intro">Veja rapidamente o posicionamento do plano antes de avançar para a contratação.</p>
+      <div class="plan-line"><span>Plano selecionado</span><strong id="selectedPlanSummary">Plano Gestão</strong></div>
+      <div class="plan-line"><span>Valor mensal</span><strong id="priceSummary">R$ 149,00/mês</strong></div>
+      <div class="plan-line"><span>Acessos incluídos</span><strong id="seatSummary">2 acessos por empresa</strong></div>
+      <div class="plan-line"><span>Teste inicial</span><strong id="trialSummary">2 meses grátis</strong></div>
+      <div class="plan-line"><span>Forma de cobrança</span><strong id="providerSummary">Stripe</strong></div>
+      <div class="plan-line"><span>Suporte</span><strong id="supportSummary">Atendimento comercial</strong></div>
+      <ul class="features">
+        <li>Cadastro de materiais e precificação por modelo</li>
+        <li>Catálogo integrado com vendedor e personalização</li>
+        <li>Histórico de orçamentos e conversão em pedidos</li>
+        <li>Agenda e painel de acompanhamento da operação</li>
+        <li>Controle de equipe com acessos por aba</li>
+      </ul>
+      <div class="actions" style="margin-top:20px">
+        <button type="button" class="checkout-plan-btn summary-checkout-btn" id="summaryAssinarBtn">Assinar agora</button>
+      </div>
+    </section>
+
+    <section class="card" id="cardConsultor">
+      <h2>Falar com um consultor</h2>
+      <p class="section-intro">Prefere tirar dúvidas antes de assinar? Deixe seu contato e retornamos em breve.</p>
+      <form id="formConsultor">
+        <label for="consultorName">Nome</label>
+        <input id="consultorName" required>
+
+        <label for="consultorBusiness">Empresa / estofaria</label>
+        <input id="consultorBusiness">
+
+        <label for="consultorEmail">E-mail</label>
+        <input id="consultorEmail" type="email" required>
+
+        <label for="consultorWhatsapp">WhatsApp</label>
+        <input id="consultorWhatsapp">
+
+        <label for="consultorPlan">Plano de interesse</label>
+        <select id="consultorPlan">
+          <option value="gestao">Plano Gestão — R$ 149,00/mês — até 2 acessos</option>
+          <option value="empresarial">Plano Empresarial — R$ 399,00/mês — acessos ilimitados</option>
+        </select>
+
+        <label class="checkbox" for="consultorTerms">
+          <input id="consultorTerms" type="checkbox" required>
+          <span>Concordo em compartilhar meus dados para contato comercial.</span>
+        </label>
+
+        <div class="actions">
+          <button type="submit">Enviar solicitação</button>
+        </div>
+      </form>
+      <div id="noticeConsultor" class="notice"></div>
+    </section>
+  </div>
+
+  <section class="card team-card" id="teamCard" style="margin-top:16px">
+    <div class="team-head">
+      <div>
+        <h2>Equipe e acessos</h2>
+        <p class="muted">Convide usuários, escolha as abas permitidas e desative acessos quando precisar.</p>
+      </div>
+      <div class="seat-pill-wrap">
+        <div class="seat-pill"><span>Acessos usados</span><strong id="teamSeatsUsed">0</strong></div>
+        <div class="seat-pill"><span>Limite do plano</span><strong id="teamSeatsLimit">—</strong></div>
+      </div>
+    </div>
+
+    <div class="team-layout">
+      <div class="team-pane soft-card">
+        <h3 id="inviteFormTitle">Convidar usuário</h3>
+        <form id="formEquipe">
+          <input type="hidden" id="editingUserId">
+
+          <label for="inviteName">Nome do usuário</label>
+          <input id="inviteName" placeholder="Ex.: Maria Souza">
+
+          <label for="inviteEmail">E-mail</label>
+          <input id="inviteEmail" type="email" placeholder="maria@empresa.com">
+
+          <label for="inviteRole">Perfil</label>
+          <select id="inviteRole">
+            <option value="admin">Administrador</option>
+            <option value="vendedor">Vendedor</option>
+            <option value="operacional">Operacional</option>
+            <option value="financeiro">Financeiro</option>
+            <option value="custom">Personalizado</option>
+          </select>
+
+          <label>Acesso por abas</label>
+          <div id="moduleChecklist" class="module-grid"></div>
+
+          <div class="actions sticky-actions">
+            <button type="submit" id="teamSubmitBtn">Enviar convite</button>
+            <button type="button" class="secondary" id="teamResetBtn">Limpar</button>
+          </div>
+        </form>
+        <div id="noticeTeam" class="notice"></div>
+      </div>
+
+      <div class="team-pane soft-card">
+        <div class="list-head">
+          <h3>Usuários cadastrados</h3>
+          <button type="button" class="secondary small-btn" id="refreshTeamBtn">Atualizar</button>
+        </div>
+        <div id="teamMeta" class="muted small-note">Carregando equipe...</div>
+        <div id="teamUsersList" class="team-users-list"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" id="gestaoCard" style="display:none;margin-top:16px">
+    <h2>Gestão do plano</h2>
+    <p class="muted">Use <b>?gestao=1</b> na URL para abrir esta área e ajustar o plano padrão, provedor, trial e atendimento comercial.</p>
+    <form id="formGestao">
+      <label class="checkbox" for="cfgEnabled">
+        <input id="cfgEnabled" type="checkbox">
+        <span>Planos ativos para novas assinaturas</span>
+      </label>
+
+      <label for="cfgPlanName">Nome do plano padrão</label>
+      <input id="cfgPlanName">
+
+      <label for="cfgMonthly">Preço mensal padrão (R$)</label>
+      <input id="cfgMonthly" type="number" min="0" step="0.01">
+
+      <label for="cfgTrial">Dias grátis</label>
+      <input id="cfgTrial" type="number" min="0" max="365">
+
+      <label for="cfgProvider">Provedor de pagamento</label>
+      <input id="cfgProvider" placeholder="manual, stripe, mercado-pago...">
+
+      <label for="cfgLink">Link de pagamento</label>
+      <input id="cfgLink" placeholder="https://...">
+
+      <label for="cfgSupport">Contato de suporte</label>
+      <input id="cfgSupport" placeholder="WhatsApp ou e-mail comercial">
+
+      <label for="cfgNotes">Observações do plano</label>
+      <textarea id="cfgNotes" placeholder="Ex.: ativação em até 1 dia útil"></textarea>
+
+      <div class="actions">
+        <button type="submit">Salvar plano</button>
+      </div>
+    </form>
+    <div id="noticeAdmin" class="notice"></div>
+
+    <h3 style="margin-top:18px">Solicitações recebidas</h3>
+    <div id="leadsList" class="muted">Carregando solicitações...</div>
+  </section>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
