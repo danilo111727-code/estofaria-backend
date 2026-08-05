@@ -1,6 +1,6 @@
 ---
 name: Deploy process — dois repos + dois ambientes Cloudflare + regra de promoção
-description: Backend e frontend em repos GitHub distintos; dois projetos Cloudflare Pages separados (teste e produção); somente o usuário promove para produção.
+description: Backend e frontend em repos GitHub distintos; dois projetos Cloudflare Pages separados (teste e produção); somente o usuário promove para produção; teste e produção compartilham o mesmo backend e banco.
 ---
 
 ## REGRA CRÍTICA — Ambientes
@@ -14,11 +14,12 @@ description: Backend e frontend em repos GitHub distintos; dois projetos Cloudfl
 **O agente sempre faz push para o remote `github` (repo `estofaria-frontend`) → vai automaticamente para o ambiente de teste.**
 **Nunca interagir com o projeto `estofaria-digital` (produção). O usuário promove manualmente depois de validar no teste.**
 
-### Backend
-- Render → `https://estofaria-backend.onrender.com`
-- Remote local: `backend-origin` → `danilo111727-code/estofaria-backend`
-- Push para `backend-origin/main` → deploy no Render (produção do backend)
-- Se o usuário quiser fluxo de teste no backend também, perguntar antes de fazer push.
+### Backend — ATENÇÃO
+- **Teste e Produção usam o MESMO backend e o MESMO banco de dados.**
+- URL: `https://estofaria-backend.onrender.com`
+- Repo: `https://github.com/danilo111727-code/estofaria-backend` → remote local `backend-origin`
+- Qualquer alteração de dados via backend afeta teste e produção ao mesmo tempo.
+- Ter cuidado redobrado ao alterar dados, rotas ou lógica de negócio no backend.
 
 ---
 
