@@ -43,7 +43,13 @@ app.use((req, res, next) => {
 
 app.use(cors(corsOptions))
 app.options('*', cors(corsOptions))
-app.use(express.json({ limit: '1mb' }))
+
+// Não parsear JSON em rotas de webhook (precisam do body raw para verificar assinatura)
+const WEBHOOK_PATHS = ['/api/subscription/webhooks/stripe', '/api/billing/webhooks/stripe']
+app.use((req, res, next) => {
+  if (WEBHOOK_PATHS.includes(req.path)) return next()
+  express.json({ limit: '1mb' })(req, res, next)
+})
 app.use(express.urlencoded({ extended: false, limit: '1mb' }))
 
 app.get('/', (_req, res) => {
@@ -67,15 +73,15 @@ app.get('/api/health', (_req, res) => {
 app.use('/api/auth', authRoutes)
 
 // Rotas principais
-app.use('/api/saas', saasRoutes)
+// IMPORTANTE: /api/billing e /api/subscription devem vir ANTES de /api (operationsRoutes),
+// pois operationsRoutes aplica requireAuth globalmente e interceptaria o webhook do Stripe.
 app.use('/api/billing', billingRoutes)
-app.use('/api', operationsRoutes)
-
-// Aliases para compatibilidade com frontends já publicados
-app.use('/api/master', saasRoutes)
-app.use('/api/admin', saasRoutes)
 app.use('/api/subscription/admin', saasRoutes)
 app.use('/api/subscription', billingRoutes)
+app.use('/api/saas', saasRoutes)
+app.use('/api/master', saasRoutes)
+app.use('/api/admin', saasRoutes)
+app.use('/api', operationsRoutes)
 
 app.use((err, _req, res, _next) => {
   if (err && err.type === 'entity.parse.failed') {
