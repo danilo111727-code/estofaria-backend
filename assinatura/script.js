@@ -346,7 +346,7 @@ async function solicitarAssinatura(ev){
   if(user?.company_id){
     setNotice('ok', 'Abrindo checkout seguro do Stripe...')
     try{
-      const stripeOut = await apiSend('POST', '/subscription/stripe/create-checkout')
+      const stripeOut = await apiSend('POST', '/subscription/stripe/create-checkout', { plan_code: getSelectedPlanCode() })
       if(stripeOut?.url){
         window.location.href = stripeOut.url
         return
