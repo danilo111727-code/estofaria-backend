@@ -1,27 +1,41 @@
 ---
-name: Deploy process — Estofaria Digital Frontend
-description: Regras e causas raiz do processo de deploy; o que fazer e o que nunca fazer
+name: Deploy process — dois repos + estrutura do frontend
+description: Backend e frontend em repos GitHub distintos; estrutura de pastas do frontend no repo é diferente da workspace local.
 ---
 
-## Regra absoluta
-NUNCA fazer `git push origin main`. Isso dispara GitHub Actions → deploy automático de produção.
-SEMPRE usar `git push origin HEAD:dev` ou `git push origin dev`.
+## Regras
 
-## Como funciona o deploy
-- GitHub Actions (`.github/workflows/deploy.yml`) dispara em `push: branches: [main]`
-- Roda `npx wrangler@3 pages deploy . --project-name=estofaria-digital --branch=main --commit-dirty=true`
-- O usuário também deploya manualmente via wrangler CLI
+### Repos
+- **Backend (Render):** `danilo111727-code/estofaria-backend`, branch `main` → remote `backend-origin`
+- **Frontend (Cloudflare Pages):** `danilo111727-code/estofaria-frontend`, branch `main` → remote `github`
 
-## Pendência do usuário
-Editar `.github/workflows/deploy.yml` no GitHub.com e remover `push: branches: [main]`, deixando só `workflow_dispatch`. O token do Replit não tem `workflow` scope para fazer esse push.
+### Estrutura do repo estofaria-frontend
+Os módulos ficam na **raiz** do repo, não em `frontend/`:
+- `assinatura/__content.html` ← arquivo real (não `frontend/assinatura/__content.html`)
+- `assinatura/script.js`, `assinatura/style.css` etc.
+- `app-shell.js` na raiz — controla o iframe shell com cache version `CV`
+- Outros módulos: `painel/`, `agenda/`, `vendedor/`, `material/`, etc. — todos na raiz
 
-## Causas raiz identificadas (19/07/2026)
-1. Workflow auto-dispara em push ao main → sobrescreve produção a cada commit
-2. Melhorias feitas via wrangler sem commit → GitHub Actions deploya versão git mais antiga
-3. Pasta `frontend/` tem duplicatas dos arquivos raiz que ficam desatualizadas
+**Why:** O workspace Replit tem uma pasta `frontend/` local que NÃO espelha o repo remoto. Editar `frontend/assinatura/` cria arquivos novos no repo, não edita os existentes em `assinatura/`.
 
-## Scripts de correção (commitados no dev)
-- `scripts/pre-deploy-check.sh` — verifica pendências antes de deploiar
-- `scripts/sync-frontend.sh` — sincroniza frontend/ com arquivos raiz
+### Cache do shell
+`app-shell.js` usa `var CV = 'YYYYMMDD?'` para cache-bust dos iframes. Bumpar CV sempre que editar `__content.html`, `script.js` ou `style.css` de qualquer módulo.
 
-**Why:** O token PAT não tem `workflow` scope; edições em `.github/workflows/` via push requerem esse scope.
+**How to apply:**
+1. Verificar sempre `git ls-tree github/main <modulo>/` antes de editar para confirmar o path real
+2. Fazer checkout de branch a partir de `github/main`, editar arquivos na raiz (sem prefixo `frontend/`)
+3. Bumpar `CV` em `app-shell.js`
+4. Push para `github/main`
+
+### Auto-deploy
+- Cloudflare Pages: auto-deploy em push ao `github/main` (funciona bem)
+- Render: auto-deploy frequentemente NÃO dispara — usar Manual Deploy no painel após push ao `backend-origin/main`
+
+### Fluxo para backend
+```bash
+git remote add backend-origin "https://<PAT>@github.com/danilo111727-code/estofaria-backend.git"
+git fetch backend-origin main
+git checkout -b fix-xyz backend-origin/main
+# editar arquivos (server.js está na raiz, src/ para rotas)
+git push backend-origin fix-xyz:main
+```
