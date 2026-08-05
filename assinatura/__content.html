@@ -76,8 +76,8 @@ setInterval(updateTime,1000);
         <div class="price" id="planPrice">R$ 149,00 <small>/ mês</small></div>
         <p class="muted hero-note" id="planNote">Plano Gestão: até 2 acessos por empresa. Plano Empresarial: acessos ilimitados.</p>
         <div class="actions">
-          <a id="paymentLinkBtn" class="cta-link" href="#" target="_blank" rel="noopener" style="display:none">Ir para pagamento</a>
-          <a class="cta-link secondary" href="#formAssinatura">Quero assinar</a>
+          <button type="button" class="cta-link" id="heroAssinarBtn">Assinar agora</button>
+          <button type="button" class="cta-link secondary" id="heroConsultorBtn">Falar com um consultor</button>
         </div>
         <div class="hero-highlights">
           <div class="hero-highlight">
@@ -120,7 +120,7 @@ setInterval(updateTime,1000);
       </ul>
       <div class="plan-footer">
         <span class="plan-footnote">Estrutura enxuta para operação do dia a dia</span>
-        <button type="button" class="secondary choose-plan-btn" data-select-plan="gestao">Selecionar Gestão</button>
+        <button type="button" class="checkout-plan-btn" data-checkout-plan="gestao">Assinar Gestão</button>
       </div>
     </article>
 
@@ -140,10 +140,12 @@ setInterval(updateTime,1000);
       </ul>
       <div class="plan-footer">
         <span class="plan-footnote">Pensado para quem quer crescer com folga operacional</span>
-        <button type="button" class="secondary choose-plan-btn" data-select-plan="empresarial">Selecionar Empresarial</button>
+        <button type="button" class="checkout-plan-btn" data-checkout-plan="empresarial">Assinar Empresarial</button>
       </div>
     </article>
   </section>
+
+  <div id="notice" class="notice" style="margin-bottom:4px"></div>
 
   <div class="grid">
     <section class="card">
@@ -152,8 +154,8 @@ setInterval(updateTime,1000);
       <div class="plan-line"><span>Plano selecionado</span><strong id="selectedPlanSummary">Plano Gestão</strong></div>
       <div class="plan-line"><span>Valor mensal</span><strong id="priceSummary">R$ 149,00/mês</strong></div>
       <div class="plan-line"><span>Acessos incluídos</span><strong id="seatSummary">2 acessos por empresa</strong></div>
-      <div class="plan-line"><span>Período gratuito</span><strong id="trialSummary">2 meses grátis com suporte incluso</strong></div>
-      <div class="plan-line"><span>Forma de cobrança</span><strong id="providerSummary">manual</strong></div>
+      <div class="plan-line"><span>Teste inicial</span><strong id="trialSummary">2 meses grátis</strong></div>
+      <div class="plan-line"><span>Forma de cobrança</span><strong id="providerSummary">Stripe</strong></div>
       <div class="plan-line"><span>Suporte</span><strong id="supportSummary">Atendimento comercial</strong></div>
       <ul class="features">
         <li>Cadastro de materiais e precificação por modelo</li>
@@ -162,45 +164,43 @@ setInterval(updateTime,1000);
         <li>Agenda e painel de acompanhamento da operação</li>
         <li>Controle de equipe com acessos por aba</li>
       </ul>
+      <div class="actions" style="margin-top:20px">
+        <button type="button" class="checkout-plan-btn summary-checkout-btn" id="summaryAssinarBtn">Assinar agora</button>
+      </div>
     </section>
 
-    <section class="card">
-      <h2>Solicitar assinatura</h2>
-      <p class="section-intro">Preencha seus dados para receber o contato comercial e iniciar a ativação do plano.</p>
-      <form id="formAssinatura">
-        <label for="name">Nome</label>
-        <input id="name" required>
+    <section class="card" id="cardConsultor">
+      <h2>Falar com um consultor</h2>
+      <p class="section-intro">Prefere tirar dúvidas antes de assinar? Deixe seu contato e retornamos em breve.</p>
+      <form id="formConsultor">
+        <label for="consultorName">Nome</label>
+        <input id="consultorName" required>
 
-        <label for="business">Empresa / estofaria</label>
-        <input id="business">
+        <label for="consultorBusiness">Empresa / estofaria</label>
+        <input id="consultorBusiness">
 
-        <label for="email">E-mail</label>
-        <input id="email" type="email" required>
+        <label for="consultorEmail">E-mail</label>
+        <input id="consultorEmail" type="email" required>
 
-        <label for="whatsapp">WhatsApp</label>
-        <input id="whatsapp">
+        <label for="consultorWhatsapp">WhatsApp</label>
+        <input id="consultorWhatsapp">
 
-        <label for="planChoice">Plano</label>
-        <select id="planChoice">
+        <label for="consultorPlan">Plano de interesse</label>
+        <select id="consultorPlan">
           <option value="gestao">Plano Gestão — R$ 149,00/mês — até 2 acessos</option>
           <option value="empresarial">Plano Empresarial — R$ 399,00/mês — acessos ilimitados</option>
         </select>
 
-        <label for="billingCycle">Ciclo</label>
-        <select id="billingCycle">
-          <option value="monthly">Mensal</option>
-        </select>
-
-        <label class="checkbox" for="terms">
-          <input id="terms" type="checkbox" required>
-          <span>Concordo em enviar meus dados para contato comercial e ativação do plano.</span>
+        <label class="checkbox" for="consultorTerms">
+          <input id="consultorTerms" type="checkbox" required>
+          <span>Concordo em compartilhar meus dados para contato comercial.</span>
         </label>
 
         <div class="actions">
-          <button type="submit">Solicitar assinatura</button>
+          <button type="submit">Enviar solicitação</button>
         </div>
       </form>
-      <div id="notice" class="notice"></div>
+      <div id="noticeConsultor" class="notice"></div>
     </section>
   </div>
 

@@ -132,13 +132,12 @@ function getPlanPreset(code){
 }
 
 function getSelectedPlanCode(){
-  const value = $('planChoice')?.value || subscriptionConfig?.default_plan_code || subscriptionConfig?.plan_code || 'gestao'
+  const value = subscriptionConfig?.default_plan_code || subscriptionConfig?.plan_code || 'gestao'
   return PLAN_PRESETS[String(value).toLowerCase()] ? String(value).toLowerCase() : 'gestao'
 }
 
 function syncPlanSelection(forceCode){
   const plan = getPlanPreset(forceCode || getSelectedPlanCode())
-  if($('planChoice')) $('planChoice').value = plan.code
   if($('planName')) $('planName').textContent = plan.name
   if($('planPrice')) $('planPrice').innerHTML = `${brl(plan.monthly_price_cents)} <small>/ mês</small>`
   if($('planBadge')) $('planBadge').textContent = plan.badge
@@ -146,7 +145,10 @@ function syncPlanSelection(forceCode){
   if($('selectedPlanSummary')) $('selectedPlanSummary').textContent = plan.name
   if($('priceSummary')) $('priceSummary').textContent = `${brl(plan.monthly_price_cents)}/mês`
   if($('seatSummary')) $('seatSummary').textContent = plan.seats_label
-  if($('billingCycle')) $('billingCycle').innerHTML = `<option value="monthly">Mensal — ${brl(plan.monthly_price_cents)}</option>`
+  if($('consultorPlan')) $('consultorPlan').value = plan.code
+  // Atualiza o data-checkout-plan do botão do resumo para refletir o plano selecionado
+  const summaryBtn = $('summaryAssinarBtn')
+  if(summaryBtn) summaryBtn.dataset.checkoutPlan = plan.code
   document.querySelectorAll('[data-plan-card]').forEach(card => {
     card.classList.toggle('selected', card.dataset.planCard === plan.code)
   })
@@ -253,7 +255,7 @@ function renderPlan(cfg){
   subscriptionConfig = cfg || {}
   const selectedPlan = syncPlanSelection(cfg?.default_plan_code || cfg?.plan_code || getSelectedPlanCode())
   const td = Number(cfg?.trial_days || 0)
-  $('trialSummary').textContent = td >= 30 ? '2 meses grátis com suporte incluso' : `${td} dias grátis`
+  $('trialSummary').textContent = td >= 30 ? `${Math.round(td/30)} ${Math.round(td/30) === 1 ? 'mês' : 'meses'} grátis` : `${td} dias grátis`
   $('providerSummary').textContent = cfg?.payment_provider || 'manual'
   $('supportSummary').textContent = cfg?.support_contact || 'Atendimento comercial'
   if($('planNote') && cfg?.notes){
@@ -261,14 +263,6 @@ function renderPlan(cfg){
   }
   if($('seatSummary') && !cfg?.notes){
     $('seatSummary').textContent = selectedPlan.seats_label
-  }
-
-  const paymentBtn = $('paymentLinkBtn')
-  if(cfg.payment_link){
-    paymentBtn.href = cfg.payment_link
-    paymentBtn.style.display = 'inline-block'
-  }else{
-    paymentBtn.style.display = 'none'
   }
 
   if(!cfg.enabled){
@@ -338,54 +332,53 @@ async function loadSubscription(){
   }
 }
 
-async function solicitarAssinatura(ev){
+async function iniciarCheckoutStripe(planCode){
+  const plan = getPlanPreset(planCode || getSelectedPlanCode())
+  setNotice('ok', 'Abrindo checkout seguro da Stripe...')
+  try{
+    const out = await apiSend('POST', '/subscription/stripe/create-checkout', { plan_code: plan.code })
+    if(out?.url){
+      window.location.href = out.url
+    }else{
+      setNotice('warn', 'Não foi possível abrir o checkout. Tente novamente.')
+    }
+  }catch(e){
+    console.error(e)
+    setNotice('warn', e.message || 'Não foi possível abrir o checkout. Tente novamente.')
+  }
+}
+
+async function solicitarAtendimento(ev){
   ev.preventDefault()
-  const selectedPlan = syncPlanSelection(getSelectedPlanCode())
+  const planCode = $('consultorPlan')?.value || getSelectedPlanCode()
+  const selectedPlan = getPlanPreset(planCode)
   const user = window.EstofariaAuth?.user
 
-  if(user?.company_id){
-    setNotice('ok', 'Abrindo checkout seguro do Stripe...')
-    try{
-      const stripeOut = await apiSend('POST', '/subscription/stripe/create-checkout', { plan_code: getSelectedPlanCode() })
-      if(stripeOut?.url){
-        window.location.href = stripeOut.url
-        return
-      }
-    }catch(e){
-      console.warn('Stripe direto falhou:', e.message)
-      setNotice('warn', e.message || 'Não foi possível abrir o checkout. Tente novamente.')
-      return
-    }
-  }
-
   const payload = {
-    name: $('name').value.trim() || user?.name || '',
-    business_name: $('business').value.trim() || user?.empresa || '',
-    email: $('email').value.trim() || user?.email || '',
-    whatsapp: $('whatsapp').value.trim(),
+    name: $('consultorName').value.trim() || user?.name || '',
+    business_name: $('consultorBusiness').value.trim() || user?.empresa || '',
+    email: $('consultorEmail').value.trim() || user?.email || '',
+    whatsapp: $('consultorWhatsapp').value.trim(),
     plan_code: selectedPlan.code,
     plan_name: selectedPlan.name,
-    billing_cycle: $('billingCycle').value,
-    accepted_terms: $('terms').checked
+    billing_cycle: 'monthly',
+    accepted_terms: $('consultorTerms').checked,
+    source: 'consultor-ui'
   }
 
   if(!payload.name || !payload.email){
-    setNotice('warn', 'Preencha pelo menos nome e e-mail para solicitar a assinatura.')
+    setNotice('warn', 'Preencha pelo menos nome e e-mail para solicitar atendimento.', 'noticeConsultor')
     return
   }
 
   try{
-    const out = await apiSend('POST', '/subscription/checkout-request', payload)
-    const link = out?.subscription?.payment_link || subscriptionConfig?.payment_link || ''
-    const trialDays = Number(out?.subscription?.trial_days || subscriptionConfig?.trial_days || 0)
-    const trialLabel = trialDays >= 30 ? `${Math.round(trialDays/30)} ${Math.round(trialDays/30) === 1 ? 'mês' : 'meses'} grátis` : `${trialDays} dia(s) grátis`
-    setNotice('ok', `Solicitação recebida com sucesso para o ${selectedPlan.name}. Seu plano começa com ${trialLabel}.`)
-    $('formAssinatura').reset()
+    await apiSend('POST', '/subscription/checkout-request', payload)
+    setNotice('ok', `Solicitação enviada! Retornaremos em breve sobre o ${selectedPlan.name}.`, 'noticeConsultor')
+    $('formConsultor').reset()
     if(isManagementMode) loadLeads()
-    if(link) window.open(link, '_blank', 'noopener')
   }catch(e){
     console.error(e)
-    setNotice('warn', e.message || 'Não consegui registrar sua solicitação.')
+    setNotice('warn', e.message || 'Não consegui registrar sua solicitação.', 'noticeConsultor')
   }
 }
 
@@ -613,7 +606,7 @@ function renderBannerAcesso(accessStatus, financialStatus){
     <div style="font-size:28px;margin-bottom:6px">${cfg.icon}</div>
     <strong style="font-size:17px;display:block;margin-bottom:6px">${cfg.title}</strong>
     <p style="margin:0 0 14px;opacity:.92;font-size:14px;max-width:520px;margin-left:auto;margin-right:auto">${cfg.text}</p>
-    <button onclick="document.getElementById('formAssinatura')?.scrollIntoView({behavior:'smooth'})" style="background:#fff;color:${cfg.bg};border:none;padding:10px 22px;border-radius:8px;font-weight:700;cursor:pointer;font-size:14px">${cfg.btn}</button>
+    <button onclick="iniciarCheckoutStripe()" style="background:#fff;color:${cfg.bg};border:none;padding:10px 22px;border-radius:8px;font-weight:700;cursor:pointer;font-size:14px">${cfg.btn}</button>
   `
 }
 
@@ -755,11 +748,19 @@ window.addEventListener('DOMContentLoaded', ()=>{
     window.history.replaceState({}, '', window.location.pathname)
   }
 
-  document.querySelectorAll('[data-select-plan]').forEach(button => {
-    button.addEventListener('click', () => syncPlanSelection(button.dataset.selectPlan))
+  // Botões de checkout direto via Stripe
+  document.querySelectorAll('[data-checkout-plan]').forEach(button => {
+    button.addEventListener('click', () => iniciarCheckoutStripe(button.dataset.checkoutPlan))
   })
-  $('planChoice')?.addEventListener('change', event => syncPlanSelection(event.target.value))
-  $('formAssinatura')?.addEventListener('submit', solicitarAssinatura)
+
+  // Hero: assinar e falar com consultor
+  $('heroAssinarBtn')?.addEventListener('click', () => iniciarCheckoutStripe(getSelectedPlanCode()))
+  $('heroConsultorBtn')?.addEventListener('click', () => {
+    $('cardConsultor')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  })
+
+  // Formulário secundário: falar com um consultor
+  $('formConsultor')?.addEventListener('submit', solicitarAtendimento)
   $('formGestao')?.addEventListener('submit', salvarConfiguracao)
   $('formEquipe')?.addEventListener('submit', submitTeamForm)
   $('inviteRole')?.addEventListener('change', event => applyRolePreset(event.target.value))
