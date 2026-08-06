@@ -75,6 +75,9 @@ button.secondary{background:#edf2ff;color:#3552a2}
 button.ghost{background:#fff;color:#3552a2;border:1px solid #d6e0f3}
 button.danger{background:#fff2f0;color:#b42318;border:1px solid #f4c9c3}
 button.small{padding:9px 12px;font-size:13px}
+button.info{background:#e0f0ff;color:#0f5fa8;border:1px solid #b3d9ff}
+button.danger-outline{background:#fff;color:#b42318;border:1px solid #f4c9c3}
+button.danger-outline:hover{background:#fff2f0}
 .detail-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:14px}
 .detail-head h2{margin:6px 0 6px}
 .detail-grid{display:grid;gap:14px}

@@ -1,5 +1,5 @@
 (function(){
-  var CV = '20260805f';
+  var CV = '20260805g';
   var ROUTES = {
     'painel':               { path:'/painel/',               content:'/painel/__content.html?v='+CV,               title:'Painel' },
     'material':             { path:'/material/',             content:'/material/__content.html?v='+CV,             title:'Materiais' },

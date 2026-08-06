@@ -85,6 +85,58 @@ function doLogout(){
   window.location.href = '/login/';
 }
 </script>
+<!-- Banner de impersonação: exibido quando o Master acessa como cliente -->
+<style>
+#masterImpersonationBanner{
+  position:fixed;top:0;left:0;right:0;z-index:99999;
+  background:#b42318;color:#fff;
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:10px 18px;font-size:14px;font-weight:500;
+  box-shadow:0 2px 8px rgba(0,0,0,0.3);
+}
+#masterImpersonationBanner button{
+  background:#fff;color:#b42318;border:none;border-radius:6px;
+  padding:6px 14px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;
+}
+#masterImpersonationBanner button:hover{background:#ffe4e4}
+</style>
+<div id="masterImpersonationBanner" style="display:none">
+  <span id="masterImpersonationMsg">⚠️ Modo de acesso administrativo</span>
+  <button type="button" onclick="exitImpersonation()">Voltar ao painel Master</button>
+</div>
+<script>
+(function(){
+  try {
+    var raw = localStorage.getItem('master_impersonating')
+    if(!raw) return
+    var data = JSON.parse(raw)
+    var banner = document.getElementById('masterImpersonationBanner')
+    var msg    = document.getElementById('masterImpersonationMsg')
+    if(banner && data){
+      msg.textContent = '⚠️ Modo de acesso administrativo — Você está acessando a conta de "' +
+        (data.company_name || 'cliente') + '"' +
+        (data.impersonated_user ? ' (' + data.impersonated_user + ')' : '') + '.'
+      banner.style.display = 'flex'
+    }
+  } catch(_){}
+})()
+
+function exitImpersonation(){
+  try {
+    var masterToken = localStorage.getItem('master_auth_token')
+    var masterUser  = localStorage.getItem('master_auth_user')
+    if(masterToken){
+      localStorage.setItem('auth_token', masterToken)
+      localStorage.setItem('token',      masterToken)
+      if(masterUser) localStorage.setItem('auth_user', masterUser)
+    }
+    localStorage.removeItem('master_impersonating')
+    localStorage.removeItem('master_auth_token')
+    localStorage.removeItem('master_auth_user')
+  } catch(_){}
+  window.location.href = '/master/'
+}
+</script>
 <script src="../pull-to-refresh.js"></script>
 <script src="../app-shell.js?v=20260804c"></script>
 <script src="../keyboard-dismiss.js"></script>

@@ -376,10 +376,12 @@ function renderCompanyList(){
           <span>Último pagamento: <b>${escapeHtml(formatDate(company.last_payment_at))}</b></span>
         </div>
         <div class="quick-actions">
-          <button type="button" class="small secondary" data-quick-action="courtesy" data-company-id="${escapeHtml(company.id)}">Cortesia</button>
-          <button type="button" class="small ghost" data-quick-action="grantGrace" data-company-id="${escapeHtml(company.id)}">+ 7 dias</button>
-          <button type="button" class="small danger" data-quick-action="block" data-company-id="${escapeHtml(company.id)}">Bloquear</button>
-          <button type="button" class="small primary" data-quick-action="view" data-company-id="${escapeHtml(company.id)}">Ver detalhes</button>
+          <button type="button" class="small secondary" data-quick-action="courtesy"    data-company-id="${escapeHtml(company.id)}">Cortesia</button>
+          <button type="button" class="small ghost"     data-quick-action="grantGrace"  data-company-id="${escapeHtml(company.id)}">+ 7 dias</button>
+          <button type="button" class="small danger"    data-quick-action="block"       data-company-id="${escapeHtml(company.id)}">Bloquear</button>
+          <button type="button" class="small primary"   data-quick-action="view"        data-company-id="${escapeHtml(company.id)}">Ver detalhes</button>
+          <button type="button" class="small info"      data-quick-action="impersonate" data-company-id="${escapeHtml(company.id)}">Entrar como cliente</button>
+          <button type="button" class="small danger-outline" data-quick-action="delete" data-company-id="${escapeHtml(company.id)}">Excluir empresa</button>
         </div>
       </article>
     `
@@ -394,10 +396,11 @@ function updateCompanyLocally(updated){
 async function sendCompanyAction(companyId, action, payload){
   const audit = buildAuditPayload(action, companyId)
   const candidates = [
-    { path:`/admin/companies/${encodeURIComponent(companyId)}/actions`, method:'POST', body:{ action, ...payload, audit } },
-    { path:`/master/companies/${encodeURIComponent(companyId)}/actions`, method:'POST', body:{ action, ...payload, audit } },
-    { path:`/admin/companies/${encodeURIComponent(companyId)}`, method:'PATCH', body:{ action, ...payload, audit } },
-    { path:`/master/companies/${encodeURIComponent(companyId)}`, method:'PATCH', body:{ action, ...payload, audit } }
+    { path:`/saas/companies/${encodeURIComponent(companyId)}/actions`,  method:'POST',  body:{ action, ...payload, audit } },
+    { path:`/admin/companies/${encodeURIComponent(companyId)}/actions`, method:'POST',  body:{ action, ...payload, audit } },
+    { path:`/master/companies/${encodeURIComponent(companyId)}/actions`,method:'POST',  body:{ action, ...payload, audit } },
+    { path:`/admin/companies/${encodeURIComponent(companyId)}`,         method:'PATCH', body:{ action, ...payload, audit } },
+    { path:`/master/companies/${encodeURIComponent(companyId)}`,        method:'PATCH', body:{ action, ...payload, audit } }
   ]
 
   let lastError = null
@@ -573,6 +576,14 @@ function handleListClick(event){
       })
       return
     }
+    if(quick.dataset.quickAction === 'delete'){
+      performDelete(companyId)
+      return
+    }
+    if(quick.dataset.quickAction === 'impersonate'){
+      performImpersonate(companyId)
+      return
+    }
   }
 
   const card = event.target.closest('[data-company-id]')
@@ -586,6 +597,71 @@ function handleDetailActions(event){
   if(!button || !state.selectedId) return
   const action = button.dataset.masterAction
   performAction(action, state.selectedId)
+}
+
+async function performDelete(companyId){
+  const company = state.companies.find(c => String(c.id) === String(companyId))
+  if(!company) return
+  const confirmed = window.confirm(
+    `⚠️ Excluir permanentemente a empresa "${company.name}"?\n\n` +
+    `Todos os usuários, pedidos e configurações serão removidos. Essa ação é irreversível.`
+  )
+  if(!confirmed) return
+
+  try {
+    await fetchJson(`/saas/companies/${encodeURIComponent(companyId)}`, { method: 'DELETE' })
+    state.companies = state.companies.filter(c => String(c.id) !== String(companyId))
+    if(String(state.selectedId) === String(companyId)) state.selectedId = null
+    appendLog(companyId, 'deleted', `Empresa "${company.name}" excluída pelo master.`)
+    applyFilters()
+    setMasterNotice('ok', `✓ Empresa "${company.name}" excluída com sucesso.`)
+  } catch(error) {
+    if(allowDemoMode){
+      state.companies = state.companies.filter(c => String(c.id) !== String(companyId))
+      if(String(state.selectedId) === String(companyId)) state.selectedId = null
+      applyFilters()
+      setMasterNotice('warn', 'Modo demonstração: empresa removida localmente.')
+      return
+    }
+    setMasterNotice('warn', explainMasterError(error, 'Não foi possível excluir a empresa agora.'))
+  }
+}
+
+async function performImpersonate(companyId){
+  const company = state.companies.find(c => String(c.id) === String(companyId))
+  if(!company) return
+  const confirmed = window.confirm(
+    `Você está prestes a entrar como cliente da empresa "${company.name}".\n\n` +
+    `Um aviso será exibido durante o acesso. Clique em "Voltar ao painel Master" para retornar.\n\n` +
+    `A senha do cliente NÃO será alterada. Continuar?`
+  )
+  if(!confirmed) return
+
+  try {
+    const data = await fetchJson(`/saas/companies/${encodeURIComponent(companyId)}/impersonate`, { method: 'POST' })
+    if(!data || !data.token) throw new Error('Token de impersonação não retornado pelo backend.')
+
+    // Salva sessão master para restaurar depois
+    localStorage.setItem('master_auth_token', getToken())
+    try { localStorage.setItem('master_auth_user', localStorage.getItem('auth_user') || '') } catch(_){}
+    localStorage.setItem('master_impersonating', JSON.stringify({
+      company_id: companyId,
+      company_name: data.company_name || company.name,
+      impersonated_user: (data.user && data.user.email) || '',
+      started_at: new Date().toISOString()
+    }))
+
+    // Troca sessão para o cliente
+    localStorage.setItem('auth_token', data.token)
+    localStorage.setItem('token', data.token)
+    if(data.user) localStorage.setItem('auth_user', JSON.stringify(data.user))
+
+    // Abre painel do cliente (usa window.top pois roda dentro de iframe)
+    var target = window.top || window
+    target.location.href = '/painel/?master_mode=1'
+  } catch(error) {
+    setMasterNotice('warn', explainMasterError(error, 'Não foi possível iniciar o acesso como cliente.'))
+  }
 }
 
 function bindEvents(){
