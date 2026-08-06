@@ -144,7 +144,9 @@
               (subData && subData.subscription && subData.subscription.access_status) ||
               (subData && subData.access_status) || ''
             ).toLowerCase();
-            var isBlocked = accessStatus === 'blocked';
+            // Bloqueia: sem assinatura ativa (pending_payment) ou explicitamente bloqueado
+            var UNBLOCKED = ['active','trialing','manual_grace','courtesy_active','trial_active'];
+            var isBlocked = !!accessStatus && !UNBLOCKED.includes(accessStatus);
             window.EstofariaAuth.accessBlocked = isBlocked;
             if (isBlocked) {
               var topWin = window.top || window.parent || window;
