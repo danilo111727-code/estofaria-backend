@@ -43,13 +43,7 @@ app.use((req, res, next) => {
 
 app.use(cors(corsOptions))
 app.options('*', cors(corsOptions))
-
-// Não parsear JSON em rotas de webhook (precisam do body raw para verificar assinatura Stripe)
-const WEBHOOK_PATHS = ['/api/subscription/webhooks/stripe', '/api/billing/webhooks/stripe']
-app.use((req, res, next) => {
-  if (WEBHOOK_PATHS.includes(req.path)) return next()
-  express.json({ limit: '1mb' })(req, res, next)
-})
+app.use(express.json({ limit: '1mb' }))
 app.use(express.urlencoded({ extended: false, limit: '1mb' }))
 
 app.get('/', (_req, res) => {
@@ -73,15 +67,15 @@ app.get('/api/health', (_req, res) => {
 app.use('/api/auth', authRoutes)
 
 // Rotas principais
-// IMPORTANTE: /api/billing e /api/subscription devem vir ANTES de /api (operationsRoutes),
-// pois operationsRoutes aplica requireAuth globalmente e interceptaria o webhook do Stripe.
-app.use('/api/billing', billingRoutes)
-app.use('/api/subscription/admin', saasRoutes)
-app.use('/api/subscription', billingRoutes)
 app.use('/api/saas', saasRoutes)
+app.use('/api/billing', billingRoutes)
+app.use('/api', operationsRoutes)
+
+// Aliases para compatibilidade com frontends já publicados
 app.use('/api/master', saasRoutes)
 app.use('/api/admin', saasRoutes)
-app.use('/api', operationsRoutes)
+app.use('/api/subscription/admin', saasRoutes)
+app.use('/api/subscription', billingRoutes)
 
 app.use((err, _req, res, _next) => {
   if (err && err.type === 'entity.parse.failed') {
@@ -100,19 +94,6 @@ async function start() {
     const pg = storeLib._pg
     await pg.init()
     await pg.bootstrapStore()
-
-  // Migração: garante trial_days = 60 se estava configurado com valor menor
-  try {
-    const store = storeLib.readStore()
-    if (Number(store.billingConfig?.trial_days || 0) < 60) {
-      store.billingConfig = { ...store.billingConfig, trial_days: 60 }
-      storeLib.writeStore(store)
-      console.log('[server] billingConfig.trial_days atualizado para 60')
-    }
-  } catch (e) {
-    console.error('[server] Erro na migração de trial_days:', e.message)
-  }
-
     process.on('SIGTERM', async () => {
       console.log('[server] SIGTERM — salvando dados pendentes...')
       await pg.flushNow().catch(console.error)
@@ -128,18 +109,6 @@ async function start() {
     storeLib.ensureStore()
     storeLib.bootstrapStore()
   }
-  // Migração: garante trial_days = 60 se estava configurado com valor menor
-  try {
-    const store = storeLib.readStore()
-    if (Number(store.billingConfig?.trial_days || 0) < 60) {
-      store.billingConfig = { ...store.billingConfig, trial_days: 60 }
-      storeLib.writeStore(store)
-      console.log('[server] billingConfig.trial_days atualizado para 60')
-    }
-  } catch (e) {
-    console.error('[server] Erro na migração de trial_days:', e.message)
-  }
-
 
   const port = Number(process.env.PORT || 8787)
   app.listen(port, () => {

@@ -1,8 +1,0 @@
-uploads = []
-generated = []
-
-[[outputs]]
-id = "ot5UM7-3ucliWBgVBNrxw"
-uri = "file://Analise-Estofaria-Digital.pdf"
-type = "pdf"
-title = "Análise Técnica Completa — Estofaria Digital (corrigida)"
