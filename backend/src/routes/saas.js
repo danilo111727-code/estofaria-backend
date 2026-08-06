@@ -266,13 +266,25 @@ router.post('/companies/:companyId/impersonate', requireAuth, requireMaster, req
   const company = store.companies.find(c => String(c.id) === String(companyId))
   if (!company) return res.status(404).json({ error: 'company_not_found', message: 'Empresa não encontrada.' })
 
-  // Localiza o usuário proprietário da empresa
-  const companyUsers = (store.companyUsers || []).filter(cu => String(cu.company_id) === String(company.id))
-  const ownerLink = companyUsers.find(cu => cu.role === 'owner' || cu.is_owner) || companyUsers[0]
-  if (!ownerLink) return res.status(404).json({ error: 'no_owner', message: 'Nenhum usuário encontrado nessa empresa.' })
+  const allUsers = store.users || []
+  const allCompanyUsers = store.companyUsers || []
 
-  const user = (store.users || []).find(u => String(u.id) === String(ownerLink.user_id))
-  if (!user) return res.status(404).json({ error: 'user_not_found', message: 'Usuário proprietário não encontrado.' })
+  // Estratégia 1: via companyUsers (owner preferencial)
+  const linked = allCompanyUsers.filter(cu => String(cu.company_id) === String(company.id))
+  const ownerLink = linked.find(cu => cu.role === 'owner' || cu.is_owner) || linked[0]
+  let user = ownerLink ? allUsers.find(u => String(u.id) === String(ownerLink.user_id)) : null
+
+  // Estratégia 2: user com company_id igual
+  if (!user) user = allUsers.find(u => String(u.company_id) === String(companyId))
+
+  // Estratégia 3: user cujo email bate com owner_email da empresa
+  if (!user && company.owner_email && company.owner_email !== '-')
+    user = allUsers.find(u => u.email === company.owner_email)
+
+  if (!user) return res.status(404).json({
+    error: 'user_not_found',
+    message: `Nenhum usuário encontrado para a empresa "${company.name || companyId}". Verifique se o proprietário já realizou o primeiro acesso.`
+  })
 
   // Emite token de curta duração (2h) marcado como impersonação — sem alterar a senha ou sessão real do cliente
   const impersonationPayload = {
