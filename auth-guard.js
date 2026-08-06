@@ -138,6 +138,18 @@
           var subRes = await fetch(base + '/api/subscription/', {
             headers: { Accept: 'application/json', Authorization: 'Bearer ' + token }
           });
+
+          // 402 = backend bloqueou explicitamente (pending_payment, blocked, etc.)
+          if (subRes.status === 402) {
+            window.EstofariaAuth.accessBlocked = true;
+            var topWin = window.top || window.parent || window;
+            var cur = String((topWin.location && topWin.location.pathname) || '');
+            if (!cur.startsWith('/assinatura/') && !cur.startsWith('/login/')) {
+              topWin.location.href = '/assinatura/?bloqueado=1';
+            }
+            return;
+          }
+
           if (subRes.ok) {
             var subData = await subRes.json();
             var accessStatus = String(
