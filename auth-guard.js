@@ -119,7 +119,32 @@
 
       window.EstofariaAuth = {
         user: data.user || data || {},
+        accessBlocked: false,
       };
+
+      // Verifica access_status para redirecionar usuários sem assinatura ativa
+      try {
+        var subRes = await fetch(base + '/api/subscription/status', {
+          headers: { Accept: 'application/json', Authorization: 'Bearer ' + token }
+        });
+        if (subRes.ok) {
+          var subData = await subRes.json();
+          var accessStatus = String(
+            (subData && subData.subscription && subData.subscription.access_status) ||
+            (subData && subData.access_status) || ''
+          ).toLowerCase();
+          var isBlocked = accessStatus === 'blocked';
+          window.EstofariaAuth.accessBlocked = isBlocked;
+          if (isBlocked) {
+            var topWin = window.top || window.parent || window;
+            var cur = String((topWin.location && topWin.location.pathname) || '');
+            if (!cur.startsWith('/assinatura/') && !cur.startsWith('/login/')) {
+              topWin.location.href = '/assinatura/?bloqueado=1';
+              return;
+            }
+          }
+        }
+      } catch (_) {}
 
       document.documentElement.setAttribute('data-auth-ok', '1');
       document.documentElement.removeAttribute('data-auth-pending');

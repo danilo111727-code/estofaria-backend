@@ -1,5 +1,5 @@
 (function(){
-  var CV = '20260805c';
+  var CV = '20260805d';
   var ROUTES = {
     'painel':               { path:'/painel/',               content:'/painel/__content.html?v='+CV,               title:'Painel' },
     'material':             { path:'/material/',             content:'/material/__content.html?v='+CV,             title:'Materiais' },
@@ -244,6 +244,11 @@
 
   function navigate(code, push){
     if(code === currentModule) return;
+    // Guarda de acesso: se assinatura bloqueada, força aba de assinatura
+    if(code !== 'assinatura' && window.EstofariaAuth && window.EstofariaAuth.accessBlocked){
+      code = 'assinatura';
+      push = true;
+    }
     loadModule(code, push);
   }
 

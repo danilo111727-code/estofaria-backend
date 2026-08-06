@@ -741,8 +741,26 @@ window.addEventListener('DOMContentLoaded', ()=>{
 
   // Retorno do Stripe / redirect por bloqueio
   if(qs.get('sucesso') === '1'){
-    setNotice('ok', '🎉 Cartão cadastrado com sucesso! Seus 2 meses grátis estão ativos. Bem-vindo ao Estofaria Digital.')
+    setNotice('ok', '🎉 Cartão cadastrado com sucesso! Seus 2 meses grátis estão ativos. Liberando acesso...')
     window.history.replaceState({}, '', window.location.pathname)
+    // Polling: aguarda webhook Stripe confirmar access_status = active e redireciona
+    ;(function pollAccess(){
+      var attempts = 0
+      var iv = setInterval(async function(){
+        attempts++
+        try{
+          const r = await apiGet('/subscription/status')
+          const st = String(r?.subscription?.access_status || r?.access_status || '').toLowerCase()
+          if(st === 'active' || st === 'trialing'){
+            clearInterval(iv)
+            if(window.top && window.top.EstofariaAuth) window.top.EstofariaAuth.accessBlocked = false
+            setNotice('ok', '✅ Acesso liberado! Redirecionando para o painel...')
+            setTimeout(function(){ try{ window.top.location.href = '/painel/' }catch(_){ window.location.href = '/painel/' } }, 1200)
+          }
+        }catch(_){}
+        if(attempts >= 20) clearInterval(iv)
+      }, 3000)
+    })()
   } else if(qs.get('cancelado') === '1'){
     setNotice('warn', 'O cadastro do cartão foi cancelado. Cadastre o cartão para liberar o acesso ao sistema.')
     window.history.replaceState({}, '', window.location.pathname)
