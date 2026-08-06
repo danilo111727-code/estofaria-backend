@@ -162,8 +162,6 @@ router.post('/register', (req, res) => {
   const companyId = uuidv4()
   const userId = uuidv4()
   const plan = planPreset(store.billingConfig.default_plan_code || 'gestao')
-  const trialDays = Number(store.billingConfig.trial_days || 30)
-  const trialEndsAt = new Date(Date.now() + trialDays * 86400000).toISOString()
 
   const user = {
     id: userId,
@@ -193,9 +191,7 @@ router.post('/register', (req, res) => {
     access_status: 'pending_payment',
     seats_limit: plan.seats_limit,
     monthly_price_cents: plan.monthly_price_cents,
-    next_charge_at: trialEndsAt,
-    trial_ends_at: trialEndsAt,
-    notes: 'Conta criada pelo fluxo de cadastro SaaS.',
+    notes: 'Conta criada pelo fluxo de cadastro SaaS. Trial inicia após checkout Stripe.',
     created_at: nowIso(),
     updated_at: nowIso()
   })

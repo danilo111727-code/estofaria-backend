@@ -136,10 +136,8 @@ function handleCheckout(req, res){
     company.monthly_price_cents = plan.monthly_price_cents
     company.seats_limit = plan.seats_limit
     company.billing_mode = 'stripe'
-    company.financial_status = company.financial_status === 'active' ? 'active' : 'trialing'
-    company.access_status = 'active'
-    company.next_charge_at = new Date(Date.now() + Number(cfg.trial_days || 60) * 86400000).toISOString()
-    if(!company.trial_ends_at) company.trial_ends_at = company.next_charge_at
+    // NÃO alterar access_status nem trial_ends_at aqui.
+    // Somente o webhook checkout.session.completed tem autoridade para liberar o acesso.
 
     upsertAudit(store, {
       company_id: company.id,
@@ -308,7 +306,8 @@ router.post('/webhooks/stripe', express.raw({ type: 'application/json' }), (req,
       const trialDays = Number(store.billingConfig?.trial_days || 60)
       company.financial_status = 'trialing'
       company.access_status = 'active'
-      if(!company.trial_ends_at) company.trial_ends_at = new Date(Date.now() + trialDays * 86400000).toISOString()
+      // Trial sempre começa a partir do checkout Stripe, nunca do cadastro
+      company.trial_ends_at = new Date(Date.now() + trialDays * 86400000).toISOString()
       company.next_charge_at = company.trial_ends_at
     }
     if(type === 'invoice.paid'){
