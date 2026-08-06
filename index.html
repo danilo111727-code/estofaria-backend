@@ -30,7 +30,18 @@
         var token = auth && typeof auth.getToken === 'function'
           ? auth.getToken()
           : (localStorage.getItem('auth_token') || localStorage.getItem('token') || '')
-        window.location.replace(token ? '/painel/' : '/login/')
+        if (!token) { window.location.replace('/login/'); return; }
+        // Detecta master pelo usuário em cache para redirecionar ao painel correto
+        var cachedUser = null
+        try { cachedUser = JSON.parse(localStorage.getItem('auth_user') || 'null') } catch(_){}
+        var u = cachedUser || {}
+        var isMaster = !!(
+          u.is_master || u.is_superadmin || u.master_access || u.saas_admin ||
+          ['platform_admin','superadmin','saas_admin'].indexOf(
+            String(u.role || '').toLowerCase()
+          ) !== -1
+        )
+        window.location.replace(isMaster ? '/master/' : '/painel/')
       } catch (_) {
         window.location.replace('/login/')
       }

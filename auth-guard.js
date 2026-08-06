@@ -118,12 +118,6 @@
       const data = await response.json();
 
       var authUser = data.user || data || {};
-      window.EstofariaAuth = {
-        user: authUser,
-        accessBlocked: false,
-      };
-
-      // Master/superadmin nunca passa pela verificação de assinatura
       var isMasterUser = !!(
         authUser.is_master || authUser.is_superadmin ||
         authUser.master_access || authUser.saas_admin ||
@@ -131,6 +125,11 @@
           String(authUser.role || '').toLowerCase()
         ) !== -1
       );
+      window.EstofariaAuth = {
+        user: authUser,
+        accessBlocked: false,
+        isMaster: isMasterUser,
+      };
 
       // Verifica access_status para redirecionar usuários comuns sem assinatura ativa
       if (!isMasterUser) {
