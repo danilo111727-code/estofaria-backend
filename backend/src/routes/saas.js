@@ -2,7 +2,6 @@ const express = require('express')
 const bcrypt = require('bcryptjs')
 const { readStore, writeStore, materializeCompany, findCompanyById, upsertAudit, nowIso, planPreset } = require('../lib/store')
 const { requireAuth, requireMaster, requirePermission } = require('../middleware/auth')
-const { issueToken, sanitizeUser } = require('../lib/auth')
 
 const router = express.Router()
 
@@ -257,63 +256,6 @@ router.delete('/companies/:companyId', requireAuth, requireMaster, requirePermis
 
   writeStore(store)
   res.json({ ok: true, message: 'Empresa "' + (company.name || company.trade_name || companyId) + '" excluida com sucesso.' })
-})
-
-// POST /companies/:companyId/impersonate — Master entra como o proprietário da empresa
-router.post('/companies/:companyId/impersonate', requireAuth, requireMaster, requirePermission('saas.companies.read'), (req, res) => {
-  const store = readStore()
-  const companyId = req.params.companyId
-  const company = store.companies.find(c => String(c.id) === String(companyId))
-  if (!company) return res.status(404).json({ error: 'company_not_found', message: 'Empresa não encontrada.' })
-
-  const allUsers = store.users || []
-  const allCompanyUsers = store.companyUsers || []
-
-  // Estratégia 1: via companyUsers (owner preferencial)
-  const linked = allCompanyUsers.filter(cu => String(cu.company_id) === String(company.id))
-  const ownerLink = linked.find(cu => cu.role === 'owner' || cu.is_owner) || linked[0]
-  let user = ownerLink ? allUsers.find(u => String(u.id) === String(ownerLink.user_id)) : null
-
-  // Estratégia 2: user com company_id igual
-  if (!user) user = allUsers.find(u => String(u.company_id) === String(companyId))
-
-  // Estratégia 3: user cujo email bate com owner_email da empresa
-  if (!user && company.owner_email && company.owner_email !== '-')
-    user = allUsers.find(u => u.email === company.owner_email)
-
-  if (!user) return res.status(404).json({
-    error: 'user_not_found',
-    message: `Nenhum usuário encontrado para a empresa "${company.name || companyId}". Verifique se o proprietário já realizou o primeiro acesso.`
-  })
-
-  // Emite token de curta duração (2h) marcado como impersonação — sem alterar a senha ou sessão real do cliente
-  const impersonationPayload = {
-    ...sanitizeUser(user),
-    company_id: company.id,
-    impersonated_by: req.user.id,
-    impersonated_by_email: req.user.email,
-    impersonation: true
-  }
-  const token = issueToken(impersonationPayload)
-
-  upsertAudit(store, {
-    company_id: company.id,
-    action: 'master_impersonation',
-    message: `Master ${req.user.email} entrou como ${user.email} (empresa "${company.name || company.trade_name}").`,
-    actor_user_id: req.user.id,
-    actor_name: req.user.name,
-    actor_email: req.user.email,
-    actor_role: req.user.role,
-    source: 'master-impersonate'
-  })
-  writeStore(store)
-
-  res.json({
-    ok: true,
-    token,
-    user: sanitizeUser(user),
-    company_name: company.name || company.trade_name || companyId
-  })
 })
 
 module.exports = router
