@@ -1,5 +1,5 @@
 (function(){
-  var CV = '20260805d';
+  var CV = '20260805e';
   var ROUTES = {
     'painel':               { path:'/painel/',               content:'/painel/__content.html?v='+CV,               title:'Painel' },
     'material':             { path:'/material/',             content:'/material/__content.html?v='+CV,             title:'Materiais' },
@@ -244,8 +244,8 @@
 
   function navigate(code, push){
     if(code === currentModule) return;
-    // Guarda de acesso: se assinatura bloqueada, força aba de assinatura
-    if(code !== 'assinatura' && window.EstofariaAuth && window.EstofariaAuth.accessBlocked){
+    // Guarda de acesso: se assinatura bloqueada, força aba de assinatura (nunca bloqueia master)
+    if(code !== 'assinatura' && window.EstofariaAuth && window.EstofariaAuth.accessBlocked && !window.EstofariaAuth.isMaster){
       code = 'assinatura';
       push = true;
     }

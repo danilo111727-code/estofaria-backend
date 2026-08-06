@@ -117,34 +117,47 @@
 
       const data = await response.json();
 
+      var authUser = data.user || data || {};
       window.EstofariaAuth = {
-        user: data.user || data || {},
+        user: authUser,
         accessBlocked: false,
       };
 
-      // Verifica access_status para redirecionar usuários sem assinatura ativa
-      try {
-        var subRes = await fetch(base + '/api/subscription/status', {
-          headers: { Accept: 'application/json', Authorization: 'Bearer ' + token }
-        });
-        if (subRes.ok) {
-          var subData = await subRes.json();
-          var accessStatus = String(
-            (subData && subData.subscription && subData.subscription.access_status) ||
-            (subData && subData.access_status) || ''
-          ).toLowerCase();
-          var isBlocked = accessStatus === 'blocked';
-          window.EstofariaAuth.accessBlocked = isBlocked;
-          if (isBlocked) {
-            var topWin = window.top || window.parent || window;
-            var cur = String((topWin.location && topWin.location.pathname) || '');
-            if (!cur.startsWith('/assinatura/') && !cur.startsWith('/login/')) {
-              topWin.location.href = '/assinatura/?bloqueado=1';
-              return;
+      // Master/superadmin nunca passa pela verificação de assinatura
+      var isMasterUser = !!(
+        authUser.is_master || authUser.is_superadmin ||
+        authUser.master_access || authUser.saas_admin ||
+        ['platform_admin','superadmin','saas_admin'].indexOf(
+          String(authUser.role || '').toLowerCase()
+        ) !== -1
+      );
+
+      // Verifica access_status para redirecionar usuários comuns sem assinatura ativa
+      if (!isMasterUser) {
+        try {
+          // Rota correta: router.get('/') em billingRoutes → /api/subscription/
+          var subRes = await fetch(base + '/api/subscription/', {
+            headers: { Accept: 'application/json', Authorization: 'Bearer ' + token }
+          });
+          if (subRes.ok) {
+            var subData = await subRes.json();
+            var accessStatus = String(
+              (subData && subData.subscription && subData.subscription.access_status) ||
+              (subData && subData.access_status) || ''
+            ).toLowerCase();
+            var isBlocked = accessStatus === 'blocked';
+            window.EstofariaAuth.accessBlocked = isBlocked;
+            if (isBlocked) {
+              var topWin = window.top || window.parent || window;
+              var cur = String((topWin.location && topWin.location.pathname) || '');
+              if (!cur.startsWith('/assinatura/') && !cur.startsWith('/login/')) {
+                topWin.location.href = '/assinatura/?bloqueado=1';
+                return;
+              }
             }
           }
-        }
-      } catch (_) {}
+        } catch (_) {}
+      }
 
       document.documentElement.setAttribute('data-auth-ok', '1');
       document.documentElement.removeAttribute('data-auth-pending');
