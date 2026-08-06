@@ -136,10 +136,8 @@ function handleCheckout(req, res){
     company.monthly_price_cents = plan.monthly_price_cents
     company.seats_limit = plan.seats_limit
     company.billing_mode = 'stripe'
-    company.financial_status = company.financial_status === 'active' ? 'active' : 'trialing'
-    company.access_status = 'active'
-    company.next_charge_at = new Date(Date.now() + Number(cfg.trial_days || 30) * 86400000).toISOString()
-    if(!company.trial_ends_at) company.trial_ends_at = company.next_charge_at
+    // access_status e financial_status só são atualizados pelo webhook Stripe,
+    // nunca pelo simples preenchimento do formulário de checkout.
 
     upsertAudit(store, {
       company_id: company.id,
