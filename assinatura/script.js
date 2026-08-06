@@ -338,7 +338,8 @@ async function iniciarCheckoutStripe(planCode){
   try{
     const out = await apiSend('POST', '/subscription/stripe/create-checkout', { plan_code: plan.code })
     if(out?.url){
-      window.location.href = out.url
+      // Redireciona no topo da página (o conteúdo roda dentro de um iframe no app-shell)
+      window.top.location.href = out.url
     }else{
       setNotice('warn', 'Não foi possível abrir o checkout. Tente novamente.')
     }
