@@ -662,7 +662,8 @@ async function performImpersonate(companyId){
   } catch(error) {
     const msg = explainMasterError(error, 'Não foi possível iniciar o acesso como cliente.')
     setMasterNotice('warn', msg)
-    window.alert('Erro ao entrar como cliente:\n\n' + msg)
+    // window.top.alert funciona mesmo quando alertas do iframe são bloqueados
+    try { (window.top || window).alert('Erro ao entrar como cliente:\n\n' + msg) } catch(_) { window.alert(msg) }
   }
 }
 

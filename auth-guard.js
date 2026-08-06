@@ -131,8 +131,12 @@
         isMaster: isMasterUser,
       };
 
+      // Sessões de impersonação pelo Master nunca são bloqueadas por assinatura
+      var isImpersonating = false;
+      try { isImpersonating = !!localStorage.getItem('master_impersonating'); } catch(_) {}
+
       // Verifica access_status para redirecionar usuários comuns sem assinatura ativa
-      if (!isMasterUser) {
+      if (!isMasterUser && !isImpersonating) {
         try {
           // Rota correta: router.get('/') em billingRoutes → /api/subscription/
           var subRes = await fetch(base + '/api/subscription/', {
