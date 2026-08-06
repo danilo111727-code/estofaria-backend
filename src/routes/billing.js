@@ -221,8 +221,13 @@ router.post('/stripe/create-checkout', requireAuth, async (req, res) => {
   const store = readStore()
   const company = getCompanyFromSession(store, req)
   if(!company) return res.status(404).json({ error:'company_not_found', message:'Empresa não encontrada.' })
-  const priceId = process.env.STRIPE_PRICE_ID || store.billingConfig?.stripe_price_id
-  if(!priceId) return res.status(503).json({ error:'price_not_configured', message:'Plano não configurado. Configure o stripe_price_id no painel Master → Faturamento.' })
+  // Resolve o Price ID por plano: env var específica > env var genérica > billingConfig map > billingConfig single
+  const planCode = (company.plan_code || store.billingConfig?.default_plan_code || 'gestao').toLowerCase()
+  const priceId = process.env[`STRIPE_PRICE_ID_${planCode.toUpperCase()}`]
+    || process.env.STRIPE_PRICE_ID
+    || (store.billingConfig?.stripe_prices || {})[planCode]
+    || store.billingConfig?.stripe_price_id
+  if(!priceId) return res.status(503).json({ error:'price_not_configured', message:'Plano não configurado.' })
   const frontendUrl = process.env.FRONTEND_URL || 'https://estofaria-digital.pages.dev'
   try {
     const trialDays = Number(store.billingConfig?.trial_days || 60)
