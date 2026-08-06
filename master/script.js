@@ -660,7 +660,9 @@ async function performImpersonate(companyId){
     var target = window.top || window
     target.location.href = '/painel/?master_mode=1'
   } catch(error) {
-    setMasterNotice('warn', explainMasterError(error, 'Não foi possível iniciar o acesso como cliente.'))
+    const msg = explainMasterError(error, 'Não foi possível iniciar o acesso como cliente.')
+    setMasterNotice('warn', msg)
+    window.alert('Erro ao entrar como cliente:\n\n' + msg)
   }
 }
 
