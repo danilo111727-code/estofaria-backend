@@ -380,7 +380,6 @@ function renderCompanyList(){
           <button type="button" class="small ghost"     data-quick-action="grantGrace"  data-company-id="${escapeHtml(company.id)}">+ 7 dias</button>
           <button type="button" class="small danger"    data-quick-action="block"       data-company-id="${escapeHtml(company.id)}">Bloquear</button>
           <button type="button" class="small primary"   data-quick-action="view"        data-company-id="${escapeHtml(company.id)}">Ver detalhes</button>
-          <button type="button" class="small info"      data-quick-action="impersonate" data-company-id="${escapeHtml(company.id)}">Entrar como cliente</button>
           <button type="button" class="small danger-outline" data-quick-action="delete" data-company-id="${escapeHtml(company.id)}">Excluir empresa</button>
         </div>
       </article>
@@ -580,10 +579,6 @@ function handleListClick(event){
       performDelete(companyId)
       return
     }
-    if(quick.dataset.quickAction === 'impersonate'){
-      performImpersonate(companyId)
-      return
-    }
   }
 
   const card = event.target.closest('[data-company-id]')
@@ -624,46 +619,6 @@ async function performDelete(companyId){
       return
     }
     setMasterNotice('warn', explainMasterError(error, 'Não foi possível excluir a empresa agora.'))
-  }
-}
-
-async function performImpersonate(companyId){
-  const company = state.companies.find(c => String(c.id) === String(companyId))
-  if(!company) return
-  const confirmed = window.confirm(
-    `Você está prestes a entrar como cliente da empresa "${company.name}".\n\n` +
-    `Um aviso será exibido durante o acesso. Clique em "Voltar ao painel Master" para retornar.\n\n` +
-    `A senha do cliente NÃO será alterada. Continuar?`
-  )
-  if(!confirmed) return
-
-  try {
-    const data = await fetchJson(`/saas/companies/${encodeURIComponent(companyId)}/impersonate`, { method: 'POST' })
-    if(!data || !data.token) throw new Error('Token de impersonação não retornado pelo backend.')
-
-    // Salva sessão master para restaurar depois
-    localStorage.setItem('master_auth_token', getToken())
-    try { localStorage.setItem('master_auth_user', localStorage.getItem('auth_user') || '') } catch(_){}
-    localStorage.setItem('master_impersonating', JSON.stringify({
-      company_id: companyId,
-      company_name: data.company_name || company.name,
-      impersonated_user: (data.user && data.user.email) || '',
-      started_at: new Date().toISOString()
-    }))
-
-    // Troca sessão para o cliente
-    localStorage.setItem('auth_token', data.token)
-    localStorage.setItem('token', data.token)
-    if(data.user) localStorage.setItem('auth_user', JSON.stringify(data.user))
-
-    // Abre painel do cliente (usa window.top pois roda dentro de iframe)
-    var target = window.top || window
-    target.location.href = '/painel/?master_mode=1'
-  } catch(error) {
-    const msg = explainMasterError(error, 'Não foi possível iniciar o acesso como cliente.')
-    setMasterNotice('warn', msg)
-    // window.top.alert funciona mesmo quando alertas do iframe são bloqueados
-    try { (window.top || window).alert('Erro ao entrar como cliente:\n\n' + msg) } catch(_) { window.alert(msg) }
   }
 }
 
