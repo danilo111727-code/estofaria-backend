@@ -1,1 +1,3 @@
 - [Deploy process](deploy-process.md) — auto-deploy dispara em push ao main; nunca pushar main; só dev; workflow fix pendente pelo usuário no GitHub.com
+- [Render não auto-deploya](render-deploy.md) — push no GitHub não garante redeploy; verificar health endpoint e usar Manual Deploy no dashboard do Render.
+- [Gate de assinatura](subscription-gate.md) — fluxo completo backend+frontend; 402 = bloqueado; pending_payment nunca deve retornar access_status ativo.
