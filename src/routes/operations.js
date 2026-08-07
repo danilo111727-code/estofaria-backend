@@ -73,30 +73,88 @@ function seedCompanyData(store, companyId){
     })
   }
 
-  if(true) return
+  if(!store.materials.some(item => String(item.company_id) === cid)){
+    const DEFAULT_MATERIALS = [
+      { name:'Grampo 80/10',              unit:'caixa'          },
+      { name:'Grampo 45/50',              unit:'caixa'          },
+      { name:'Parafuso 45/50',            unit:'caixa'          },
+      { name:'Parafuso 60/80',            unit:'caixa'          },
+      { name:'Parafuso em Geral',         unit:'caixa'          },
+      { name:'Molas Ensacadas',           unit:'unidade'        },
+      { name:'Molas Ensacadas',           unit:'metro quadrado' },
+      { name:'Cola de Contato',           unit:'litro'          },
+      { name:'TNT Médio',                 unit:'metro'          },
+      { name:'TNT Grosso',               unit:'metro'          },
+      { name:'TNT Fino',                  unit:'metro'          },
+      { name:'Mecanismo Retrátil',        unit:'unidade'        },
+      { name:'Rodízio',                   unit:'unidade'        },
+      { name:'Percinta',                  unit:'metro'          },
+      { name:'Tecido Clássico',           unit:'metro'          },
+      { name:'Tecido Premium',            unit:'metro'          },
+      { name:'Tecido Alto Padrão',        unit:'metro'          },
+      { name:'Madeira',                   unit:'peça'           },
+      { name:'Folha de MDF 18mm',         unit:'placa'          },
+      { name:'Compensado 15mm',           unit:'placa'          },
+      { name:'Manta Acrílica',            unit:'metro'          },
+      { name:'Fibra',                     unit:'quilograma'     },
+      { name:'Encaixes',                  unit:'par'            },
+      { name:'Saco de Embalagem',         unit:'unidade'        },
+      { name:'Malha de Embalagem',        unit:'metro'          },
+      { name:'Espuma D-28 Selada 1cm',    unit:'metro'          },
+      { name:'Espuma D-28 Selada 2cm',    unit:'metro'          },
+      { name:'Espuma D-28 Selada 3cm',    unit:'metro'          },
+      { name:'Espuma D-28 Selada 4cm',    unit:'metro'          },
+      { name:'Espuma D-28 Selada 5cm',    unit:'metro'          },
+      { name:'Espuma D-28 Selada 6cm',    unit:'metro'          },
+      { name:'Espuma D-28 Selada 7cm',    unit:'metro'          },
+      { name:'Espuma D-28 Selada 8cm',    unit:'metro'          },
+      { name:'Espuma D-28 Selada 9cm',    unit:'metro'          },
+      { name:'Espuma D-28 Selada 10cm',   unit:'metro'          },
+      { name:'Espuma D-33 Selada 1cm',    unit:'metro'          },
+      { name:'Espuma D-33 Selada 2cm',    unit:'metro'          },
+      { name:'Espuma D-33 Selada 3cm',    unit:'metro'          },
+      { name:'Espuma D-33 Selada 4cm',    unit:'metro'          },
+      { name:'Espuma D-33 Selada 5cm',    unit:'metro'          },
+      { name:'Espuma D-33 Selada 6cm',    unit:'metro'          },
+      { name:'Espuma D-33 Selada 7cm',    unit:'metro'          },
+      { name:'Espuma D-33 Selada 8cm',    unit:'metro'          },
+      { name:'Espuma D-33 Selada 9cm',    unit:'metro'          },
+      { name:'Espuma D-33 Selada 10cm',   unit:'metro'          },
+      { name:'Espuma D-45 Selada 1cm',    unit:'metro'          },
+      { name:'Espuma D-45 Selada 2cm',    unit:'metro'          },
+      { name:'Espuma D-45 Selada 3cm',    unit:'metro'          },
+      { name:'Espuma D-45 Selada 4cm',    unit:'metro'          },
+      { name:'Espuma D-45 Selada 5cm',    unit:'metro'          },
+      { name:'Espuma D-45 Selada 6cm',    unit:'metro'          },
+      { name:'Espuma D-45 Selada 7cm',    unit:'metro'          },
+      { name:'Espuma D-45 Selada 8cm',    unit:'metro'          },
+      { name:'Espuma D-45 Selada 9cm',    unit:'metro'          },
+      { name:'Espuma D-45 Selada 10cm',   unit:'metro'          },
+      { name:'Espuma Soft 1cm',           unit:'metro'          },
+      { name:'Espuma Soft 2cm',           unit:'metro'          },
+      { name:'Espuma Soft 3cm',           unit:'metro'          },
+      { name:'Espuma Soft 4cm',           unit:'metro'          },
+      { name:'Espuma Soft 5cm',           unit:'metro'          },
+      { name:'Espuma Soft 6cm',           unit:'metro'          },
+      { name:'Espuma Soft 7cm',           unit:'metro'          },
+      { name:'Espuma Soft 8cm',           unit:'metro'          },
+      { name:'Espuma Soft 9cm',           unit:'metro'          },
+      { name:'Espuma Soft 10cm',          unit:'metro'          },
+    ]
+    DEFAULT_MATERIALS.forEach(m => {
+      store.materials.push({
+        id: nextId(store, 'materials'),
+        company_id: companyId,
+        name: m.name,
+        unit: m.unit,
+        price_cents: 0,
+        created_at: nowIso(),
+        updated_at: nowIso()
+      })
+    })
+  }
 
-  const tecidoId = nextId(store, 'materials')
-  const espumaId = nextId(store, 'materials')
-  store.materials.push(
-    {
-      id: tecidoId,
-      company_id: companyId,
-      name: 'Tecido Suede',
-      unit: 'metro',
-      price_cents: 4590,
-      created_at: nowIso(),
-      updated_at: nowIso()
-    },
-    {
-      id: espumaId,
-      company_id: companyId,
-      name: 'Espuma D28',
-      unit: 'unidade',
-      price_cents: 1890,
-      created_at: nowIso(),
-      updated_at: nowIso()
-    }
-  )
+  return // modelos, orçamentos e personalizações demo permanecem desativados
 
   const modelId = nextId(store, 'models')
   store.models.push({
