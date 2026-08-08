@@ -13,6 +13,7 @@ function ensureCollections(store){
   if(!Array.isArray(store.agendaBlocos)) store.agendaBlocos = []
   if(!Array.isArray(store.quotes)) store.quotes = []
   if(!Array.isArray(store.templates)) store.templates = []
+  if(!Array.isArray(store.financialEntries)) store.financialEntries = []
   if(!store.counters || typeof store.counters !== 'object') store.counters = {}
   return store
 }
@@ -1106,5 +1107,93 @@ router.delete('/templates/:id', (req, res) => {
   writeStore(store)
   return res.json({ ok: true })
 })
+
+
+// ===== FINANCEIRO — LANÇAMENTOS =====
+
+// GET /financial/entries?tipo=pagar|receber&status=pendente|pago|recebido
+router.get('/financial/entries', (req, res) => {
+  const store = ensureCollections(readStore())
+  const company = getCompanyContext(req, store)
+  if(!company) return res.status(404).json({ error: 'company_not_found' })
+  const tipo   = text(req.query.tipo).toLowerCase()
+  const status = text(req.query.status).toLowerCase()
+  const rows = store.financialEntries
+    .filter(e => String(e.company_id) === String(company.id))
+    .filter(e => !tipo   || String(e.tipo   || '').toLowerCase() === tipo)
+    .filter(e => !status || String(e.status || '').toLowerCase() === status)
+    .sort((a, b) => String(a.dataVencimento || '').localeCompare(String(b.dataVencimento || '')))
+  return res.json({ items: rows })
+})
+
+// POST /financial/entries
+router.post('/financial/entries', (req, res) => {
+  const store = ensureCollections(readStore())
+  const company = getCompanyContext(req, store)
+  if(!company) return res.status(404).json({ error: 'company_not_found' })
+  const tipo = text(req.body?.tipo, '').toLowerCase()
+  if(tipo !== 'pagar' && tipo !== 'receber')
+    return res.status(400).json({ error: 'invalid_tipo', message: 'tipo deve ser "pagar" ou "receber".' })
+  const entry = {
+    id:              nextId(store, 'financialEntries'),
+    company_id:      company.id,
+    tipo,
+    descricao:       text(req.body?.descricao),
+    cliente:         text(req.body?.cliente),
+    fornecedor:      text(req.body?.fornecedor),
+    valor:           num(req.body?.valor, 0),
+    dataVencimento:  toDateOnly(req.body?.dataVencimento),
+    status:          'pendente',
+    formaPagamento:  text(req.body?.formaPagamento),
+    categoria:       text(req.body?.categoria),
+    created_at:      nowIso(),
+    updated_at:      nowIso()
+  }
+  store.financialEntries.push(entry)
+  audit(store, req, company.id, 'financial.entry.create', `Lançamento criado: ${entry.descricao} (${tipo})`)
+  writeStore(store)
+  return res.status(201).json(entry)
+})
+
+// PATCH /financial/entries/:id
+router.patch('/financial/entries/:id', (req, res) => {
+  const store = ensureCollections(readStore())
+  const company = getCompanyContext(req, store)
+  const entry = store.financialEntries.find(
+    e => String(e.company_id) === String(company?.id) && String(e.id) === String(req.params.id)
+  )
+  if(!entry) return res.status(404).json({ error: 'not_found', message: 'Lançamento não encontrado.' })
+  if(req.body?.descricao      !== undefined) entry.descricao      = text(req.body.descricao,      entry.descricao)
+  if(req.body?.cliente        !== undefined) entry.cliente        = text(req.body.cliente,        entry.cliente)
+  if(req.body?.fornecedor     !== undefined) entry.fornecedor     = text(req.body.fornecedor,     entry.fornecedor)
+  if(req.body?.valor          !== undefined) entry.valor          = num(req.body.valor,           entry.valor)
+  if(req.body?.dataVencimento !== undefined) entry.dataVencimento = toDateOnly(req.body.dataVencimento) || entry.dataVencimento
+  if(req.body?.formaPagamento !== undefined) entry.formaPagamento = text(req.body.formaPagamento, entry.formaPagamento)
+  if(req.body?.categoria      !== undefined) entry.categoria      = text(req.body.categoria,      entry.categoria)
+  if(req.body?.status         !== undefined){
+    const s = text(req.body.status).toLowerCase()
+    if(['pendente','pago','recebido'].includes(s)) entry.status = s
+  }
+  entry.updated_at = nowIso()
+  audit(store, req, company.id, 'financial.entry.update', `Lançamento atualizado: ${entry.id}`)
+  writeStore(store)
+  return res.json(entry)
+})
+
+// DELETE /financial/entries/:id
+router.delete('/financial/entries/:id', (req, res) => {
+  const store = ensureCollections(readStore())
+  const company = getCompanyContext(req, store)
+  const before = store.financialEntries.length
+  store.financialEntries = store.financialEntries.filter(
+    e => !(String(e.company_id) === String(company?.id) && String(e.id) === String(req.params.id))
+  )
+  if(store.financialEntries.length === before)
+    return res.status(404).json({ error: 'not_found', message: 'Lançamento não encontrado.' })
+  audit(store, req, company.id, 'financial.entry.delete', `Lançamento removido: ${req.params.id}`)
+  writeStore(store)
+  return res.json({ ok: true })
+})
+
 
 module.exports = router
