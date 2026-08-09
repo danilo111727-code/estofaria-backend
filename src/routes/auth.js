@@ -9,7 +9,7 @@ const { hasMasterAccess } = require('../lib/policies')
 const { sendEmail, welcomeEmail, passwordResetEmail } = require('../lib/email')
 
 const router = express.Router()
-const BUSINESS_MODULES = ['painel','vendedor','agenda','material','precificacao','catalogo','itens-personalizacao','assinatura']
+const BUSINESS_MODULES = ['painel','vendedor','agenda','material','precificacao','catalogo','itens-personalizacao','assinatura','financeiro','configuracao']
 const RATE_LIMIT_BUCKETS = new Map()
 
 function normalizeText(value, max = 160){
