@@ -115,6 +115,11 @@ function mergeWithDefaults(raw) {
   }
 }
 
+function cloneStore(value) {
+  if (typeof structuredClone === 'function') return structuredClone(value)
+  return JSON.parse(JSON.stringify(value))
+}
+
 // ─── Escrita com debounce ────────────────────────────────────────────────────
 
 function scheduleWrite() {
@@ -176,11 +181,22 @@ async function init() {
 
 function readStore() {
   if (!_cache) throw new Error('[store-pg] Store não inicializado — chame init() antes.')
-  return JSON.parse(JSON.stringify(_cache))
+  return cloneStore(_cache)
+}
+
+// Leitura mínima para autenticação. Evita clonar materiais, modelos, agenda,
+// orçamentos, imagens e históricos inteiros a cada request autenticado.
+// O middleware apenas consulta users/companies, portanto cópias rasas bastam.
+function readAuthStore() {
+  if (!_cache) throw new Error('[store-pg] Store não inicializado — chame init() antes.')
+  return {
+    users: Array.isArray(_cache.users) ? _cache.users.slice() : [],
+    companies: Array.isArray(_cache.companies) ? _cache.companies.slice() : []
+  }
 }
 
 function writeStore(store) {
-  _cache = JSON.parse(JSON.stringify(store))
+  _cache = cloneStore(store)
   scheduleWrite()
 }
 
@@ -371,6 +387,7 @@ module.exports = {
   STORE_FILE,
   ensureStore,
   readStore,
+  readAuthStore,
   writeStore,
   updateStore,
   bootstrapStore,
