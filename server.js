@@ -3,6 +3,12 @@
 const express = require('express')
 const cors = require('cors')
 const storeLib = require('./src/lib/store')
+const perfDiagnostics = require('./src/lib/perf-diagnostics')
+
+// Instala a medição antes de carregar as rotas, para que imports destruturados
+// de readStore/writeStore já recebam as versões instrumentadas.
+perfDiagnostics.installStoreTiming(storeLib)
+
 const authRoutes = require('./src/routes/auth')
 const saasRoutes = require('./src/routes/saas')
 const billingRoutes = require('./src/routes/billing')
@@ -45,6 +51,9 @@ app.use(cors(corsOptions))
 app.options('*', cors(corsOptions))
 app.use(express.json({ limit: '1mb' }))
 app.use(express.urlencoded({ extended: false, limit: '1mb' }))
+
+// Diagnóstico temporário: só mede POST /api/quotes e não altera a resposta.
+app.use(perfDiagnostics.middleware)
 
 app.get('/', (_req, res) => {
   res.json({
