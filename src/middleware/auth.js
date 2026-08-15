@@ -1,8 +1,16 @@
-const { readStore } = require('../lib/store')
+const storeLib = require('../lib/store')
 const { decodeToken, sanitizeUser } = require('../lib/auth')
 const { hasMasterAccess, hasPermission } = require('../lib/policies')
 
 const SUBSCRIPTION_EXEMPT_PATHS = ['/billing', '/subscription', '/assinatura', '/me', '/logout', '/team']
+
+function readAuthStore(){
+  try {
+    const pg = storeLib && storeLib._pg
+    if(pg && typeof pg.readAuthStore === 'function') return pg.readAuthStore()
+  } catch (_) {}
+  return storeLib.readStore()
+}
 
 function enrichUserWithCompany(store, user){
   const company = store.companies.find(item => String(item.id) === String(user.company_id || '')) || null
@@ -34,16 +42,15 @@ function requireAuth(req, res, next){
     const token = getBearerToken(req)
     if(!token) return res.status(401).json({ error:'unauthorized', message:'Token ausente.' })
     const payload = decodeToken(token)
-    const store = readStore()
+    const store = readAuthStore()
     const user = store.users.find(item => String(item.id) === String(payload.id) && item.is_active !== false)
     if(!user) return res.status(401).json({ error:'unauthorized', message:'Sessão inválida.' })
     req.user = sanitizeUser(enrichUserWithCompany(store, user))
-    req.store = store
 
     if(!hasMasterAccess(req.user) && !isSubscriptionExempt(req)){
       const company = store.companies.find(item => String(item.id) === String(user.company_id || ''))
       const HARD_BLOCKED = ['blocked','suspended','disabled']
-    if(company && HARD_BLOCKED.includes(company.access_status)){
+      if(company && HARD_BLOCKED.includes(company.access_status)){
         return res.status(402).json({
           error:'subscription_required',
           message:'Sua assinatura está inativa. Acesse a tela de Assinatura para regularizar.',
@@ -65,7 +72,7 @@ function optionalAuth(req, _res, next){
     const token = getBearerToken(req)
     if(!token) return next()
     const payload = decodeToken(token)
-    const store = readStore()
+    const store = readAuthStore()
     const user = store.users.find(item => String(item.id) === String(payload.id) && item.is_active !== false)
     if(user) req.user = sanitizeUser(enrichUserWithCompany(store, user))
   } catch (_) {}
