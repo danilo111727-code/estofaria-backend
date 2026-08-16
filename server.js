@@ -4,6 +4,7 @@ const express = require('express')
 const cors = require('cors')
 const storeLib = require('./src/lib/store')
 const perfDiagnostics = require('./src/lib/perf-diagnostics')
+const compactModelResponse = require('./src/middleware/compact-model-response')
 
 // Instala a medição antes de carregar as rotas, para que imports destruturados
 // de readStore/writeStore já recebam as versões instrumentadas.
@@ -55,6 +56,10 @@ app.use(express.urlencoded({ extended: false, limit: '1mb' }))
 
 // Diagnóstico temporário: só mede POST /api/quotes e não altera a resposta.
 app.use(perfDiagnostics.middleware)
+
+// Modelos são armazenados com uma única imagem; a API também deve devolver
+// apenas image_data_url para evitar multiplicar base64 na rede.
+app.use(compactModelResponse)
 
 app.get('/', (_req, res) => {
   res.json({
