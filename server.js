@@ -13,6 +13,7 @@ const authRoutes = require('./src/routes/auth')
 const saasRoutes = require('./src/routes/saas')
 const billingRoutes = require('./src/routes/billing')
 const operationsRoutes = require('./src/routes/operations')
+const materialUnitsRoutes = require('./src/routes/material-units')
 
 function parseAllowedOrigins() {
   return String(process.env.CORS_ALLOWED_ORIGINS || '')
@@ -79,6 +80,7 @@ app.use('/api/auth', authRoutes)
 // Rotas principais
 app.use('/api/saas', saasRoutes)
 app.use('/api/billing', billingRoutes)
+app.use('/api', materialUnitsRoutes)
 app.use('/api', operationsRoutes)
 
 // Aliases para compatibilidade com frontends já publicados
