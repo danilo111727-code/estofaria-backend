@@ -37,6 +37,20 @@ function isSubscriptionExempt(req){
   return SUBSCRIPTION_EXEMPT_PATHS.some(p => path.startsWith(p))
 }
 
+function stripForeignCompanySelectors(req, user){
+  if(hasMasterAccess(user)) return
+
+  if(req.query && typeof req.query === 'object'){
+    delete req.query.company_id
+    delete req.query.companyId
+  }
+
+  if(req.body && typeof req.body === 'object' && !Array.isArray(req.body)){
+    delete req.body.company_id
+    delete req.body.companyId
+  }
+}
+
 function requireAuth(req, res, next){
   try {
     const token = getBearerToken(req)
@@ -46,6 +60,11 @@ function requireAuth(req, res, next){
     const user = store.users.find(item => String(item.id) === String(payload.id) && item.is_active !== false)
     if(!user) return res.status(401).json({ error:'unauthorized', message:'Sessão inválida.' })
     req.user = sanitizeUser(enrichUserWithCompany(store, user))
+
+    // Isolamento multiempresa: usuários comuns nunca podem selecionar outra
+    // empresa enviando company_id/companyId manualmente na requisição.
+    // O contexto da empresa deve vir exclusivamente do usuário autenticado.
+    stripForeignCompanySelectors(req, req.user)
 
     if(!hasMasterAccess(req.user) && !isSubscriptionExempt(req)){
       const company = store.companies.find(item => String(item.id) === String(user.company_id || ''))
@@ -74,7 +93,10 @@ function optionalAuth(req, _res, next){
     const payload = decodeToken(token)
     const store = readAuthStore()
     const user = store.users.find(item => String(item.id) === String(payload.id) && item.is_active !== false)
-    if(user) req.user = sanitizeUser(enrichUserWithCompany(store, user))
+    if(user){
+      req.user = sanitizeUser(enrichUserWithCompany(store, user))
+      stripForeignCompanySelectors(req, req.user)
+    }
   } catch (_) {}
   next()
 }
