@@ -8,6 +8,7 @@ const compactModelResponse = require('./src/middleware/compact-model-response')
 const modelsV2Db = require('./src/lib/models-v2-db')
 const { runR2SmokeTest } = require('./src/lib/r2-smoke-test')
 const { runModelsV2SelfTest } = require('./src/lib/models-v2-self-test')
+const { runModelsV2MigrationTrial } = require('./src/lib/models-v2-migration-trial')
 
 // Instala a medição antes de carregar as rotas, para que imports destruturados
 // de readStore/writeStore já recebam as versões instrumentadas.
@@ -129,6 +130,7 @@ async function start() {
     if (String(process.env.R2_SMOKE_TEST_ON_START || '') === '1') {
       await runR2SmokeTest()
       await runModelsV2SelfTest()
+      await runModelsV2MigrationTrial()
     }
 
     process.on('SIGTERM', async () => {
