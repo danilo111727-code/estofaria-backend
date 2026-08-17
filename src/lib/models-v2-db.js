@@ -119,7 +119,7 @@ function normalizeModelInput(input = {}) {
     targetProfitCents: Math.max(0, Math.round(number(input.target_profit_cents ?? input.targetProfitCents ?? 0))),
     salePriceCents: Math.max(0, Math.round(number(input.sale_price_cents ?? input.salePriceCents ?? input.price_cents ?? 0))),
     valuePerSpacingCents: Math.max(0, Math.round(number(input.value_per_spacing_cents ?? input.valor_por_espacamento_cents ?? input.valorPorEspacamentoCents ?? 0))),
-    includedItems: normalizeIncludedItems(input.included_items ?? input.itens_incluidos ?? input.itensIncluidos),
+    includedItems: normalizeIncludedItems(input.itens_incluidos ?? input.included_items ?? input.itensIncluidos),
     materials: Array.isArray(input.materials) ? input.materials : []
   }
 }
