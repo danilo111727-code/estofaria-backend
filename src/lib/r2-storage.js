@@ -73,7 +73,7 @@ function signingKey(secret, dateStamp) {
   return hmac(kService, 'aws4_request')
 }
 
-function authorizationHeader({ accessKeyId, secretAccessKey, method, host, path, payloadHash, contentType, now }) {
+function authorizationHeader({ accessKeyId, secretAccessKey, method, host, path, payloadHash, contentType, extraHeaders = {}, now }) {
   const { dateTime, dateStamp } = amzDate(now)
   const headers = {
     host,
@@ -81,9 +81,13 @@ function authorizationHeader({ accessKeyId, secretAccessKey, method, host, path,
     'x-amz-date': dateTime
   }
   if (contentType) headers['content-type'] = contentType
+  for (const [name, value] of Object.entries(extraHeaders || {})) {
+    if (value === undefined || value === null || value === '') continue
+    headers[String(name).toLowerCase()] = String(value).trim()
+  }
 
   const sortedNames = Object.keys(headers).sort()
-  const canonicalHeaders = sortedNames.map(name => `${name}:${String(headers[name]).trim()}\n`).join('')
+  const canonicalHeaders = sortedNames.map(name => `${name}:${String(headers[name]).trim().replace(/\s+/g, ' ')}\n`).join('')
   const signedHeaders = sortedNames.join(';')
   const canonicalRequest = [
     method.toUpperCase(),
@@ -105,7 +109,6 @@ function authorizationHeader({ accessKeyId, secretAccessKey, method, host, path,
   const signature = hmac(signingKey(secretAccessKey, dateStamp), stringToSign, 'hex')
   return {
     authorization: `AWS4-HMAC-SHA256 Credential=${accessKeyId}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`,
-    dateTime,
     headers
   }
 }
@@ -124,13 +127,13 @@ function request({ method, key, body = Buffer.alloc(0), contentType = '', extraH
     path,
     payloadHash,
     contentType,
+    extraHeaders,
     now: new Date()
   })
 
   const headers = {
     ...signed.headers,
-    Authorization: signed.authorization,
-    ...extraHeaders
+    Authorization: signed.authorization
   }
   if (payload.length) headers['Content-Length'] = String(payload.length)
 
