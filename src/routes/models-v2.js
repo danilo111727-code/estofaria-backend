@@ -170,57 +170,98 @@ function validVariant(value) {
   return value === 'original' || value === 'thumb'
 }
 
-router.put(
-  '/models/:id/images/:variant',
-  requireModelWrite,
-  requireCompany,
-  express.raw({ type: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'], limit: `${MAX_ORIGINAL_BYTES}b` }),
-  async (req, res, next) => {
-    try {
-      const variant = String(req.params.variant || '')
-      if (!validVariant(variant)) return res.status(400).json({ error: 'invalid_variant', message: 'Variante inválida.' })
-      if (!r2.isConfigured()) return res.status(503).json({ error: 'r2_not_configured', message: 'Armazenamento de imagens ainda não foi configurado.' })
+function normalizeImageContentType(value) {
+  const normalized = String(value || '').toLowerCase().split(';')[0].trim()
+  return normalized === 'image/jpg' ? 'image/jpeg' : normalized
+}
 
-      const model = await db.getModel(req.modelsV2CompanyId, req.params.id, { includeInactive: false })
-      if (!model) return res.status(404).json({ error: 'not_found', message: 'Modelo não encontrado.' })
+router.post('/models/:id/images/:variant/upload-url', requireModelWrite, requireCompany, async (req, res, next) => {
+  try {
+    const variant = String(req.params.variant || '')
+    if (!validVariant(variant)) return res.status(400).json({ error: 'invalid_variant', message: 'Variante inválida.' })
+    if (!r2.isConfigured()) return res.status(503).json({ error: 'r2_not_configured', message: 'Armazenamento de imagens ainda não foi configurado.' })
 
-      const contentType = String(req.headers['content-type'] || '').toLowerCase().split(';')[0].trim()
-      if (!IMAGE_TYPES.has(contentType)) return res.status(415).json({ error: 'unsupported_image_type', message: 'Use JPG, PNG ou WebP.' })
-      const body = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0)
-      if (!body.length) return res.status(400).json({ error: 'empty_image', message: 'Imagem vazia.' })
-      if (body.length > imageLimitFor(variant)) {
-        return res.status(413).json({ error: 'image_too_large', message: `Imagem acima do limite para ${variant}.` })
-      }
+    const model = await db.getModel(req.modelsV2CompanyId, req.params.id, { includeInactive: false })
+    if (!model) return res.status(404).json({ error: 'not_found', message: 'Modelo não encontrado.' })
 
-      const objectKey = r2.buildModelImageKey({
-        companyId: req.modelsV2CompanyId,
-        modelId: req.params.id,
-        variant,
-        contentType
-      })
-      const sha256 = r2.sha256Hex(body)
-      const uploaded = await r2.putObject(objectKey, body, contentType, {
-        company_id: req.modelsV2CompanyId,
-        model_id: req.params.id,
-        variant,
-        sha256
-      })
-      const meta = await db.upsertImageMeta(req.modelsV2CompanyId, req.params.id, variant, {
-        objectKey,
-        contentType,
-        sizeBytes: uploaded.sizeBytes,
-        sha256,
-        etag: uploaded.etag
-      })
-      return res.status(201).json({
-        ...meta,
-        url: r2.presignGetUrl(objectKey, 300)
-      })
-    } catch (err) {
-      next(err)
+    const contentType = normalizeImageContentType(req.body?.content_type || req.body?.contentType)
+    if (!IMAGE_TYPES.has(contentType)) return res.status(415).json({ error: 'unsupported_image_type', message: 'Use JPG, PNG ou WebP.' })
+    const declaredSize = Math.max(0, Number(req.body?.size_bytes || req.body?.sizeBytes || 0))
+    const maxBytes = imageLimitFor(variant)
+    if (declaredSize && declaredSize > maxBytes) {
+      return res.status(413).json({ error: 'image_too_large', message: `Imagem acima do limite para ${variant}.` })
     }
+
+    const objectKey = r2.buildModelImageKey({
+      companyId: req.modelsV2CompanyId,
+      modelId: req.params.id,
+      variant,
+      contentType
+    })
+
+    return res.json({
+      method: 'PUT',
+      url: r2.presignPutUrl(objectKey, contentType, 300),
+      headers: { 'Content-Type': contentType },
+      object_key: objectKey,
+      expires_in: 300,
+      max_bytes: maxBytes
+    })
+  } catch (err) {
+    next(err)
   }
-)
+})
+
+router.post('/models/:id/images/:variant/complete', requireModelWrite, requireCompany, async (req, res, next) => {
+  try {
+    const variant = String(req.params.variant || '')
+    if (!validVariant(variant)) return res.status(400).json({ error: 'invalid_variant', message: 'Variante inválida.' })
+    if (!r2.isConfigured()) return res.status(503).json({ error: 'r2_not_configured', message: 'Armazenamento de imagens ainda não foi configurado.' })
+
+    const model = await db.getModel(req.modelsV2CompanyId, req.params.id, { includeInactive: false })
+    if (!model) return res.status(404).json({ error: 'not_found', message: 'Modelo não encontrado.' })
+
+    const contentType = normalizeImageContentType(req.body?.content_type || req.body?.contentType)
+    if (!IMAGE_TYPES.has(contentType)) return res.status(415).json({ error: 'unsupported_image_type', message: 'Use JPG, PNG ou WebP.' })
+    const objectKey = r2.buildModelImageKey({
+      companyId: req.modelsV2CompanyId,
+      modelId: req.params.id,
+      variant,
+      contentType
+    })
+
+    const head = await r2.headObject(objectKey)
+    if (!head.exists) {
+      return res.status(409).json({ error: 'upload_not_found', message: 'O upload ainda não foi encontrado no R2.' })
+    }
+    if (head.sizeBytes > imageLimitFor(variant)) {
+      await r2.deleteObject(objectKey).catch(() => {})
+      return res.status(413).json({ error: 'image_too_large', message: `Imagem acima do limite para ${variant}.` })
+    }
+
+    const previous = await db.getImageMeta(req.modelsV2CompanyId, req.params.id, variant)
+    const meta = await db.upsertImageMeta(req.modelsV2CompanyId, req.params.id, variant, {
+      objectKey,
+      contentType: head.contentType || contentType,
+      sizeBytes: head.sizeBytes,
+      sha256: req.body?.sha256 || null,
+      etag: head.etag || null
+    })
+
+    if (previous?.object_key && previous.object_key !== objectKey) {
+      await r2.deleteObject(previous.object_key).catch(err => {
+        console.warn('[models-v2] Falha ao remover imagem antiga do R2:', err.message)
+      })
+    }
+
+    return res.status(201).json({
+      ...meta,
+      url: r2.presignGetUrl(objectKey, 300)
+    })
+  } catch (err) {
+    next(err)
+  }
+})
 
 router.get('/models/:id/images/:variant/url', requireModelRead, requireCompany, async (req, res, next) => {
   try {
@@ -249,7 +290,8 @@ router.delete('/models/:id/images/:variant', requireModelWrite, requireCompany, 
     const meta = await db.getImageMeta(req.modelsV2CompanyId, req.params.id, variant)
     if (!meta) return res.status(404).json({ error: 'image_not_found', message: 'Imagem não encontrada.' })
 
-    if (r2.isConfigured()) await r2.deleteObject(meta.object_key)
+    if (!r2.isConfigured()) return res.status(503).json({ error: 'r2_not_configured', message: 'Armazenamento de imagens ainda não foi configurado.' })
+    await r2.deleteObject(meta.object_key)
     await db.removeImageMeta(req.modelsV2CompanyId, req.params.id, variant)
     return res.json({ ok: true })
   } catch (err) {
