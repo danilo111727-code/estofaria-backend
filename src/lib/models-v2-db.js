@@ -28,10 +28,14 @@ async function ensureSchema() {
       target_profit_cents BIGINT NOT NULL DEFAULT 0,
       sale_price_cents BIGINT NOT NULL DEFAULT 0,
       value_per_spacing_cents BIGINT NOT NULL DEFAULT 0,
+      included_items JSONB NOT NULL DEFAULT '[]'::jsonb,
       active BOOLEAN NOT NULL DEFAULT TRUE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    ALTER TABLE app_models_v2
+      ADD COLUMN IF NOT EXISTS included_items JSONB NOT NULL DEFAULT '[]'::jsonb;
 
     CREATE INDEX IF NOT EXISTS idx_app_models_v2_company_active
       ON app_models_v2 (company_id, active, updated_at DESC);
@@ -50,10 +54,14 @@ async function ensureSchema() {
       quantity NUMERIC(16,4) NOT NULL DEFAULT 0,
       unit_price_cents BIGINT NOT NULL DEFAULT 0,
       total_cents BIGINT NOT NULL DEFAULT 0,
+      is_free_cost BOOLEAN NOT NULL DEFAULT FALSE,
       sort_order INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    ALTER TABLE app_model_materials_v2
+      ADD COLUMN IF NOT EXISTS is_free_cost BOOLEAN NOT NULL DEFAULT FALSE;
 
     CREATE INDEX IF NOT EXISTS idx_app_model_materials_v2_model
       ON app_model_materials_v2 (model_id, sort_order);
@@ -96,6 +104,11 @@ function text(value, fallback = '') {
   return String(value)
 }
 
+function normalizeIncludedItems(value) {
+  const source = Array.isArray(value) ? value : []
+  return Array.from(new Set(source.map(item => text(item).trim()).filter(Boolean))).slice(0, 200)
+}
+
 function normalizeModelInput(input = {}) {
   return {
     name: text(input.name || input.nome || input.modelo).trim().slice(0, 180),
@@ -106,6 +119,7 @@ function normalizeModelInput(input = {}) {
     targetProfitCents: Math.max(0, Math.round(number(input.target_profit_cents ?? input.targetProfitCents ?? 0))),
     salePriceCents: Math.max(0, Math.round(number(input.sale_price_cents ?? input.salePriceCents ?? input.price_cents ?? 0))),
     valuePerSpacingCents: Math.max(0, Math.round(number(input.value_per_spacing_cents ?? input.valor_por_espacamento_cents ?? input.valorPorEspacamentoCents ?? 0))),
+    includedItems: normalizeIncludedItems(input.included_items ?? input.itens_incluidos ?? input.itensIncluidos),
     materials: Array.isArray(input.materials) ? input.materials : []
   }
 }
@@ -121,6 +135,7 @@ function normalizeMaterial(material = {}, sortOrder = 0) {
     quantity,
     unitPriceCents,
     totalCents,
+    isFreeCost: Boolean(material.is_free_cost ?? material.is_custo_livre ?? material.isCustoLivre),
     sortOrder
   }
 }
@@ -132,8 +147,8 @@ async function replaceMaterials(client, companyId, modelId, materials) {
     await client.query(`
       INSERT INTO app_model_materials_v2 (
         model_id, company_id, material_id, material_name, unit,
-        quantity, unit_price_cents, total_cents, sort_order, created_at, updated_at
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW(),NOW())
+        quantity, unit_price_cents, total_cents, is_free_cost, sort_order, created_at, updated_at
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW(),NOW())
     `, [
       modelId,
       companyId,
@@ -143,6 +158,7 @@ async function replaceMaterials(client, companyId, modelId, materials) {
       material.quantity,
       material.unitPriceCents,
       material.totalCents,
+      material.isFreeCost,
       material.sortOrder
     ])
   }
@@ -163,6 +179,8 @@ function rowToModel(row) {
     target_profit_cents: number(row.target_profit_cents),
     sale_price_cents: number(row.sale_price_cents),
     valor_por_espacamento_cents: number(row.value_per_spacing_cents),
+    itens_incluidos: normalizeIncludedItems(row.included_items),
+    included_items: normalizeIncludedItems(row.included_items),
     active: row.active !== false,
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -180,6 +198,8 @@ const MATERIALS_LATERAL = `
       'quantity', mm.quantity,
       'unit_price_cents', mm.unit_price_cents,
       'total_cents', mm.total_cents,
+      'is_custo_livre', mm.is_free_cost,
+      'is_free_cost', mm.is_free_cost,
       'sort_order', mm.sort_order
     ) ORDER BY mm.sort_order), '[]'::jsonb) AS materials
     FROM app_model_materials_v2 mm
@@ -271,8 +291,8 @@ async function createModel(companyId, input = {}) {
       INSERT INTO app_models_v2 (
         id, company_id, name, description, base_meters, spacing_cm,
         total_cost_cents, target_profit_cents, sale_price_cents,
-        value_per_spacing_cents, active, created_at, updated_at
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,TRUE,NOW(),NOW())
+        value_per_spacing_cents, included_items, active, created_at, updated_at
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,TRUE,NOW(),NOW())
     `, [
       id,
       companyId,
@@ -283,7 +303,8 @@ async function createModel(companyId, input = {}) {
       normalized.totalCostCents,
       normalized.targetProfitCents,
       normalized.salePriceCents,
-      normalized.valuePerSpacingCents
+      normalized.valuePerSpacingCents,
+      JSON.stringify(normalized.includedItems)
     ])
     await replaceMaterials(client, companyId, id, normalized.materials)
     await client.query('COMMIT')
@@ -320,6 +341,7 @@ async function updateModel(companyId, modelId, input = {}) {
           target_profit_cents = $8,
           sale_price_cents = $9,
           value_per_spacing_cents = $10,
+          included_items = $11::jsonb,
           updated_at = NOW()
       WHERE company_id = $1 AND id = $2
       RETURNING id
@@ -333,7 +355,8 @@ async function updateModel(companyId, modelId, input = {}) {
       merged.totalCostCents,
       merged.targetProfitCents,
       merged.salePriceCents,
-      merged.valuePerSpacingCents
+      merged.valuePerSpacingCents,
+      JSON.stringify(merged.includedItems)
     ])
     if (!result.rows.length) {
       await client.query('ROLLBACK')
@@ -380,8 +403,8 @@ async function upsertMigratedModel(companyId, legacyId, input = {}) {
       INSERT INTO app_models_v2 (
         id, company_id, legacy_id, name, description, base_meters, spacing_cm,
         total_cost_cents, target_profit_cents, sale_price_cents,
-        value_per_spacing_cents, active, created_at, updated_at
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,TRUE,$12,$13)
+        value_per_spacing_cents, included_items, active, created_at, updated_at
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,TRUE,$13,$14)
       ON CONFLICT (id) DO UPDATE SET
         name = EXCLUDED.name,
         description = EXCLUDED.description,
@@ -391,6 +414,7 @@ async function upsertMigratedModel(companyId, legacyId, input = {}) {
         target_profit_cents = EXCLUDED.target_profit_cents,
         sale_price_cents = EXCLUDED.sale_price_cents,
         value_per_spacing_cents = EXCLUDED.value_per_spacing_cents,
+        included_items = EXCLUDED.included_items,
         active = TRUE,
         updated_at = EXCLUDED.updated_at
     `, [
@@ -405,6 +429,7 @@ async function upsertMigratedModel(companyId, legacyId, input = {}) {
       normalized.targetProfitCents,
       normalized.salePriceCents,
       normalized.valuePerSpacingCents,
+      JSON.stringify(normalized.includedItems),
       input.created_at || input.createdAt || new Date().toISOString(),
       input.updated_at || input.updatedAt || new Date().toISOString()
     ])
