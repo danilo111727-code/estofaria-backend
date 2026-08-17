@@ -5,6 +5,7 @@ const cors = require('cors')
 const storeLib = require('./src/lib/store')
 const perfDiagnostics = require('./src/lib/perf-diagnostics')
 const compactModelResponse = require('./src/middleware/compact-model-response')
+const modelsV2Db = require('./src/lib/models-v2-db')
 
 // Instala a medição antes de carregar as rotas, para que imports destruturados
 // de readStore/writeStore já recebam as versões instrumentadas.
@@ -15,6 +16,7 @@ const saasRoutes = require('./src/routes/saas')
 const billingRoutes = require('./src/routes/billing')
 const operationsRoutes = require('./src/routes/operations')
 const materialUnitsRoutes = require('./src/routes/material-units')
+const modelsV2Routes = require('./src/routes/models-v2')
 
 function parseAllowedOrigins() {
   return String(process.env.CORS_ALLOWED_ORIGINS || '')
@@ -57,8 +59,8 @@ app.use(express.urlencoded({ extended: false, limit: '1mb' }))
 // Diagnóstico temporário: só mede POST /api/quotes e não altera a resposta.
 app.use(perfDiagnostics.middleware)
 
-// Modelos são armazenados com uma única imagem; a API também deve devolver
-// apenas image_data_url para evitar multiplicar base64 na rede.
+// Modelos legados são armazenados com uma única imagem; a API antiga também
+// devolve apenas image_data_url para reduzir base64 durante a transição.
 app.use(compactModelResponse)
 
 app.get('/', (_req, res) => {
@@ -74,9 +76,10 @@ app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
     service: 'estofaria-saas-backend-starter',
-    version: '20260806b',
+    version: '20260816-models-v2a',
     storage: process.env.DATABASE_URL ? 'postgresql' : 'file',
-    store_file: storeLib.STORE_FILE
+    store_file: storeLib.STORE_FILE,
+    models_v2: process.env.DATABASE_URL ? 'available' : 'postgres_required'
   })
 })
 
@@ -86,6 +89,10 @@ app.use('/api/auth', authRoutes)
 app.use('/api/saas', saasRoutes)
 app.use('/api/billing', billingRoutes)
 app.use('/api', materialUnitsRoutes)
+
+// API V2 paralela. Não substitui nem altera /api/models nesta fase.
+app.use('/api/v2', modelsV2Routes)
+
 app.use('/api', operationsRoutes)
 
 // Aliases para compatibilidade com frontends já publicados
@@ -97,6 +104,9 @@ app.use('/api/subscription', billingRoutes)
 app.use((err, _req, res, _next) => {
   if (err && err.type === 'entity.parse.failed') {
     return res.status(400).json({ error: 'invalid_json', message: 'JSON inválido na requisição.' })
+  }
+  if (err && err.type === 'entity.too.large') {
+    return res.status(413).json({ error: 'payload_too_large', message: 'Arquivo ou conteúdo acima do limite permitido.' })
   }
   if (err && err.message === 'origin_not_allowed') {
     return res.status(403).json({ error: 'forbidden_origin', message: 'Origem não permitida por CORS.' })
@@ -111,6 +121,8 @@ async function start() {
     const pg = storeLib._pg
     await pg.init()
     await pg.bootstrapStore()
+    await modelsV2Db.ensureSchema()
+    console.log('[server] Models V2 schema pronto (API paralela)')
     process.on('SIGTERM', async () => {
       console.log('[server] SIGTERM — salvando dados pendentes...')
       await pg.flushNow().catch(console.error)
