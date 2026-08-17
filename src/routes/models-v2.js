@@ -54,7 +54,7 @@ function hasInlineImage(body) {
   })
 }
 
-function decorateImages(model) {
+async function decorateImages(model) {
   if (!model) return model
   const images = model.images || {}
   const decorated = {}
@@ -63,7 +63,7 @@ function decorateImages(model) {
     if (!meta) continue
     decorated[variant] = {
       ...meta,
-      url: r2.isConfigured() ? r2.presignGetUrl(meta.object_key, 300) : null
+      url: r2.isConfigured() ? await r2.presignGetUrl(meta.object_key, 300) : null
     }
   }
   const preferred = decorated.thumb || decorated.original || null
@@ -84,7 +84,8 @@ router.get('/models', requireModelRead, requireCompany, async (req, res, next) =
       includeInactive: String(req.query.include_inactive || '') === '1',
       search: req.query.search || ''
     })
-    return res.json({ ...result, items: result.items.map(decorateImages) })
+    const items = await Promise.all(result.items.map(decorateImages))
+    return res.json({ ...result, items })
   } catch (err) {
     next(err)
   }
@@ -96,7 +97,7 @@ router.get('/models/:id', requireModelRead, requireCompany, async (req, res, nex
       includeInactive: String(req.query.include_inactive || '') === '1'
     })
     if (!model) return res.status(404).json({ error: 'not_found', message: 'Modelo não encontrado.' })
-    return res.json(decorateImages(model))
+    return res.json(await decorateImages(model))
   } catch (err) {
     next(err)
   }
@@ -111,7 +112,7 @@ router.post('/models', requireModelWrite, requireCompany, async (req, res, next)
       })
     }
     const model = await db.createModel(req.modelsV2CompanyId, req.body || {})
-    return res.status(201).json(decorateImages(model))
+    return res.status(201).json(await decorateImages(model))
   } catch (err) {
     if (err?.code === 'invalid_model_name') return res.status(400).json({ error: err.code, message: err.message })
     next(err)
@@ -128,7 +129,7 @@ router.put('/models/:id', requireModelWrite, requireCompany, async (req, res, ne
     }
     const model = await db.updateModel(req.modelsV2CompanyId, req.params.id, req.body || {})
     if (!model) return res.status(404).json({ error: 'not_found', message: 'Modelo não encontrado.' })
-    return res.json(decorateImages(model))
+    return res.json(await decorateImages(model))
   } catch (err) {
     if (err?.code === 'invalid_model_name') return res.status(400).json({ error: err.code, message: err.message })
     next(err)
@@ -145,7 +146,7 @@ router.patch('/models/:id', requireModelWrite, requireCompany, async (req, res, 
     }
     const model = await db.updateModel(req.modelsV2CompanyId, req.params.id, req.body || {})
     if (!model) return res.status(404).json({ error: 'not_found', message: 'Modelo não encontrado.' })
-    return res.json(decorateImages(model))
+    return res.json(await decorateImages(model))
   } catch (err) {
     if (err?.code === 'invalid_model_name') return res.status(400).json({ error: err.code, message: err.message })
     next(err)
@@ -201,7 +202,7 @@ router.post('/models/:id/images/:variant/upload-url', requireModelWrite, require
 
     return res.json({
       method: 'PUT',
-      url: r2.presignPutUrl(objectKey, contentType, 300),
+      url: await r2.presignPutUrl(objectKey, contentType, 300),
       headers: { 'Content-Type': contentType },
       object_key: objectKey,
       expires_in: 300,
@@ -256,7 +257,7 @@ router.post('/models/:id/images/:variant/complete', requireModelWrite, requireCo
 
     return res.status(201).json({
       ...meta,
-      url: r2.presignGetUrl(objectKey, 300)
+      url: await r2.presignGetUrl(objectKey, 300)
     })
   } catch (err) {
     next(err)
@@ -276,7 +277,7 @@ router.get('/models/:id/images/:variant/url', requireModelRead, requireCompany, 
     return res.json({
       variant,
       expires_in: 300,
-      url: r2.presignGetUrl(meta.object_key, 300)
+      url: await r2.presignGetUrl(meta.object_key, 300)
     })
   } catch (err) {
     next(err)
