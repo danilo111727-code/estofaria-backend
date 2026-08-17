@@ -34,6 +34,7 @@ async function runModelsV2SelfTest() {
       target_profit_cents: 15000,
       sale_price_cents: 40000,
       value_per_spacing_cents: 1800,
+      itens_incluidos: ['Chaise', 'Encosto móvel'],
       materials: [
         {
           material_id: 'mat-selftest',
@@ -42,6 +43,14 @@ async function runModelsV2SelfTest() {
           quantity: 2,
           unit_price_cents: 5000,
           total_cents: 10000
+        },
+        {
+          material_name: 'Visita técnica',
+          unit: '—',
+          quantity: 1,
+          unit_price_cents: 20000,
+          total_cents: 20000,
+          is_custo_livre: true
         }
       ]
     })
@@ -55,7 +64,9 @@ async function runModelsV2SelfTest() {
 
     assert(modelA && modelA.company_id === companyA, 'Modelo A não foi criado na empresa A.')
     assert(modelB && modelB.company_id === companyB, 'Modelo B não foi criado na empresa B.')
-    assert(modelA.materials.length === 1, 'Material do Modelo A não foi persistido.')
+    assert(modelA.materials.length === 2, 'Materiais do Modelo A não foram persistidos.')
+    assert(modelA.materials.some(item => item.is_custo_livre === true), 'Custo livre não foi preservado.')
+    assert(Array.isArray(modelA.itens_incluidos) && modelA.itens_incluidos.length === 2, 'Itens incluídos não foram persistidos.')
 
     const listA = await db.listModels(companyA)
     const listB = await db.listModels(companyB)
@@ -103,6 +114,7 @@ async function runModelsV2SelfTest() {
     const edited = await db.updateModel(companyA, modelA.id, {
       name: 'Modelo Teste A Editado',
       sale_price_cents: 45500,
+      itens_incluidos: ['Chaise'],
       materials: [
         {
           material_id: 'mat-selftest',
@@ -111,12 +123,22 @@ async function runModelsV2SelfTest() {
           quantity: 3,
           unit_price_cents: 5000,
           total_cents: 15000
+        },
+        {
+          material_name: 'Visita técnica editada',
+          unit: '—',
+          quantity: 1,
+          unit_price_cents: 22000,
+          total_cents: 22000,
+          is_custo_livre: true
         }
       ]
     })
     assert(edited?.name === 'Modelo Teste A Editado', 'Edição do nome não persistiu.')
     assert(Number(edited?.sale_price_cents) === 45500, 'Edição do valor não persistiu.')
     assert(edited?.materials?.[0]?.material_name === 'Espuma Teste Editada', 'Edição dos materiais não persistiu.')
+    assert(edited?.materials?.[1]?.is_custo_livre === true, 'Custo livre foi perdido após edição.')
+    assert(Array.isArray(edited?.itens_incluidos) && edited.itens_incluidos.length === 1 && edited.itens_incluidos[0] === 'Chaise', 'Itens incluídos não persistiram após edição.')
 
     const deactivated = await db.deactivateModel(companyA, modelA.id)
     assert(deactivated, 'Exclusão lógica do modelo falhou.')
@@ -124,7 +146,7 @@ async function runModelsV2SelfTest() {
     const inactive = await db.getModel(companyA, modelA.id, { includeInactive: true })
     assert(inactive && inactive.active === false, 'Modelo excluído não ficou disponível como inativo para auditoria.')
 
-    console.log('[models-v2-selftest] PASS: criar, reler, foto R2, editar, excluir e isolamento entre empresas funcionando.')
+    console.log('[models-v2-selftest] PASS: CRUD, itens incluídos, custo livre, foto R2 e isolamento funcionando.')
     return { ok: true }
   } finally {
     for (const key of objectKeys) {
