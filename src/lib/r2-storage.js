@@ -201,7 +201,7 @@ async function deleteObject(key) {
   return { ok: true }
 }
 
-function presignGetUrl(key, expiresSeconds = 300) {
+function presignObjectUrl(method, key, { expiresSeconds = 300, contentType = '' } = {}) {
   const cfg = assertConfigured()
   const endpoint = new URL(cfg.endpoint)
   const path = canonicalObjectPath(cfg.bucket, key)
@@ -209,13 +209,18 @@ function presignGetUrl(key, expiresSeconds = 300) {
   const { dateTime, dateStamp } = amzDate(now)
   const scope = `${dateStamp}/${REGION}/${SERVICE}/aws4_request`
   const expires = Math.min(3600, Math.max(30, Number(expiresSeconds || 300)))
+  const normalizedMethod = String(method || 'GET').toUpperCase()
+  const signedHeaderMap = { host: endpoint.host }
+  if (contentType) signedHeaderMap['content-type'] = String(contentType).trim()
+  const signedHeaderNames = Object.keys(signedHeaderMap).sort()
+  const signedHeaders = signedHeaderNames.join(';')
 
   const params = {
     'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
     'X-Amz-Credential': `${cfg.accessKeyId}/${scope}`,
     'X-Amz-Date': dateTime,
     'X-Amz-Expires': String(expires),
-    'X-Amz-SignedHeaders': 'host'
+    'X-Amz-SignedHeaders': signedHeaders
   }
 
   const canonicalQuery = Object.keys(params)
@@ -223,13 +228,15 @@ function presignGetUrl(key, expiresSeconds = 300) {
     .map(name => `${encodeRfc3986(name)}=${encodeRfc3986(params[name])}`)
     .join('&')
 
-  const canonicalHeaders = `host:${endpoint.host}\n`
+  const canonicalHeaders = signedHeaderNames
+    .map(name => `${name}:${String(signedHeaderMap[name]).trim().replace(/\s+/g, ' ')}\n`)
+    .join('')
   const canonicalRequest = [
-    'GET',
+    normalizedMethod,
     path,
     canonicalQuery,
     canonicalHeaders,
-    'host',
+    signedHeaders,
     'UNSIGNED-PAYLOAD'
   ].join('\n')
 
@@ -241,6 +248,14 @@ function presignGetUrl(key, expiresSeconds = 300) {
   ].join('\n')
   const signature = hmac(signingKey(cfg.secretAccessKey, dateStamp), stringToSign, 'hex')
   return `${endpoint.origin}${path}?${canonicalQuery}&X-Amz-Signature=${signature}`
+}
+
+function presignGetUrl(key, expiresSeconds = 300) {
+  return presignObjectUrl('GET', key, { expiresSeconds })
+}
+
+function presignPutUrl(key, contentType, expiresSeconds = 300) {
+  return presignObjectUrl('PUT', key, { expiresSeconds, contentType })
 }
 
 function extensionForContentType(contentType) {
@@ -265,6 +280,7 @@ module.exports = {
   headObject,
   deleteObject,
   presignGetUrl,
+  presignPutUrl,
   buildModelImageKey,
   extensionForContentType,
   sha256Hex
