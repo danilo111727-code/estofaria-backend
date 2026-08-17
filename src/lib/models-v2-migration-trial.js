@@ -5,6 +5,8 @@ const storeLib = require('./store')
 const db = require('./models-v2-db')
 const r2 = require('./r2-storage')
 
+const FIXTURE_IMAGE_DATA_URL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+
 function parseDataUrl(dataUrl) {
   if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) return null
   const match = dataUrl.match(/^data:(image\/(?:jpeg|jpg|png|webp));base64,(.+)$/i)
@@ -107,6 +109,90 @@ function chooseCompany(store) {
   })[0] || null
 }
 
+function makeFixture(companyId) {
+  return {
+    id: `migration-trial-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`,
+    company_id: companyId,
+    name: 'Modelo Legado Teste Migração',
+    descricao_modelo: 'Registro temporário criado apenas para validar a migração legado → V2.',
+    base_meters: 2.4,
+    spacing_cm: 10,
+    total_cost_cents: 123450,
+    target_profit_cents: 45670,
+    sale_price_cents: 169120,
+    valor_por_espacamento_cents: 7047,
+    materials: [
+      {
+        material_id: 'fixture-espuma-d33',
+        material_name: 'Espuma D33 - teste',
+        unit: 'placa',
+        quantity: 2.5,
+        unit_price_cents: 25000,
+        total_cents: 62500
+      },
+      {
+        material_id: 'fixture-tecido',
+        material_name: 'Tecido - teste',
+        unit: 'metro',
+        quantity: 8,
+        unit_price_cents: 4500,
+        total_cents: 36000
+      }
+    ],
+    image_data_url: FIXTURE_IMAGE_DATA_URL,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  }
+}
+
+async function persistFixtureIfNeeded(originalStore) {
+  const selected = chooseCompany(originalStore)
+  if (selected) return { selected, fixture: null }
+
+  const company = (originalStore.companies || []).find(item => String(item?.id || '').trim())
+  if (!company) return { selected: null, fixture: null }
+
+  const fixture = makeFixture(String(company.id))
+  const nextStore = storeLib.readStore()
+  nextStore.models = Array.isArray(nextStore.models) ? nextStore.models : []
+  nextStore.models.push(fixture)
+  storeLib.writeStore(nextStore)
+  if (storeLib._pg?.flushNow) await storeLib._pg.flushNow()
+
+  const persisted = storeLib.readStore()
+  const savedFixture = (persisted.models || []).find(item => String(item.id) === fixture.id)
+  if (!savedFixture) throw new Error('Não foi possível persistir o modelo legado temporário no backend dev.')
+
+  console.log('[models-v2-migration-trial] Backend dev não tinha modelos legados; criado 1 modelo legado temporário para testar a migração real.')
+  return {
+    selected: { companyId: String(company.id), models: [savedFixture], withImages: 1 },
+    fixture: savedFixture
+  }
+}
+
+async function cleanupFixture(fixture) {
+  if (!fixture) return
+  const companyId = String(fixture.company_id)
+  const modelId = db.deterministicLegacyId(companyId, String(fixture.id))
+
+  try {
+    const imageMeta = await db.getImageMeta(companyId, modelId, 'original')
+    if (imageMeta?.object_key && r2.isConfigured()) {
+      await r2.deleteObject(imageMeta.object_key).catch(() => {})
+    }
+  } catch (_) {}
+
+  try {
+    const pool = storeLib._pg?.pool
+    if (pool) await pool.query('DELETE FROM app_models_v2 WHERE company_id = $1 AND id = $2', [companyId, modelId])
+  } catch (_) {}
+
+  const store = storeLib.readStore()
+  store.models = (Array.isArray(store.models) ? store.models : []).filter(item => String(item.id) !== String(fixture.id))
+  storeLib.writeStore(store)
+  if (storeLib._pg?.flushNow) await storeLib._pg.flushNow()
+}
+
 async function migrateImage(companyId, modelId, legacyId, legacy) {
   const image = legacyImage(legacy)
   const existing = await db.getImageMeta(companyId, modelId, 'original')
@@ -150,70 +236,86 @@ async function migrateImage(companyId, modelId, legacyId, legacy) {
 }
 
 async function runModelsV2MigrationTrial() {
-  const beforeStore = storeLib.readStore()
-  const selected = chooseCompany(beforeStore)
-  if (!selected) {
-    console.log('[models-v2-migration-trial] SKIP: nenhum modelo legado com company_id/id no backend dev.')
-    return { ok: true, skipped: true, reason: 'no_legacy_models' }
-  }
-
-  const allLegacyHashBefore = stableHash(Array.isArray(beforeStore.models) ? beforeStore.models : [])
-  const company = (beforeStore.companies || []).find(item => String(item.id) === selected.companyId)
-  console.log(`[models-v2-migration-trial] Empresa selecionada: ${company?.name || 'sem nome'} | modelos=${selected.models.length} | com_foto=${selected.withImages}`)
-
-  let migratedCount = 0
-  let uploadedImages = 0
+  const originalStore = storeLib.readStore()
+  const originalLegacyHash = stableHash(Array.isArray(originalStore.models) ? originalStore.models : [])
+  let fixture = null
   const failures = []
 
-  for (const legacy of selected.models) {
-    const legacyId = String(legacy.id)
-    const migrated = await db.upsertMigratedModel(selected.companyId, legacyId, legacy)
-    migratedCount += 1
+  try {
+    const prepared = await persistFixtureIfNeeded(originalStore)
+    const selected = prepared.selected
+    fixture = prepared.fixture
 
-    const imageResult = await migrateImage(selected.companyId, migrated.id, legacyId, legacy)
-    if (imageResult.uploaded) uploadedImages += 1
-    if (!imageResult.verified) {
-      failures.push(`${legacyId}: imagem não conferiu entre legado e R2`)
+    if (!selected) {
+      console.log('[models-v2-migration-trial] SKIP: nenhuma empresa disponível no backend dev para o teste.')
+      return { ok: true, skipped: true, reason: 'no_company' }
     }
 
-    const reread = await db.getModel(selected.companyId, migrated.id, { includeInactive: true })
-    failures.push(...compareModel(legacy, reread).map(message => `${legacyId}: ${message}`))
+    const migrationStore = storeLib.readStore()
+    const migrationLegacyHashBefore = stableHash(Array.isArray(migrationStore.models) ? migrationStore.models : [])
+    const company = (migrationStore.companies || []).find(item => String(item.id) === selected.companyId)
+    console.log(`[models-v2-migration-trial] Empresa selecionada: ${company?.name || 'sem nome'} | modelos=${selected.models.length} | com_foto=${selected.withImages}`)
 
-    if (String(reread?.company_id || '') !== selected.companyId) {
-      failures.push(`${legacyId}: company_id divergente após migração`)
+    let migratedCount = 0
+    let uploadedImages = 0
+
+    for (const legacy of selected.models) {
+      const legacyId = String(legacy.id)
+      const migrated = await db.upsertMigratedModel(selected.companyId, legacyId, legacy)
+      migratedCount += 1
+
+      const imageResult = await migrateImage(selected.companyId, migrated.id, legacyId, legacy)
+      if (imageResult.uploaded) uploadedImages += 1
+      if (!imageResult.verified) failures.push(`${legacyId}: imagem não conferiu entre legado e R2`)
+
+      const reread = await db.getModel(selected.companyId, migrated.id, { includeInactive: true })
+      failures.push(...compareModel(legacy, reread).map(message => `${legacyId}: ${message}`))
+
+      if (String(reread?.company_id || '') !== selected.companyId) {
+        failures.push(`${legacyId}: company_id divergente após migração`)
+      }
     }
-  }
 
-  const v2List = await db.listModels(selected.companyId, { includeInactive: true, limit: 200 })
-  const selectedLegacyIds = new Set(selected.models.map(model => String(model.id)))
-  const migratedLegacyIds = new Set(v2List.items.filter(item => item.legacy_id != null).map(item => String(item.legacy_id)))
-  for (const legacyId of selectedLegacyIds) {
-    if (!migratedLegacyIds.has(legacyId)) failures.push(`${legacyId}: não encontrado na listagem V2 da empresa`)
-  }
-  if (v2List.items.some(item => String(item.company_id) !== selected.companyId)) {
-    failures.push('listModels retornou registro de outra empresa')
-  }
+    const v2List = await db.listModels(selected.companyId, { includeInactive: true, limit: 200 })
+    const selectedLegacyIds = new Set(selected.models.map(model => String(model.id)))
+    const migratedLegacyIds = new Set(v2List.items.filter(item => item.legacy_id != null).map(item => String(item.legacy_id)))
+    for (const legacyId of selectedLegacyIds) {
+      if (!migratedLegacyIds.has(legacyId)) failures.push(`${legacyId}: não encontrado na listagem V2 da empresa`)
+    }
+    if (v2List.items.some(item => String(item.company_id) !== selected.companyId)) {
+      failures.push('listModels retornou registro de outra empresa')
+    }
 
-  const afterStore = storeLib.readStore()
-  const allLegacyHashAfter = stableHash(Array.isArray(afterStore.models) ? afterStore.models : [])
-  if (allLegacyHashBefore !== allLegacyHashAfter) {
-    failures.push('store.models legado foi alterado durante a migração experimental')
-  }
+    const afterMigrationStore = storeLib.readStore()
+    const migrationLegacyHashAfter = stableHash(Array.isArray(afterMigrationStore.models) ? afterMigrationStore.models : [])
+    if (migrationLegacyHashBefore !== migrationLegacyHashAfter) {
+      failures.push('store.models legado foi alterado durante a migração experimental')
+    }
 
-  if (failures.length) {
-    console.error('[models-v2-migration-trial] FAIL:', failures.join(' | '))
-    const err = new Error(`Migração experimental falhou em ${failures.length} conferência(ões).`)
-    err.code = 'models_v2_migration_trial_failed'
-    throw err
-  }
+    if (failures.length) {
+      throw new Error(`Migração experimental falhou em ${failures.length} conferência(ões): ${failures.join(' | ')}`)
+    }
 
-  console.log(`[models-v2-migration-trial] PASS: ${migratedCount} modelo(s) migrado(s), ${uploadedImages} foto(s) enviada(s), comparação 100% e legado preservado.`)
-  return {
-    ok: true,
-    companyId: selected.companyId,
-    migratedCount,
-    uploadedImages,
-    legacyPreserved: true
+    console.log(`[models-v2-migration-trial] PASS: ${migratedCount} modelo(s) migrado(s), ${uploadedImages} foto(s) enviada(s), comparação 100% e legado preservado.${fixture ? ' Fixture temporária será removida.' : ''}`)
+    return {
+      ok: true,
+      companyId: selected.companyId,
+      migratedCount,
+      uploadedImages,
+      legacyPreserved: true,
+      fixtureUsed: Boolean(fixture)
+    }
+  } finally {
+    if (fixture) {
+      await cleanupFixture(fixture)
+      const finalStore = storeLib.readStore()
+      const finalHash = stableHash(Array.isArray(finalStore.models) ? finalStore.models : [])
+      if (finalHash !== originalLegacyHash) {
+        console.error('[models-v2-migration-trial] ALERTA: limpeza da fixture não restaurou exatamente store.models original.')
+      } else {
+        console.log('[models-v2-migration-trial] Limpeza concluída: fixture removida do legado, V2 e R2; estado original restaurado.')
+      }
+    }
   }
 }
 
