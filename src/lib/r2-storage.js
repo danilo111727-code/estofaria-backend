@@ -1,10 +1,18 @@
 'use strict'
 
 const crypto = require('crypto')
-const https = require('https')
+const {
+  S3Client,
+  PutObjectCommand,
+  HeadObjectCommand,
+  DeleteObjectCommand,
+  GetObjectCommand
+} = require('@aws-sdk/client-s3')
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner')
 
 const REGION = 'auto'
-const SERVICE = 's3'
+let cachedClient = null
+let cachedClientKey = ''
 
 function env(name) {
   return String(process.env[name] || '').trim()
@@ -40,222 +48,128 @@ function assertConfigured() {
   return cfg
 }
 
+function getClient() {
+  const cfg = assertConfigured()
+  const cacheKey = [cfg.endpoint, cfg.accessKeyId, cfg.secretAccessKey].join('|')
+  if (!cachedClient || cachedClientKey !== cacheKey) {
+    cachedClient = new S3Client({
+      region: REGION,
+      endpoint: cfg.endpoint,
+      credentials: {
+        accessKeyId: cfg.accessKeyId,
+        secretAccessKey: cfg.secretAccessKey
+      }
+    })
+    cachedClientKey = cacheKey
+  }
+  return { client: cachedClient, cfg }
+}
+
 function sha256Hex(value) {
   return crypto.createHash('sha256').update(value).digest('hex')
 }
 
-function hmac(key, value, encoding) {
-  return crypto.createHmac('sha256', key).update(value).digest(encoding)
-}
-
-function amzDate(date = new Date()) {
-  const iso = date.toISOString().replace(/[:-]|\.\d{3}/g, '')
-  return { dateTime: iso, dateStamp: iso.slice(0, 8) }
-}
-
-function encodeRfc3986(value) {
-  return encodeURIComponent(String(value)).replace(/[!'()*]/g, ch => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`)
-}
-
-function canonicalObjectPath(bucket, key) {
-  const normalizedKey = String(key || '')
-    .split('/')
-    .filter(Boolean)
-    .map(encodeRfc3986)
-    .join('/')
-  return `/${encodeRfc3986(bucket)}/${normalizedKey}`
-}
-
-function signingKey(secret, dateStamp) {
-  const kDate = hmac(`AWS4${secret}`, dateStamp)
-  const kRegion = hmac(kDate, REGION)
-  const kService = hmac(kRegion, SERVICE)
-  return hmac(kService, 'aws4_request')
-}
-
-function authorizationHeader({ accessKeyId, secretAccessKey, method, host, path, payloadHash, contentType, extraHeaders = {}, now }) {
-  const { dateTime, dateStamp } = amzDate(now)
-  const headers = {
-    host,
-    'x-amz-content-sha256': payloadHash,
-    'x-amz-date': dateTime
-  }
-  if (contentType) headers['content-type'] = contentType
-  for (const [name, value] of Object.entries(extraHeaders || {})) {
+function normalizeMetadata(metadata = {}) {
+  const result = {}
+  for (const [name, value] of Object.entries(metadata || {})) {
     if (value === undefined || value === null || value === '') continue
-    headers[String(name).toLowerCase()] = String(value).trim()
+    result[String(name)] = String(value)
   }
-
-  const sortedNames = Object.keys(headers).sort()
-  const canonicalHeaders = sortedNames.map(name => `${name}:${String(headers[name]).trim().replace(/\s+/g, ' ')}\n`).join('')
-  const signedHeaders = sortedNames.join(';')
-  const canonicalRequest = [
-    method.toUpperCase(),
-    path,
-    '',
-    canonicalHeaders,
-    signedHeaders,
-    payloadHash
-  ].join('\n')
-
-  const scope = `${dateStamp}/${REGION}/${SERVICE}/aws4_request`
-  const stringToSign = [
-    'AWS4-HMAC-SHA256',
-    dateTime,
-    scope,
-    sha256Hex(canonicalRequest)
-  ].join('\n')
-
-  const signature = hmac(signingKey(secretAccessKey, dateStamp), stringToSign, 'hex')
-  return {
-    authorization: `AWS4-HMAC-SHA256 Credential=${accessKeyId}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`,
-    headers
-  }
+  return result
 }
 
-function request({ method, key, body = Buffer.alloc(0), contentType = '', extraHeaders = {} }) {
-  const cfg = assertConfigured()
-  const endpoint = new URL(cfg.endpoint)
-  const path = canonicalObjectPath(cfg.bucket, key)
-  const payload = Buffer.isBuffer(body) ? body : Buffer.from(body || '')
-  const payloadHash = sha256Hex(payload)
-  const signed = authorizationHeader({
-    accessKeyId: cfg.accessKeyId,
-    secretAccessKey: cfg.secretAccessKey,
-    method,
-    host: endpoint.host,
-    path,
-    payloadHash,
-    contentType,
-    extraHeaders,
-    now: new Date()
-  })
+function etagValue(value) {
+  return String(value || '').replace(/^"|"$/g, '')
+}
 
-  const headers = {
-    ...signed.headers,
-    Authorization: signed.authorization
-  }
-  if (payload.length) headers['Content-Length'] = String(payload.length)
-
-  return new Promise((resolve, reject) => {
-    const req = https.request({
-      protocol: endpoint.protocol,
-      hostname: endpoint.hostname,
-      port: endpoint.port || 443,
-      method,
-      path,
-      headers
-    }, res => {
-      const chunks = []
-      res.on('data', chunk => chunks.push(chunk))
-      res.on('end', () => {
-        const responseBody = Buffer.concat(chunks)
-        const status = Number(res.statusCode || 0)
-        if (status >= 200 && status < 300) {
-          resolve({ status, headers: res.headers, body: responseBody })
-          return
-        }
-        const err = new Error(`R2 ${method} falhou com HTTP ${status}: ${responseBody.toString('utf8').slice(0, 500)}`)
-        err.code = 'r2_request_failed'
-        err.status = status
-        reject(err)
-      })
-    })
-
-    req.on('error', reject)
-    if (payload.length) req.write(payload)
-    req.end()
-  })
+function isNotFoundError(err) {
+  return Boolean(
+    err && (
+      err.name === 'NotFound' ||
+      err.name === 'NoSuchKey' ||
+      err.$metadata?.httpStatusCode === 404
+    )
+  )
 }
 
 async function putObject(key, body, contentType, metadata = {}) {
-  const extraHeaders = {}
-  for (const [name, value] of Object.entries(metadata || {})) {
-    if (value === undefined || value === null || value === '') continue
-    extraHeaders[`x-amz-meta-${String(name).toLowerCase()}`] = String(value)
-  }
-  const response = await request({ method: 'PUT', key, body, contentType, extraHeaders })
+  const { client, cfg } = getClient()
+  const payload = Buffer.isBuffer(body) ? body : Buffer.from(body || '')
+  const response = await client.send(new PutObjectCommand({
+    Bucket: cfg.bucket,
+    Key: String(key),
+    Body: payload,
+    ContentType: contentType || undefined,
+    Metadata: normalizeMetadata(metadata)
+  }))
+
   return {
-    etag: String(response.headers.etag || '').replace(/^"|"$/g, ''),
-    sizeBytes: Buffer.isBuffer(body) ? body.length : Buffer.byteLength(body || '')
+    etag: etagValue(response.ETag),
+    sizeBytes: payload.length
   }
 }
 
 async function headObject(key) {
+  const { client, cfg } = getClient()
   try {
-    const response = await request({ method: 'HEAD', key })
+    const response = await client.send(new HeadObjectCommand({
+      Bucket: cfg.bucket,
+      Key: String(key)
+    }))
     return {
       exists: true,
-      etag: String(response.headers.etag || '').replace(/^"|"$/g, ''),
-      contentType: String(response.headers['content-type'] || ''),
-      sizeBytes: Number(response.headers['content-length'] || 0)
+      etag: etagValue(response.ETag),
+      contentType: String(response.ContentType || ''),
+      sizeBytes: Number(response.ContentLength || 0)
     }
   } catch (err) {
-    if (err && err.status === 404) return { exists: false }
+    if (isNotFoundError(err)) return { exists: false }
     throw err
   }
 }
 
 async function deleteObject(key) {
-  await request({ method: 'DELETE', key })
+  const { client, cfg } = getClient()
+  await client.send(new DeleteObjectCommand({
+    Bucket: cfg.bucket,
+    Key: String(key)
+  }))
   return { ok: true }
 }
 
-function presignObjectUrl(method, key, { expiresSeconds = 300, contentType = '' } = {}) {
-  const cfg = assertConfigured()
-  const endpoint = new URL(cfg.endpoint)
-  const path = canonicalObjectPath(cfg.bucket, key)
-  const now = new Date()
-  const { dateTime, dateStamp } = amzDate(now)
-  const scope = `${dateStamp}/${REGION}/${SERVICE}/aws4_request`
-  const expires = Math.min(3600, Math.max(30, Number(expiresSeconds || 300)))
-  const normalizedMethod = String(method || 'GET').toUpperCase()
-  const signedHeaderMap = { host: endpoint.host }
-  if (contentType) signedHeaderMap['content-type'] = String(contentType).trim()
-  const signedHeaderNames = Object.keys(signedHeaderMap).sort()
-  const signedHeaders = signedHeaderNames.join(';')
+function normalizeExpiresSeconds(expiresSeconds) {
+  return Math.min(3600, Math.max(30, Number(expiresSeconds || 300)))
+}
 
-  const params = {
-    'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
-    'X-Amz-Credential': `${cfg.accessKeyId}/${scope}`,
-    'X-Amz-Date': dateTime,
-    'X-Amz-Expires': String(expires),
-    'X-Amz-SignedHeaders': signedHeaders
+async function presignGetUrl(key, expiresSeconds = 300) {
+  const { client, cfg } = getClient()
+  return getSignedUrl(
+    client,
+    new GetObjectCommand({
+      Bucket: cfg.bucket,
+      Key: String(key)
+    }),
+    { expiresIn: normalizeExpiresSeconds(expiresSeconds) }
+  )
+}
+
+async function presignPutUrl(key, contentType, expiresSeconds = 300) {
+  const { client, cfg } = getClient()
+  const normalizedContentType = String(contentType || '').trim()
+  const command = new PutObjectCommand({
+    Bucket: cfg.bucket,
+    Key: String(key),
+    ContentType: normalizedContentType || undefined
+  })
+
+  const options = {
+    expiresIn: normalizeExpiresSeconds(expiresSeconds)
+  }
+  if (normalizedContentType) {
+    options.signableHeaders = new Set(['content-type'])
   }
 
-  const canonicalQuery = Object.keys(params)
-    .sort()
-    .map(name => `${encodeRfc3986(name)}=${encodeRfc3986(params[name])}`)
-    .join('&')
-
-  const canonicalHeaders = signedHeaderNames
-    .map(name => `${name}:${String(signedHeaderMap[name]).trim().replace(/\s+/g, ' ')}\n`)
-    .join('')
-  const canonicalRequest = [
-    normalizedMethod,
-    path,
-    canonicalQuery,
-    canonicalHeaders,
-    signedHeaders,
-    'UNSIGNED-PAYLOAD'
-  ].join('\n')
-
-  const stringToSign = [
-    'AWS4-HMAC-SHA256',
-    dateTime,
-    scope,
-    sha256Hex(canonicalRequest)
-  ].join('\n')
-  const signature = hmac(signingKey(cfg.secretAccessKey, dateStamp), stringToSign, 'hex')
-  return `${endpoint.origin}${path}?${canonicalQuery}&X-Amz-Signature=${signature}`
-}
-
-function presignGetUrl(key, expiresSeconds = 300) {
-  return presignObjectUrl('GET', key, { expiresSeconds })
-}
-
-function presignPutUrl(key, contentType, expiresSeconds = 300) {
-  return presignObjectUrl('PUT', key, { expiresSeconds, contentType })
+  return getSignedUrl(client, command, options)
 }
 
 function extensionForContentType(contentType) {
