@@ -31,12 +31,17 @@ Base: `/api/v2`
 - `POST /models`
 - `PUT|PATCH /models/:id`
 - `DELETE /models/:id` (soft delete)
-- `PUT /models/:id/images/original`
-- `PUT /models/:id/images/thumb`
+- `POST /models/:id/images/:variant/upload-url`
+- upload direto do navegador para a URL temporária do R2
+- `POST /models/:id/images/:variant/complete`
 - `GET /models/:id/images/:variant/url`
 - `DELETE /models/:id/images/:variant`
 
-A API V2 rejeita imagem base64 dentro do JSON do modelo. Imagens são objetos separados no R2.
+Variantes aceitas: `original` e `thumb`.
+
+A API V2 rejeita imagem base64 dentro do JSON do modelo. O backend gera uma URL assinada de curta duração, o navegador envia a imagem diretamente ao R2 e depois confirma o upload. Assim a imagem não atravessa o Render no fluxo normal.
+
+O bucket R2 deve permanecer privado. Para upload direto pelo navegador, configure CORS no bucket permitindo apenas as origens oficiais do Estofaria Digital e o método `PUT` com `Content-Type`.
 
 ## Migração segura
 
