@@ -7,6 +7,7 @@ const perfDiagnostics = require('./src/lib/perf-diagnostics')
 const compactModelResponse = require('./src/middleware/compact-model-response')
 const normalizeModelsV2BaseMeters = require('./src/middleware/models-v2-base-meters')
 const modelsV2Db = require('./src/lib/models-v2-db')
+const quotesV2Db = require('./src/lib/quotes-v2-db')
 const { normalizeExistingBaseMeters } = require('./src/lib/models-v2-base-migration')
 const { runR2SmokeTest } = require('./src/lib/r2-smoke-test')
 
@@ -20,6 +21,7 @@ const billingRoutes = require('./src/routes/billing')
 const operationsRoutes = require('./src/routes/operations')
 const materialUnitsRoutes = require('./src/routes/material-units')
 const modelsV2Routes = require('./src/routes/models-v2')
+const quotesV2Routes = require('./src/routes/quotes-v2')
 
 function parseAllowedOrigins() {
   return String(process.env.CORS_ALLOWED_ORIGINS || '')
@@ -79,10 +81,11 @@ app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
     service: 'estofaria-saas-backend-starter',
-    version: '20260818-models-v2b',
+    version: '20260818-quotes-v2a',
     storage: process.env.DATABASE_URL ? 'postgresql' : 'file',
     store_file: storeLib.STORE_FILE,
-    models_v2: process.env.DATABASE_URL ? 'available' : 'postgres_required'
+    models_v2: process.env.DATABASE_URL ? 'available' : 'postgres_required',
+    quotes_v2: process.env.DATABASE_URL ? 'available' : 'postgres_required'
   })
 })
 
@@ -93,10 +96,11 @@ app.use('/api/saas', saasRoutes)
 app.use('/api/billing', billingRoutes)
 app.use('/api', materialUnitsRoutes)
 
-// API V2 paralela. Não substitui nem altera /api/models nesta fase.
+// APIs V2 paralelas. Não substituem os endpoints legados nesta fase.
 // A medida base é canonicalizada em metros antes de qualquer gravação V2.
 app.use('/api/v2/models', normalizeModelsV2BaseMeters)
 app.use('/api/v2', modelsV2Routes)
+app.use('/api/v2', quotesV2Routes)
 
 app.use('/api', operationsRoutes)
 
@@ -128,7 +132,9 @@ async function start() {
     await pg.bootstrapStore()
     await modelsV2Db.ensureSchema()
     await normalizeExistingBaseMeters()
-    console.log('[server] Models V2 schema pronto (API paralela)')
+    await quotesV2Db.ensureSchema()
+    await quotesV2Db.migrateLegacyQuotes(storeLib.readStore())
+    console.log('[server] Models V2 e Quotes V2 prontos (APIs paralelas)')
 
     if (String(process.env.R2_SMOKE_TEST_ON_START || '') === '1') {
       await runR2SmokeTest()
