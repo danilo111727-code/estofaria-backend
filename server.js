@@ -5,7 +5,9 @@ const cors = require('cors')
 const storeLib = require('./src/lib/store')
 const perfDiagnostics = require('./src/lib/perf-diagnostics')
 const compactModelResponse = require('./src/middleware/compact-model-response')
+const normalizeModelsV2BaseMeters = require('./src/middleware/models-v2-base-meters')
 const modelsV2Db = require('./src/lib/models-v2-db')
+const { normalizeExistingBaseMeters } = require('./src/lib/models-v2-base-migration')
 const { runR2SmokeTest } = require('./src/lib/r2-smoke-test')
 
 // Instala a medição antes de carregar as rotas, para que imports destruturados
@@ -77,7 +79,7 @@ app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
     service: 'estofaria-saas-backend-starter',
-    version: '20260816-models-v2a',
+    version: '20260818-models-v2b',
     storage: process.env.DATABASE_URL ? 'postgresql' : 'file',
     store_file: storeLib.STORE_FILE,
     models_v2: process.env.DATABASE_URL ? 'available' : 'postgres_required'
@@ -92,6 +94,8 @@ app.use('/api/billing', billingRoutes)
 app.use('/api', materialUnitsRoutes)
 
 // API V2 paralela. Não substitui nem altera /api/models nesta fase.
+// A medida base é canonicalizada em metros antes de qualquer gravação V2.
+app.use('/api/v2/models', normalizeModelsV2BaseMeters)
 app.use('/api/v2', modelsV2Routes)
 
 app.use('/api', operationsRoutes)
@@ -123,6 +127,7 @@ async function start() {
     await pg.init()
     await pg.bootstrapStore()
     await modelsV2Db.ensureSchema()
+    await normalizeExistingBaseMeters()
     console.log('[server] Models V2 schema pronto (API paralela)')
 
     if (String(process.env.R2_SMOKE_TEST_ON_START || '') === '1') {
