@@ -28,12 +28,32 @@ function parseDataUrl(dataUrl) {
   }
 }
 
-async function main() {
-  const options = parseArgs(process.argv)
+function finiteNumber(value, fallback = 0) {
+  const n = Number(String(value ?? '').replace(',', '.'))
+  return Number.isFinite(n) ? n : fallback
+}
+
+function canonicalLegacyBaseMeters(model = {}) {
+  const raw = model.base_meters ?? model.baseMeters ?? model.metragem_base ?? model.metragemBase ?? 0
+  const value = Math.max(0, finiteNumber(raw, 0))
+  return value > 10 ? Number((value / 100).toFixed(2)) : Number(value.toFixed(2))
+}
+
+function normalizeLegacyForV2(model = {}) {
+  return {
+    ...model,
+    base_meters: canonicalLegacyBaseMeters(model)
+  }
+}
+
+async function migrateModels(options = {}) {
   if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL é obrigatória para a migração Models V2.')
 
-  await pgStore.init()
-  await db.ensureSchema()
+  if (!options.skipInit) {
+    await pgStore.init()
+    await db.ensureSchema()
+  }
+
   const store = pgStore.readStore()
   const allModels = Array.isArray(store.models) ? store.models : []
   const models = options.companyId
@@ -47,9 +67,18 @@ async function main() {
   console.log('[models-v2] Modelos com imagem:', withImages.length)
   if (options.companyId) console.log('[models-v2] Empresa filtrada:', options.companyId)
 
+  const preview = models.map(model => ({
+    company_id: String(model.company_id || ''),
+    legacy_id: String(model.id ?? ''),
+    name: String(model.name || model.nome || ''),
+    base_meters_legacy: model.base_meters ?? model.baseMeters ?? model.metragem_base ?? null,
+    base_meters_v2: canonicalLegacyBaseMeters(model)
+  }))
+  if (preview.length) console.log('[models-v2] Prévia de normalização:', JSON.stringify(preview))
+
   if (!options.apply) {
     console.log('[models-v2] Nenhuma alteração feita. Use --apply para executar a migração.')
-    return
+    return { found: models.length, migratedModels: 0, uploadedImages: 0, skippedImages: 0, preview }
   }
 
   if (withImages.length && !r2.isConfigured()) {
@@ -68,7 +97,8 @@ async function main() {
       continue
     }
 
-    const model = await db.upsertMigratedModel(companyId, legacyId, legacy)
+    const normalizedLegacy = normalizeLegacyForV2(legacy)
+    const model = await db.upsertMigratedModel(companyId, legacyId, normalizedLegacy)
     migratedModels += 1
 
     const image = parseDataUrl(legacy.image_data_url || legacy.imageDataUrl || legacy.foto_data_url || legacy.fotoDataUrl)
@@ -105,13 +135,28 @@ async function main() {
   console.log('[models-v2] Imagens enviadas:', uploadedImages)
   console.log('[models-v2] Imagens já existentes ignoradas:', skippedImages)
   console.log('[models-v2] O kv_store não foi alterado nem apagado.')
+
+  return { found: models.length, migratedModels, uploadedImages, skippedImages, preview }
 }
 
-main()
-  .catch(err => {
-    console.error('[models-v2] Falha:', err.message)
-    process.exitCode = 1
-  })
-  .finally(async () => {
-    await pgStore.pool.end().catch(() => {})
-  })
+async function main() {
+  const options = parseArgs(process.argv)
+  return migrateModels(options)
+}
+
+if (require.main === module) {
+  main()
+    .catch(err => {
+      console.error('[models-v2] Falha:', err.message)
+      process.exitCode = 1
+    })
+    .finally(async () => {
+      await pgStore.pool.end().catch(() => {})
+    })
+}
+
+module.exports = {
+  canonicalLegacyBaseMeters,
+  normalizeLegacyForV2,
+  migrateModels
+}
