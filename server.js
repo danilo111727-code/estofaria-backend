@@ -13,9 +13,8 @@ const { ensurePersonalizationIsolation } = require('./src/lib/personalization-v2
 const { runPersonalizationV2SelfTest } = require('./src/lib/personalization-v2-self-test')
 const { normalizeExistingBaseMeters } = require('./src/lib/models-v2-base-migration')
 const { runR2SmokeTest } = require('./src/lib/r2-smoke-test')
+const { migrateModels } = require('./scripts/migrate-models-v2')
 
-// Instala a medição antes de carregar as rotas, para que imports destruturados
-// de readStore/writeStore já recebam as versões instrumentadas.
 perfDiagnostics.installStoreTiming(storeLib)
 
 const authRoutes = require('./src/routes/auth')
@@ -64,12 +63,7 @@ app.use(cors(corsOptions))
 app.options('*', cors(corsOptions))
 app.use(express.json({ limit: '1mb' }))
 app.use(express.urlencoded({ extended: false, limit: '1mb' }))
-
-// Diagnóstico temporário: só mede POST /api/quotes e não altera a resposta.
 app.use(perfDiagnostics.middleware)
-
-// Modelos legados são armazenados com uma única imagem; a API antiga também
-// devolve apenas image_data_url para reduzir base64 durante a transição.
 app.use(compactModelResponse)
 
 app.get('/', (_req, res) => {
@@ -85,7 +79,7 @@ app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
     service: 'estofaria-saas-backend-starter',
-    version: '20260818-personalization-v2b',
+    version: '20260819-models-v2-migration-control',
     storage: process.env.DATABASE_URL ? 'postgresql' : 'file',
     store_file: storeLib.STORE_FILE,
     models_v2: process.env.DATABASE_URL ? 'available' : 'postgres_required',
@@ -95,22 +89,14 @@ app.get('/api/health', (_req, res) => {
 })
 
 app.use('/api/auth', authRoutes)
-
-// Rotas principais
 app.use('/api/saas', saasRoutes)
 app.use('/api/billing', billingRoutes)
 app.use('/api', materialUnitsRoutes)
-
-// APIs V2 paralelas. Não substituem os endpoints legados nesta fase.
-// A medida base é canonicalizada em metros antes de qualquer gravação V2.
 app.use('/api/v2/models', normalizeModelsV2BaseMeters)
 app.use('/api/v2', modelsV2Routes)
 app.use('/api/v2', quotesV2Routes)
 app.use('/api/v2', personalizationV2Routes)
-
 app.use('/api', operationsRoutes)
-
-// Aliases para compatibilidade com frontends já publicados
 app.use('/api/master', saasRoutes)
 app.use('/api/admin', saasRoutes)
 app.use('/api/subscription/admin', saasRoutes)
@@ -130,6 +116,22 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: 'internal_error', message: 'Erro interno do servidor.' })
 })
 
+async function runControlledModelsMigration() {
+  const mode = String(process.env.MODELS_V2_MIGRATION_ON_START || '').trim().toLowerCase()
+  if (!mode) return null
+  if (!['dry-run', 'apply'].includes(mode)) {
+    throw new Error('MODELS_V2_MIGRATION_ON_START deve ser dry-run ou apply.')
+  }
+  const companyId = String(process.env.MODELS_V2_MIGRATION_COMPANY_ID || '').trim()
+  console.log(`[models-v2] Migração controlada no startup: ${mode}${companyId ? ` | empresa ${companyId}` : ''}`)
+  return migrateModels({
+    apply: mode === 'apply',
+    forceImages: false,
+    companyId,
+    skipInit: true
+  })
+}
+
 async function start() {
   if (process.env.DATABASE_URL) {
     console.log('[server] DATABASE_URL detectada — usando PostgreSQL')
@@ -138,6 +140,7 @@ async function start() {
     await pg.bootstrapStore()
     await modelsV2Db.ensureSchema()
     await normalizeExistingBaseMeters()
+    await runControlledModelsMigration()
     await quotesV2Db.ensureSchema()
     await quotesV2Db.migrateLegacyQuotes(storeLib.readStore())
     await personalizationV2Db.ensureSchema()
@@ -151,7 +154,6 @@ async function start() {
     if (String(process.env.PERSONALIZATION_V2_SELF_TEST_ON_START || '') === '1') {
       await runPersonalizationV2SelfTest()
     }
-
     if (String(process.env.R2_SMOKE_TEST_ON_START || '') === '1') {
       await runR2SmokeTest()
     }
