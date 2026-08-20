@@ -51,8 +51,11 @@ function normalizeLegacyForV2(model = {}) {
 async function migrateModels(options = {}) {
   if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL é obrigatória para a migração Models V2.')
 
-  await pgStore.init()
-  await db.ensureSchema()
+  if (!options.skipInit) {
+    await pgStore.init()
+    await db.ensureSchema()
+  }
+
   const store = pgStore.readStore()
   const allModels = Array.isArray(store.models) ? store.models : []
   const models = options.companyId
