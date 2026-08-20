@@ -13,6 +13,7 @@ const { ensurePersonalizationIsolation } = require('./src/lib/personalization-v2
 const { runPersonalizationV2SelfTest } = require('./src/lib/personalization-v2-self-test')
 const { normalizeExistingBaseMeters } = require('./src/lib/models-v2-base-migration')
 const { runR2SmokeTest } = require('./src/lib/r2-smoke-test')
+const { migrateModels } = require('./scripts/migrate-models-v2')
 
 // Instala a medição antes de carregar as rotas, para que imports destruturados
 // de readStore/writeStore já recebam as versões instrumentadas.
@@ -85,7 +86,7 @@ app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
     service: 'estofaria-saas-backend-starter',
-    version: '20260818-personalization-v2b',
+    version: '20260819-models-v2-cleanup-dev1',
     storage: process.env.DATABASE_URL ? 'postgresql' : 'file',
     store_file: storeLib.STORE_FILE,
     models_v2: process.env.DATABASE_URL ? 'available' : 'postgres_required',
@@ -130,6 +131,23 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: 'internal_error', message: 'Erro interno do servidor.' })
 })
 
+async function runControlledModelsMigration() {
+  const mode = String(process.env.MODELS_V2_MIGRATION_ON_START || '').trim().toLowerCase()
+  if (!mode) return null
+  if (!['dry-run', 'apply'].includes(mode)) {
+    throw new Error('MODELS_V2_MIGRATION_ON_START deve ser dry-run ou apply.')
+  }
+
+  const companyId = String(process.env.MODELS_V2_MIGRATION_COMPANY_ID || '').trim()
+  console.log(`[models-v2] Migração controlada no startup: ${mode}${companyId ? ` | empresa ${companyId}` : ''}`)
+  return migrateModels({
+    apply: mode === 'apply',
+    forceImages: false,
+    companyId,
+    skipInit: true
+  })
+}
+
 async function start() {
   if (process.env.DATABASE_URL) {
     console.log('[server] DATABASE_URL detectada — usando PostgreSQL')
@@ -138,6 +156,11 @@ async function start() {
     await pg.bootstrapStore()
     await modelsV2Db.ensureSchema()
     await normalizeExistingBaseMeters()
+
+    // A migração é opt-in por variável de ambiente. Sem a variável, nada muda.
+    // Em dev usamos primeiro dry-run e só depois apply.
+    await runControlledModelsMigration()
+
     await quotesV2Db.ensureSchema()
     await quotesV2Db.migrateLegacyQuotes(storeLib.readStore())
     await personalizationV2Db.ensureSchema()
