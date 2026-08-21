@@ -21,6 +21,7 @@ const { migrateModels } = require('./scripts/migrate-models-v2')
 perfDiagnostics.installStoreTiming(storeLib)
 
 const authRoutes = require('./src/routes/auth')
+const companyDeletionRoutes = require('./src/routes/company-deletion')
 const saasRoutes = require('./src/routes/saas')
 const billingRoutes = require('./src/routes/billing')
 const operationsRoutes = require('./src/routes/operations')
@@ -98,6 +99,7 @@ app.get('/api/health', (_req, res) => {
 })
 
 app.use('/api/auth/team', teamManagementPermissions)
+app.use('/api', companyDeletionRoutes)
 app.use('/api/auth', authRoutes)
 app.use('/api/saas', saasRoutes)
 app.use('/api/billing', billingRoutes)
