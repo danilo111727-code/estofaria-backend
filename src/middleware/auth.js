@@ -61,11 +61,28 @@ function stripForeignCompanySelectors(req, user){
 }
 
 function requireAuth(req, res, next){
+  const token = getBearerToken(req)
+  if(!token) return res.status(401).json({ error:'unauthorized', message:'Token ausente.' })
+
+  let payload
   try {
-    const token = getBearerToken(req)
-    if(!token) return res.status(401).json({ error:'unauthorized', message:'Token ausente.' })
-    const payload = decodeToken(token)
-    const store = readAuthStore()
+    payload = decodeToken(token)
+  } catch (_) {
+    return res.status(401).json({ error:'unauthorized', message:'Token inválido ou expirado.' })
+  }
+
+  let store
+  try {
+    store = readAuthStore()
+  } catch (error) {
+    console.error('[auth] Falha temporária ao carregar dados da sessão:', error && error.message ? error.message : error)
+    return res.status(503).json({
+      error:'auth_temporarily_unavailable',
+      message:'Não foi possível validar sua sessão agora. Tente novamente em instantes.'
+    })
+  }
+
+  try {
     const user = store.users.find(item => String(item.id) === String(payload.id) && item.is_active !== false)
     if(!user) return res.status(401).json({ error:'unauthorized', message:'Sessão inválida.' })
     if(!hasMasterAccess(user) && hasInactiveMembership(store, user)){
@@ -93,8 +110,12 @@ function requireAuth(req, res, next){
     }
 
     next()
-  } catch (_) {
-    return res.status(401).json({ error:'unauthorized', message:'Token inválido ou expirado.' })
+  } catch (error) {
+    console.error('[auth] Falha temporária durante validação da sessão:', error && error.message ? error.message : error)
+    return res.status(503).json({
+      error:'auth_temporarily_unavailable',
+      message:'Não foi possível validar sua sessão agora. Tente novamente em instantes.'
+    })
   }
 }
 
