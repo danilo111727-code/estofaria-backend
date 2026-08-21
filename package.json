@@ -4,6 +4,7 @@
   "private": true,
   "main": "server.js",
   "scripts": {
+    "prestart": "npm audit --json || true",
     "start": "node server.js",
     "dev": "node server.js"
   },
