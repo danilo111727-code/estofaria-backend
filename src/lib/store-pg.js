@@ -283,18 +283,45 @@ function materializeCompany(store, company) {
   }
 }
 
-// ─── Bootstrap (cria usuário master se store vazio) ──────────────────────────
+function bootstrapEnabled(name) {
+  return String(process.env[name] || '').trim() === '1'
+}
+
+function requiredBootstrapEnv(name) {
+  const value = String(process.env[name] || '').trim()
+  if (value) return value
+  const error = new Error(`${name} é obrigatório quando o bootstrap é habilitado.`)
+  error.code = 'bootstrap_env_required'
+  throw error
+}
+
+function validateBootstrapPassword(password, envName) {
+  if (String(password || '').length >= 12) return
+  const error = new Error(`${envName} deve ter pelo menos 12 caracteres.`)
+  error.code = 'bootstrap_password_too_short'
+  throw error
+}
+
+// ─── Bootstrap explícito (somente quando o store estiver realmente vazio) ────
 
 async function bootstrapStore() {
   updateStore(store => {
     if (store.users.length > 0) return store
 
-    const masterEmail = process.env.MASTER_EMAIL || 'master@estofaria.local'
-    const masterPassword = process.env.MASTER_PASSWORD || 'ChangeMe123!'
+    if (!bootstrapEnabled('BOOTSTRAP_MASTER')) {
+      const error = new Error('Store vazio e BOOTSTRAP_MASTER não está habilitado. Nenhuma conta administrativa foi criada.')
+      error.code = 'bootstrap_master_disabled'
+      throw error
+    }
+
+    const masterEmail = requiredBootstrapEnv('MASTER_EMAIL')
+    const masterPassword = requiredBootstrapEnv('MASTER_PASSWORD')
+    validateBootstrapPassword(masterPassword, 'MASTER_PASSWORD')
+
     const masterId = uuidv4()
     store.users.push({
       id: masterId,
-      name: 'Master SaaS',
+      name: String(process.env.MASTER_NAME || 'Master SaaS').trim() || 'Master SaaS',
       email: masterEmail,
       password_hash: bcrypt.hashSync(masterPassword, 10),
       role: 'platform_admin',
@@ -309,14 +336,33 @@ async function bootstrapStore() {
       updated_at: nowIso()
     })
 
+    upsertAudit(store, {
+      action: 'bootstrap_master',
+      message: 'Conta Master criada por bootstrap explícito.',
+      actor_name: 'system',
+      actor_email: 'system@local',
+      actor_role: 'bootstrap',
+      reason: 'explicit_bootstrap',
+      source: 'bootstrap-pg'
+    })
+
+    if (!bootstrapEnabled('BOOTSTRAP_DEMO')) return store
+
+    const demoEmail = requiredBootstrapEnv('DEMO_EMAIL')
+    const demoPassword = requiredBootstrapEnv('DEMO_PASSWORD')
+    validateBootstrapPassword(demoPassword, 'DEMO_PASSWORD')
+
     const companyId = uuidv4()
     const ownerId = uuidv4()
     const plan = planPreset('gestao')
+    const demoOwnerName = String(process.env.DEMO_OWNER_NAME || 'Dono da Empresa Demo').trim() || 'Dono da Empresa Demo'
+    const demoCompanyName = String(process.env.DEMO_COMPANY_NAME || 'Estofaria Demo').trim() || 'Estofaria Demo'
+
     store.users.push({
       id: ownerId,
-      name: 'Dono da Empresa Demo',
-      email: 'owner@demo.local',
-      password_hash: bcrypt.hashSync('Owner123!', 10),
+      name: demoOwnerName,
+      email: demoEmail,
+      password_hash: bcrypt.hashSync(demoPassword, 10),
       role: 'owner',
       company_id: companyId,
       is_owner: true,
@@ -328,10 +374,10 @@ async function bootstrapStore() {
     })
     store.companies.push({
       id: companyId,
-      name: 'Estofaria Demo',
-      owner_name: 'Dono da Empresa Demo',
-      owner_email: 'owner@demo.local',
-      owner_phone: '11999999999',
+      name: demoCompanyName,
+      owner_name: demoOwnerName,
+      owner_email: demoEmail,
+      owner_phone: String(process.env.DEMO_OWNER_PHONE || '').trim(),
       plan_code: plan.code,
       plan_name: plan.name,
       billing_mode: 'stripe',
@@ -343,7 +389,7 @@ async function bootstrapStore() {
       trial_ends_at: '',
       created_at: nowIso(),
       updated_at: nowIso(),
-      notes: 'Empresa demo inicial do starter SaaS.'
+      notes: 'Empresa demo criada por bootstrap explícito.'
     })
     store.companyUsers.push({
       id: uuidv4(),
@@ -358,12 +404,12 @@ async function bootstrapStore() {
     })
     upsertAudit(store, {
       company_id: companyId,
-      action: 'bootstrap',
-      message: 'Loja inicial criada automaticamente.',
+      action: 'bootstrap_demo',
+      message: 'Loja demo criada por bootstrap explícito.',
       actor_name: 'system',
       actor_email: 'system@local',
       actor_role: 'bootstrap',
-      reason: 'seed',
+      reason: 'explicit_demo_bootstrap',
       source: 'bootstrap-pg'
     })
     return store
