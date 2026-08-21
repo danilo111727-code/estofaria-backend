@@ -14,7 +14,7 @@ const personalizationV2Db = require('./src/lib/personalization-v2-db')
 const { ensurePersonalizationIsolation } = require('./src/lib/personalization-v2-hardening')
 const { runPersonalizationV2SelfTest } = require('./src/lib/personalization-v2-self-test')
 const { normalizeExistingBaseMeters } = require('./src/lib/models-v2-base-migration')
-const { runR2SmokeTest } = require('./src/lib/r2-storage')
+const { runR2SmokeTest } = require('./src/lib/r2-smoke-test')
 const { migrateModels } = require('./scripts/migrate-models-v2')
 
 perfDiagnostics.installStoreTiming(storeLib)
