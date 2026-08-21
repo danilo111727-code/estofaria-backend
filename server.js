@@ -61,7 +61,13 @@ app.use((req, res, next) => {
 
 app.use(cors(corsOptions))
 app.options('*', cors(corsOptions))
-app.use(express.json({ limit: '1mb' }))
+const jsonParser = express.json({ limit: '1mb' })
+app.use((req, res, next) => {
+  const isStripeWebhook = req.path === '/api/billing/webhooks/stripe'
+    || req.path === '/api/subscription/webhooks/stripe'
+  if (isStripeWebhook) return next()
+  return jsonParser(req, res, next)
+})
 app.use(express.urlencoded({ extended: false, limit: '1mb' }))
 app.use(perfDiagnostics.middleware)
 app.use(compactModelResponse)
