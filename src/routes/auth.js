@@ -44,6 +44,33 @@ function normalizeEmail(value){
   return String(value || '').trim().toLowerCase()
 }
 
+function buildTeamPassword(){
+  const groups = [
+    'ABCDEFGHJKLMNPQRSTUVWXYZ',
+    'abcdefghijkmnopqrstuvwxyz',
+    '23456789',
+    '!@#$%&*'
+  ]
+  const all = groups.join('')
+  const chars = groups.map(group => group[crypto.randomInt(0, group.length)])
+  while(chars.length < 12){
+    chars.push(all[crypto.randomInt(0, all.length)])
+  }
+  for(let i = chars.length - 1; i > 0; i -= 1){
+    const j = crypto.randomInt(0, i + 1)
+    ;[chars[i], chars[j]] = [chars[j], chars[i]]
+  }
+  return chars.join('')
+}
+
+function getUserMembership(store, user){
+  if(!user || !user.company_id) return null
+  return store.companyUsers.find(item =>
+    String(item.user_id) === String(user.id)
+    && String(item.company_id) === String(user.company_id)
+  ) || null
+}
+
 function genericResetResponse(extra = {}){
   return {
     ok:true,
@@ -132,10 +159,16 @@ router.post('/login', (req, res) => {
   const store = readStore()
   const user = findUserByEmail(store, email)
   if(!user || user.is_active === false) return res.status(401).json({ error:'unauthorized', message:'E-mail ou senha inválidos.' })
+  const membership = getUserMembership(store, user)
+  if(membership && String(membership.status || '').toLowerCase() === 'inactive'){
+    return res.status(403).json({ error:'access_cancelled', message:'Seu acesso foi cancelado pelo administrador da empresa.' })
+  }
   if(!bcrypt.compareSync(password, String(user.password_hash || ''))) return res.status(401).json({ error:'unauthorized', message:'E-mail ou senha inválidos.' })
+  if(membership){
+    membership.status = 'active'
+    membership.last_login_at = nowIso()
+  }
   const token = issueToken(user)
-  const membership = store.companyUsers.find(item => String(item.user_id) === String(user.id) && String(item.status).toLowerCase() !== 'inactive')
-  if(membership) membership.last_login_at = nowIso()
   user.updated_at = nowIso()
   writeStore(store)
   res.json({ token, user: sanitizeUser(enrichUserForResponse(store, user)) })
@@ -339,12 +372,14 @@ router.post('/team/invite', requireAuth, (req, res) => {
   }
 
   let user = findUserByEmail(store, email)
+  let initialPassword = ''
   if(!user){
+    initialPassword = buildTeamPassword()
     user = {
       id: uuidv4(),
       name: cleanName,
       email,
-      password_hash: bcrypt.hashSync('Temp123!', 10),
+      password_hash: bcrypt.hashSync(initialPassword, 10),
       company_id: company.id,
       role: role || 'custom',
       permissions: selectedModules,
@@ -360,7 +395,7 @@ router.post('/team/invite', requireAuth, (req, res) => {
   if(existing){
     existing.role = role || existing.role || 'custom'
     existing.modules = selectedModules
-    existing.status = 'pending'
+    existing.status = 'active'
     existing.invited_at = nowIso()
   }else{
     store.companyUsers.push({
@@ -368,7 +403,7 @@ router.post('/team/invite', requireAuth, (req, res) => {
       company_id: company.id,
       user_id: user.id,
       role: role || 'custom',
-      status: 'pending',
+      status: 'active',
       modules: selectedModules,
       invited_at: nowIso(),
       last_login_at: '',
@@ -381,7 +416,12 @@ router.post('/team/invite', requireAuth, (req, res) => {
   user.company_id = company.id
   user.updated_at = nowIso()
   writeStore(store)
-  res.status(201).json({ ok:true, message:'Convite registrado.', user: sanitizeUser(enrichUserForResponse(store, user)) })
+  res.status(201).json({
+    ok:true,
+    message: initialPassword ? 'Usuário cadastrado.' : 'Usuário vinculado.',
+    user: sanitizeUser(enrichUserForResponse(store, user)),
+    ...(initialPassword ? { initial_password: initialPassword } : {})
+  })
 })
 
 router.patch('/team/users/:userId', requireAuth, (req, res) => {
@@ -407,6 +447,35 @@ router.patch('/team/users/:userId', requireAuth, (req, res) => {
   }
   writeStore(store)
   res.json({ ok:true })
+})
+
+router.post('/team/users/:userId/generate-password', requireAuth, (req, res) => {
+  const store = readStore()
+  const company = getCompanyContext(req, store)
+  const link = store.companyUsers.find(item => String(item.company_id) === String(company?.id) && String(item.user_id) === String(req.params.userId))
+  if(!company || !link) return res.status(404).json({ error:'user_not_found', message:'Usuário não encontrado.' })
+  if(link.is_owner) return res.status(409).json({ error:'owner_protected', message:'A senha da conta principal não pode ser alterada por aqui.' })
+  const user = store.users.find(item => String(item.id) === String(req.params.userId))
+  if(!user) return res.status(404).json({ error:'user_not_found', message:'Usuário não encontrado.' })
+
+  const generatedPassword = buildTeamPassword()
+  user.password_hash = bcrypt.hashSync(generatedPassword, 10)
+  user.reset_token_hash = ''
+  user.reset_token_expires_at = ''
+  user.reset_requested_at = ''
+  user.updated_at = nowIso()
+  upsertAudit(store, {
+    company_id: company.id,
+    action: 'team_password_regenerated',
+    message: 'Nova senha de acesso gerada para usuário da equipe.',
+    actor_user_id: req.user.id,
+    actor_name: req.user.name,
+    actor_email: req.user.email,
+    actor_role: req.user.role || 'user',
+    source: 'team-management'
+  })
+  writeStore(store)
+  res.json({ ok:true, generated_password: generatedPassword })
 })
 
 router.post('/team/users/:userId/deactivate', requireAuth, (req, res) => {
