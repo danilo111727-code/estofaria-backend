@@ -1,6 +1,28 @@
+const crypto = require('crypto')
 const jwt = require('jsonwebtoken')
 
-const JWT_SECRET = process.env.JWT_SECRET || 'troque-este-segredo-em-producao'
+function enabled(name){
+  return String(process.env[name] || '').trim() === '1'
+}
+
+function resolveJwtSecret(){
+  const configured = String(process.env.JWT_SECRET || '').trim()
+  if(configured) return configured
+
+  const allowEphemeralDev = enabled('ALLOW_EPHEMERAL_DEV_JWT')
+    && String(process.env.NODE_ENV || '').trim().toLowerCase() !== 'production'
+
+  if(allowEphemeralDev){
+    console.warn('[auth] JWT_SECRET ausente; usando segredo efêmero porque ALLOW_EPHEMERAL_DEV_JWT=1. Sessões serão invalidadas ao reiniciar.')
+    return crypto.randomBytes(48).toString('hex')
+  }
+
+  const error = new Error('JWT_SECRET é obrigatório. O servidor não inicia sem um segredo configurado.')
+  error.code = 'jwt_secret_required'
+  throw error
+}
+
+const JWT_SECRET = resolveJwtSecret()
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '12h'
 
 function normalizeArray(value){
