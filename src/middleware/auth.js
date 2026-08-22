@@ -46,6 +46,10 @@ function hasInactiveMembership(store, user){
   return Boolean(membership && String(membership.status || '').toLowerCase() === 'inactive')
 }
 
+function sessionVersionMatches(payload, user){
+  return Number(payload?.session_version || 0) === Number(user?.session_version || 0)
+}
+
 function stripForeignCompanySelectors(req, user){
   if(hasMasterAccess(user)) return
 
@@ -85,6 +89,9 @@ function requireAuth(req, res, next){
   try {
     const user = store.users.find(item => String(item.id) === String(payload.id) && item.is_active !== false)
     if(!user) return res.status(401).json({ error:'unauthorized', message:'Sessão inválida.' })
+    if(!sessionVersionMatches(payload, user)){
+      return res.status(401).json({ error:'session_revoked', message:'Esta sessão foi encerrada após uma alteração de senha. Entre novamente.' })
+    }
     if(!hasMasterAccess(user) && hasInactiveMembership(store, user)){
       return res.status(401).json({ error:'access_cancelled', message:'Seu acesso foi cancelado pelo administrador da empresa.' })
     }
@@ -126,7 +133,7 @@ function optionalAuth(req, _res, next){
     const payload = decodeToken(token)
     const store = readAuthStore()
     const user = store.users.find(item => String(item.id) === String(payload.id) && item.is_active !== false)
-    if(user && (hasMasterAccess(user) || !hasInactiveMembership(store, user))){
+    if(user && sessionVersionMatches(payload, user) && (hasMasterAccess(user) || !hasInactiveMembership(store, user))){
       req.user = sanitizeUser(enrichUserWithCompany(store, user))
       stripForeignCompanySelectors(req, req.user)
     }
