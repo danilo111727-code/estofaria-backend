@@ -66,7 +66,10 @@ function sanitizeUser(user){
 }
 
 function issueToken(user){
-  const payload = sanitizeUser(user)
+  const payload = {
+    ...sanitizeUser(user),
+    session_version: Number(user?.session_version || 0)
+  }
   return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN })
 }
 
