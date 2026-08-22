@@ -58,8 +58,6 @@ const DEFAULT_STORE = {
   webhookEvents: []
 }
 
-// ─── Schema ──────────────────────────────────────────────────────────────────
-
 async function ensureSchema() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS kv_store (
@@ -69,8 +67,6 @@ async function ensureSchema() {
     )
   `)
 }
-
-// ─── Carga e persistência ────────────────────────────────────────────────────
 
 async function loadFromPg() {
   const res = await pool.query(`SELECT value FROM kv_store WHERE key = 'main' LIMIT 1`)
@@ -120,8 +116,6 @@ function cloneStore(value) {
   return JSON.parse(JSON.stringify(value))
 }
 
-// ─── Escrita com debounce ────────────────────────────────────────────────────
-
 function scheduleWrite() {
   _dirty = true
   if (_writeTimer) clearTimeout(_writeTimer)
@@ -146,8 +140,6 @@ async function flushNow() {
   _dirty = false
   if (_cache) await saveToPg(_cache)
 }
-
-// ─── Init ────────────────────────────────────────────────────────────────────
 
 async function init() {
   if (_initialized) return
@@ -177,17 +169,11 @@ async function init() {
   _initialized = true
 }
 
-// ─── API pública (mesma interface do store.js) ────────────────────────────────
-
 function readStore() {
   if (!_cache) throw new Error('[store-pg] Store não inicializado — chame init() antes.')
   return cloneStore(_cache)
 }
 
-// Leitura mínima para autenticação. Evita clonar materiais, modelos, agenda,
-// orçamentos, imagens e históricos inteiros a cada request autenticado.
-// O middleware consulta users/companies e também companyUsers para validar
-// imediatamente cancelamentos e reativações de acesso da equipe.
 function readAuthStore() {
   if (!_cache) throw new Error('[store-pg] Store não inicializado — chame init() antes.')
   return {
@@ -208,8 +194,6 @@ function updateStore(mutator) {
   writeStore(next)
   return next
 }
-
-// ─── Utilitários (idênticos ao store.js) ────────────────────────────────────
 
 function nowIso() {
   return new Date().toISOString()
@@ -240,7 +224,7 @@ function findCompanyById(store, companyId) {
 
 function activeMembershipCount(store, companyId) {
   return store.companyUsers.filter(
-    item => String(item.company_id) === String(companyId) && String(item.status || '').toLowerCase().includes('active')
+    item => String(item.company_id) === String(companyId) && String(item.status || '').toLowerCase() === 'active'
   ).length
 }
 
@@ -303,8 +287,6 @@ function validateBootstrapPassword(password, envName) {
   error.code = 'bootstrap_password_too_short'
   throw error
 }
-
-// ─── Bootstrap explícito (somente quando o store estiver realmente vazio) ────
 
 async function bootstrapStore() {
   updateStore(store => {
@@ -419,14 +401,10 @@ async function bootstrapStore() {
   await flushNow()
 }
 
-// ─── Compat: STORE_FILE para o health check ──────────────────────────────────
-
 const DATA_DIR = process.env.DATA_DIR || '/data'
 const STORE_FILE = path.join(DATA_DIR, 'store.json')
 
-function ensureStore() {} // no-op em modo PG
-
-// ─── Exports ─────────────────────────────────────────────────────────────────
+function ensureStore() {}
 
 module.exports = {
   init,
