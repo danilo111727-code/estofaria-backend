@@ -3,6 +3,7 @@
 const express = require('express')
 const cors = require('cors')
 const storeLib = require('./src/lib/store')
+const atomicStore = require('./src/lib/atomic-store')
 const perfDiagnostics = require('./src/lib/perf-diagnostics')
 const compactModelResponse = require('./src/middleware/compact-model-response')
 const normalizeModelsV2BaseMeters = require('./src/middleware/models-v2-base-meters')
@@ -17,6 +18,7 @@ const { normalizeExistingBaseMeters } = require('./src/lib/models-v2-base-migrat
 const { runR2SmokeTest } = require('./src/lib/r2-smoke-test')
 const { migrateModels } = require('./scripts/migrate-models-v2')
 
+atomicStore.install(storeLib)
 perfDiagnostics.installStoreTiming(storeLib)
 
 const authRoutes = require('./src/routes/auth')
@@ -74,6 +76,7 @@ app.use((req, res, next) => {
 app.use(express.urlencoded({ extended: false, limit: '1mb' }))
 app.use(perfDiagnostics.middleware)
 app.use(compactModelResponse)
+app.use(atomicStore.middleware)
 
 app.get('/', (_req, res) => {
   res.json({
