@@ -37,6 +37,15 @@ function isSubscriptionExempt(req){
   return SUBSCRIPTION_EXEMPT_PATHS.some(p => path.startsWith(p))
 }
 
+function hasInactiveMembership(store, user){
+  if(!user || !user.company_id) return false
+  const membership = store.companyUsers.find(item =>
+    String(item.user_id) === String(user.id)
+    && String(item.company_id) === String(user.company_id)
+  )
+  return Boolean(membership && String(membership.status || '').toLowerCase() === 'inactive')
+}
+
 function stripForeignCompanySelectors(req, user){
   if(hasMasterAccess(user)) return
 
@@ -52,13 +61,33 @@ function stripForeignCompanySelectors(req, user){
 }
 
 function requireAuth(req, res, next){
+  const token = getBearerToken(req)
+  if(!token) return res.status(401).json({ error:'unauthorized', message:'Token ausente.' })
+
+  let payload
   try {
-    const token = getBearerToken(req)
-    if(!token) return res.status(401).json({ error:'unauthorized', message:'Token ausente.' })
-    const payload = decodeToken(token)
-    const store = readAuthStore()
+    payload = decodeToken(token)
+  } catch (_) {
+    return res.status(401).json({ error:'unauthorized', message:'Token inválido ou expirado.' })
+  }
+
+  let store
+  try {
+    store = readAuthStore()
+  } catch (error) {
+    console.error('[auth] Falha temporária ao carregar dados da sessão:', error && error.message ? error.message : error)
+    return res.status(503).json({
+      error:'auth_temporarily_unavailable',
+      message:'Não foi possível validar sua sessão agora. Tente novamente em instantes.'
+    })
+  }
+
+  try {
     const user = store.users.find(item => String(item.id) === String(payload.id) && item.is_active !== false)
     if(!user) return res.status(401).json({ error:'unauthorized', message:'Sessão inválida.' })
+    if(!hasMasterAccess(user) && hasInactiveMembership(store, user)){
+      return res.status(401).json({ error:'access_cancelled', message:'Seu acesso foi cancelado pelo administrador da empresa.' })
+    }
     req.user = sanitizeUser(enrichUserWithCompany(store, user))
 
     // Isolamento multiempresa: usuários comuns nunca podem selecionar outra
@@ -81,8 +110,12 @@ function requireAuth(req, res, next){
     }
 
     next()
-  } catch (_) {
-    return res.status(401).json({ error:'unauthorized', message:'Token inválido ou expirado.' })
+  } catch (error) {
+    console.error('[auth] Falha temporária durante validação da sessão:', error && error.message ? error.message : error)
+    return res.status(503).json({
+      error:'auth_temporarily_unavailable',
+      message:'Não foi possível validar sua sessão agora. Tente novamente em instantes.'
+    })
   }
 }
 
@@ -93,7 +126,7 @@ function optionalAuth(req, _res, next){
     const payload = decodeToken(token)
     const store = readAuthStore()
     const user = store.users.find(item => String(item.id) === String(payload.id) && item.is_active !== false)
-    if(user){
+    if(user && (hasMasterAccess(user) || !hasInactiveMembership(store, user))){
       req.user = sanitizeUser(enrichUserWithCompany(store, user))
       stripForeignCompanySelectors(req, req.user)
     }
