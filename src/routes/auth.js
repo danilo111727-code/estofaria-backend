@@ -372,6 +372,23 @@ router.post('/team/invite', requireAuth, (req, res) => {
   }
 
   let user = findUserByEmail(store, email)
+  if(user){
+    const currentCompanyId = String(user.company_id || '').trim()
+    const belongsToAnotherCompany = store.companyUsers.some(item =>
+      String(item.user_id) === String(user.id)
+      && String(item.company_id) !== String(company.id)
+    )
+    if(
+      (currentCompanyId && currentCompanyId !== String(company.id))
+      || belongsToAnotherCompany
+    ){
+      return res.status(409).json({
+        error:'email_belongs_to_another_company',
+        message:'Este e-mail já está vinculado a outra empresa e não pode ser adicionado aqui.'
+      })
+    }
+  }
+
   let initialPassword = ''
   if(!user){
     initialPassword = buildTeamPassword()
