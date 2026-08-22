@@ -186,12 +186,14 @@ function readStore() {
 
 // Leitura mínima para autenticação. Evita clonar materiais, modelos, agenda,
 // orçamentos, imagens e históricos inteiros a cada request autenticado.
-// O middleware apenas consulta users/companies, portanto cópias rasas bastam.
+// O middleware consulta users/companies e também companyUsers para validar
+// imediatamente cancelamentos e reativações de acesso da equipe.
 function readAuthStore() {
   if (!_cache) throw new Error('[store-pg] Store não inicializado — chame init() antes.')
   return {
     users: Array.isArray(_cache.users) ? _cache.users.slice() : [],
-    companies: Array.isArray(_cache.companies) ? _cache.companies.slice() : []
+    companies: Array.isArray(_cache.companies) ? _cache.companies.slice() : [],
+    companyUsers: Array.isArray(_cache.companyUsers) ? _cache.companyUsers.slice() : []
   }
 }
 
