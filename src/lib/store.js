@@ -94,7 +94,7 @@ function findCompanyById(store, companyId){
 }
 
 function activeMembershipCount(store, companyId){
-  return store.companyUsers.filter(item => String(item.company_id) === String(companyId) && String(item.status || '').toLowerCase().includes('active')).length
+  return store.companyUsers.filter(item => String(item.company_id) === String(companyId) && String(item.status || '').toLowerCase() === 'active').length
 }
 
 function materializeCompany(store, company){
