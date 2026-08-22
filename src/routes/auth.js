@@ -44,6 +44,10 @@ function normalizeEmail(value){
   return String(value || '').trim().toLowerCase()
 }
 
+function revokeExistingSessions(user){
+  user.session_version = Number(user?.session_version || 0) + 1
+}
+
 function buildTeamPassword(){
   const groups = [
     'ABCDEFGHJKLMNPQRSTUVWXYZ',
@@ -198,6 +202,7 @@ router.post('/register', (req, res) => {
     name: nome,
     email,
     password_hash: bcrypt.hashSync(password, 10),
+    session_version: 0,
     company_id: companyId,
     role: 'owner',
     is_owner: true,
@@ -313,6 +318,7 @@ function handleResetPassword(req, res){
   if(!user) return res.status(400).json({ error:'invalid_token', message:'Token inválido ou expirado.' })
 
   user.password_hash = bcrypt.hashSync(password, 10)
+  revokeExistingSessions(user)
   user.reset_token_hash = ''
   user.reset_token_expires_at = ''
   user.reset_requested_at = ''
@@ -397,6 +403,7 @@ router.post('/team/invite', requireAuth, (req, res) => {
       name: cleanName,
       email,
       password_hash: bcrypt.hashSync(initialPassword, 10),
+      session_version: 0,
       company_id: company.id,
       role: role || 'custom',
       permissions: selectedModules,
@@ -477,6 +484,7 @@ router.post('/team/users/:userId/generate-password', requireAuth, (req, res) => 
 
   const generatedPassword = buildTeamPassword()
   user.password_hash = bcrypt.hashSync(generatedPassword, 10)
+  revokeExistingSessions(user)
   user.reset_token_hash = ''
   user.reset_token_expires_at = ''
   user.reset_requested_at = ''
