@@ -71,7 +71,17 @@ const jsonParser = express.json({ limit: '1mb' })
 app.use((req, res, next) => {
   const isStripeWebhook = req.path === '/api/billing/webhooks/stripe'
     || req.path === '/api/subscription/webhooks/stripe'
-  if (isStripeWebhook) return next()
+  if (isStripeWebhook) {
+    const stripeConfigured = String(process.env.STRIPE_SECRET_KEY || '').trim()
+    const webhookConfigured = String(process.env.STRIPE_WEBHOOK_SECRET || '').trim()
+    if (!stripeConfigured || !webhookConfigured) {
+      return res.status(503).json({
+        error: 'stripe_webhook_not_configured',
+        message: 'Webhook Stripe não configurado no servidor.'
+      })
+    }
+    return next()
+  }
   return jsonParser(req, res, next)
 })
 app.use(express.urlencoded({ extended: false, limit: '1mb' }))
