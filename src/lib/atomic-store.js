@@ -180,11 +180,24 @@ function isParallelReadOnlyGet(req){
   ].includes(requestPath(req))
 }
 
+function isAgendaV2Mutation(method,path){
+  if(method === 'PATCH' && path === '/api/agenda/config') return true
+  if(method === 'POST' && path === '/api/agenda/orders') return true
+  if(['PATCH','DELETE'].includes(method) && /^\/api\/agenda\/orders\/[^/]+$/.test(path)) return true
+  if(method === 'POST' && path === '/api/agenda/blocos') return true
+  if(['PATCH','DELETE'].includes(method) && /^\/api\/agenda\/blocos\/[^/]+$/.test(path)) return true
+  if(['POST','DELETE'].includes(method) && /^\/api\/agenda\/blocos\/[^/]+\/vaga$/.test(path)) return true
+  if(method === 'POST' && /^\/api\/agenda\/blocos\/[^/]+\/pedido$/.test(path)) return true
+  return false
+}
+
 function shouldWrap(req){
   if(!storeLib?._pg?.pool) return false
   const method = String(req.method || '').toUpperCase()
   if(['POST','PUT','PATCH','DELETE'].includes(method)){
-    const path = String(req.originalUrl || req.url || '').split('?')[0]
+    const path = requestPath(req)
+    // Agenda V2 grava diretamente em tabelas PostgreSQL próprias.
+    if(isAgendaV2Mutation(method,path)) return false
     if(path.startsWith('/api/v2/')) return false
     if(path.includes('/companies/') && method === 'DELETE') return false
     if(path.endsWith('/stripe/create-checkout') || path.endsWith('/customer-portal')) return false
