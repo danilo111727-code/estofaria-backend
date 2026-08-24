@@ -191,13 +191,19 @@ function isAgendaV2Mutation(method,path){
   return false
 }
 
+function isFinancialV2Mutation(method,path){
+  if(method === 'POST' && path === '/api/financial/entries') return true
+  if(['PATCH','DELETE'].includes(method) && /^\/api\/financial\/entries\/[^/]+$/.test(path)) return true
+  return false
+}
+
 function shouldWrap(req){
   if(!storeLib?._pg?.pool) return false
   const method = String(req.method || '').toUpperCase()
   if(['POST','PUT','PATCH','DELETE'].includes(method)){
     const path = requestPath(req)
-    // Agenda V2 grava diretamente em tabelas PostgreSQL próprias.
-    if(isAgendaV2Mutation(method,path)) return false
+    // Agenda V2 e Financeiro V2 gravam diretamente em tabelas PostgreSQL próprias.
+    if(isAgendaV2Mutation(method,path) || isFinancialV2Mutation(method,path)) return false
     if(path.startsWith('/api/v2/')) return false
     if(path.includes('/companies/') && method === 'DELETE') return false
     if(path.endsWith('/stripe/create-checkout') || path.endsWith('/customer-portal')) return false
