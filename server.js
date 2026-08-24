@@ -39,6 +39,7 @@ const quotesV2Routes = require('./src/routes/quotes-v2')
 const personalizationV2Routes = require('./src/routes/personalization-v2')
 const agendaV2Routes = require('./src/routes/agenda-v2')
 const financialV2Routes = require('./src/routes/financial-v2')
+const dashboardV2Routes = require('./src/routes/dashboard-v2')
 
 function parseAllowedOrigins() {
   return String(process.env.CORS_ALLOWED_ORIGINS || '')
@@ -110,7 +111,7 @@ app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
     service: 'estofaria-saas-backend-starter',
-    version: '20260823-audit-v2-dev1',
+    version: '20260824-dashboard-v2-dev1',
     storage: process.env.DATABASE_URL ? 'postgresql' : 'file',
     store_file: storeLib.STORE_FILE,
     models_v2: process.env.DATABASE_URL ? 'available' : 'postgres_required',
@@ -118,7 +119,8 @@ app.get('/api/health', (_req, res) => {
     personalization_v2: process.env.DATABASE_URL ? 'available' : 'postgres_required',
     agenda_v2: process.env.DATABASE_URL ? 'available' : 'postgres_required',
     financial_v2: process.env.DATABASE_URL ? 'available' : 'postgres_required',
-    audit_v2: process.env.DATABASE_URL ? 'available' : 'postgres_required'
+    audit_v2: process.env.DATABASE_URL ? 'available' : 'postgres_required',
+    dashboard_v2: process.env.DATABASE_URL ? 'available' : 'postgres_required'
   })
 })
 
@@ -129,6 +131,7 @@ app.use('/api/saas', auditV2Routes)
 app.use('/api/saas', saasRoutes)
 app.use('/api/billing', billingRoutes)
 app.use('/api', legacyApiPermissions)
+app.use('/api', dashboardV2Routes)
 app.use('/api', agendaV2Routes)
 app.use('/api', financialV2Routes)
 app.use('/api', materialUnitsRoutes)
@@ -213,7 +216,7 @@ async function start() {
     }
     auditV2Db.enableWrites()
 
-    console.log('[server] Models V2, Quotes V2, Personalização V2, Agenda V2, Financeiro V2 e Auditoria V2 prontos')
+    console.log('[server] Models V2, Quotes V2, Personalização V2, Agenda V2, Financeiro V2, Auditoria V2 e Dashboard V2 prontos')
     if (personalizationMigration.companies || personalizationMigration.model_configs) {
       console.log(`[personalization-v2] Migração inicial: ${personalizationMigration.companies} catálogo(s), ${personalizationMigration.model_configs} configuração(ões) de modelo.`)
     }
