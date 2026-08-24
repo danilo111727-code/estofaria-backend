@@ -204,12 +204,9 @@ function requestPath(req){
 
 function isParallelReadOnlyGet(req){
   if(String(req.method || '').toUpperCase() !== 'GET') return false
-  return [
-    '/api/agenda/config',
-    '/api/agenda/orders',
-    '/api/quotes',
-    '/api/dashboard/summary'
-  ].includes(requestPath(req))
+  // Agenda V2 e Dashboard V2 já leem PostgreSQL diretamente. Apenas a rota
+  // legada de quotes continua precisando da cópia isolada do store.
+  return ['/api/quotes'].includes(requestPath(req))
 }
 
 function isAgendaV2Mutation(method,path){
@@ -302,9 +299,8 @@ function captureResponse(res){
 }
 
 function middleware(req, res, next){
-  // Estas rotas são consultas. Cada requisição recebe uma cópia isolada do
-  // estado atual e pode rodar em paralelo, sem SELECT ... FOR UPDATE e sem
-  // entrar na fila das mutações.
+  // Estas rotas legadas de consulta recebem uma cópia isolada do estado atual
+  // e podem rodar em paralelo, sem SELECT ... FOR UPDATE e sem fila de mutações.
   if(isParallelReadOnlyGet(req)){
     const ctx = { store:currentCommittedStore(), dirty:false, readOnly:true }
     return requestStore.run(ctx, () => next())
