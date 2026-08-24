@@ -14,6 +14,8 @@ const quotesV2Db = require('./src/lib/quotes-v2-db')
 const personalizationV2Db = require('./src/lib/personalization-v2-db')
 const agendaV2Db = require('./src/lib/agenda-v2-db')
 const financialV2Db = require('./src/lib/financial-v2-db')
+const auditV2Db = require('./src/lib/audit-v2-db')
+const auditV2Bridge = require('./src/lib/audit-v2-bridge')
 const { ensurePersonalizationIsolation } = require('./src/lib/personalization-v2-hardening')
 const { runPersonalizationV2SelfTest } = require('./src/lib/personalization-v2-self-test')
 const { runModelsV2MigrationSelfTest } = require('./src/lib/models-v2-migration-self-test')
@@ -22,11 +24,13 @@ const { runR2SmokeTest } = require('./src/lib/r2-smoke-test')
 const { migrateModels } = require('./scripts/migrate-models-v2')
 
 atomicStore.install(storeLib)
+auditV2Bridge.install(storeLib,auditV2Db)
 perfDiagnostics.installStoreTiming(storeLib)
 
 const authRoutes = require('./src/routes/auth')
 const companyDeletionRoutes = require('./src/routes/company-deletion')
 const saasRoutes = require('./src/routes/saas')
+const auditV2Routes = require('./src/routes/audit-v2')
 const billingRoutes = require('./src/routes/billing')
 const operationsRoutes = require('./src/routes/operations')
 const materialUnitsRoutes = require('./src/routes/material-units')
@@ -106,20 +110,22 @@ app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
     service: 'estofaria-saas-backend-starter',
-    version: '20260823-financial-v2-dev1',
+    version: '20260823-audit-v2-dev1',
     storage: process.env.DATABASE_URL ? 'postgresql' : 'file',
     store_file: storeLib.STORE_FILE,
     models_v2: process.env.DATABASE_URL ? 'available' : 'postgres_required',
     quotes_v2: process.env.DATABASE_URL ? 'available' : 'postgres_required',
     personalization_v2: process.env.DATABASE_URL ? 'available' : 'postgres_required',
     agenda_v2: process.env.DATABASE_URL ? 'available' : 'postgres_required',
-    financial_v2: process.env.DATABASE_URL ? 'available' : 'postgres_required'
+    financial_v2: process.env.DATABASE_URL ? 'available' : 'postgres_required',
+    audit_v2: process.env.DATABASE_URL ? 'available' : 'postgres_required'
   })
 })
 
 app.use('/api/auth/team', teamManagementPermissions)
 app.use('/api', companyDeletionRoutes)
 app.use('/api/auth', authRoutes)
+app.use('/api/saas', auditV2Routes)
 app.use('/api/saas', saasRoutes)
 app.use('/api/billing', billingRoutes)
 app.use('/api', legacyApiPermissions)
@@ -131,8 +137,11 @@ app.use('/api/v2', modelsV2Routes)
 app.use('/api/v2', quotesV2Routes)
 app.use('/api/v2', personalizationV2Routes)
 app.use('/api', operationsRoutes)
+app.use('/api/master', auditV2Routes)
 app.use('/api/master', saasRoutes)
+app.use('/api/admin', auditV2Routes)
 app.use('/api/admin', saasRoutes)
+app.use('/api/subscription/admin', auditV2Routes)
 app.use('/api/subscription/admin', saasRoutes)
 app.use('/api/subscription', billingRoutes)
 
@@ -193,7 +202,18 @@ async function start() {
     await financialV2Db.ensureSchema()
     const financialMigration = await financialV2Db.migrateLegacyFinancial(storeLib.readStore())
 
-    console.log('[server] Models V2, Quotes V2, Personalização V2, Agenda V2 e Financeiro V2 prontos')
+    await auditV2Db.ensureSchema()
+    const auditMigration = await auditV2Db.migrateLegacyAudit(storeLib.readStore())
+    const legacyAuditStore = storeLib.readStore()
+    const legacyAuditCount = Array.isArray(legacyAuditStore.auditLogs) ? legacyAuditStore.auditLogs.length : 0
+    if(legacyAuditCount){
+      legacyAuditStore.auditLogs = []
+      storeLib.writeStore(legacyAuditStore)
+      await pg.flushNow()
+    }
+    auditV2Db.enableWrites()
+
+    console.log('[server] Models V2, Quotes V2, Personalização V2, Agenda V2, Financeiro V2 e Auditoria V2 prontos')
     if (personalizationMigration.companies || personalizationMigration.model_configs) {
       console.log(`[personalization-v2] Migração inicial: ${personalizationMigration.companies} catálogo(s), ${personalizationMigration.model_configs} configuração(ões) de modelo.`)
     }
@@ -206,6 +226,14 @@ async function start() {
       console.log(`[financial-v2] Migração inicial: ${financialMigration.entries || 0} lançamento(s).`)
     } else {
       console.log('[financial-v2] Migração legada já concluída anteriormente.')
+    }
+    if (!auditMigration.skipped) {
+      console.log(`[audit-v2] Migração inicial: ${auditMigration.entries || 0} registro(s); ${auditMigration.inserted || 0} inserido(s).`)
+    } else {
+      console.log(`[audit-v2] Migração legada já concluída; ${auditMigration.synced || 0} registro(s) pendente(s) sincronizado(s).`)
+    }
+    if(legacyAuditCount){
+      console.log(`[audit-v2] auditLogs legado removido do kv_store após cópia confirmada: ${legacyAuditCount} registro(s).`)
     }
 
     if (String(process.env.PERSONALIZATION_V2_SELF_TEST_ON_START || '') === '1') {
