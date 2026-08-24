@@ -15,15 +15,22 @@ const path = require('path')
 
 // ─── Conexão ────────────────────────────────────────────────────────────────
 
+const configuredPoolMax = Number(process.env.PG_POOL_MAX || 10)
+const poolMax = Number.isFinite(configuredPoolMax)
+  ? Math.max(1, Math.min(80, Math.round(configuredPoolMax)))
+  : 10
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('localhost')
     ? { rejectUnauthorized: false }
     : false,
-  max: 10,
+  max: poolMax,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000
 })
+
+console.log(`[store-pg] Pool PostgreSQL configurado para até ${poolMax} conexões`)
 
 pool.on('error', (err) => {
   console.error('[store-pg] Pool error:', err.message)
