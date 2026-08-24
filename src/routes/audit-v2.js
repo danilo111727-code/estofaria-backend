@@ -7,6 +7,7 @@ const db = require('../lib/audit-v2-db')
 const router = express.Router()
 
 router.get('/audit',requireAuth,requireMaster,requirePermission('saas.audit.read'),async(req,res,next)=>{
+  if(!db.isEnabled()) return next()
   try{
     const result = await db.listGlobal(req.query?.limit)
     return res.json(result)
@@ -14,6 +15,7 @@ router.get('/audit',requireAuth,requireMaster,requirePermission('saas.audit.read
 })
 
 router.get('/companies/:companyId/audit',requireAuth,requireMaster,requirePermission('saas.audit.read'),async(req,res,next)=>{
+  if(!db.isEnabled()) return next()
   try{
     const rows = await db.listCompany(req.params.companyId)
     const items = rows.map(item=>({
