@@ -132,10 +132,10 @@ async function migrateLegacyFinancial(store){
   const client = await pool.connect()
   try{
     await client.query('BEGIN')
-    const marker = await migrationAlreadyDone(client)
-    if(marker){
+    const existingMarker = await migrationAlreadyDone(client)
+    if(existingMarker){
       await client.query('ROLLBACK')
-      return {skipped:true,...marker}
+      return {skipped:true,...existingMarker}
     }
 
     const entries = Array.isArray(store?.financialEntries) ? store.financialEntries : []
@@ -162,14 +162,14 @@ async function migrateLegacyFinancial(store){
       migrated += result.rowCount || 0
     }
 
-    const marker = {entries:migrated,finished_at:new Date().toISOString()}
+    const importMarker = {entries:migrated,finished_at:new Date().toISOString()}
     await client.query(`
       INSERT INTO app_financial_v2_meta (key,value,updated_at)
       VALUES ('legacy_import_v1',$1::jsonb,NOW())
       ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()
-    `,[JSON.stringify(marker)])
+    `,[JSON.stringify(importMarker)])
     await client.query('COMMIT')
-    return {skipped:false,...marker}
+    return {skipped:false,...importMarker}
   }catch(err){
     await client.query('ROLLBACK').catch(()=>{})
     throw err
