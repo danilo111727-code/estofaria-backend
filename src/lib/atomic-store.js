@@ -110,6 +110,13 @@ function install(targetStoreLib){
     const ctx = requestStore.getStore()
     const next = clone(nextStore)
 
+    // GETs marcados como somente leitura podem manter mutações legadas na
+    // cópia local para montar a resposta, mas nunca persistem essas mudanças.
+    if(ctx?.readOnly){
+      ctx.store = next
+      return
+    }
+
     if(ctx){
       if(!same(ctx.store, next)){
         ctx.store = next
@@ -159,6 +166,20 @@ function install(targetStoreLib){
   }
 }
 
+function requestPath(req){
+  return String(req.originalUrl || req.url || '').split('?')[0].replace(/\/$/, '')
+}
+
+function isParallelReadOnlyGet(req){
+  if(String(req.method || '').toUpperCase() !== 'GET') return false
+  return [
+    '/api/agenda/config',
+    '/api/agenda/orders',
+    '/api/quotes',
+    '/api/dashboard/summary'
+  ].includes(requestPath(req))
+}
+
 function shouldWrap(req){
   if(!storeLib?._pg?.pool) return false
   const method = String(req.method || '').toUpperCase()
@@ -171,14 +192,10 @@ function shouldWrap(req){
   }
 
   if(method !== 'GET') return false
-  const path = String(req.originalUrl || req.url || '').split('?')[0].replace(/\/$/, '')
+  const path = requestPath(req)
   return [
     '/api/materials',
     '/api/models',
-    '/api/agenda/config',
-    '/api/agenda/orders',
-    '/api/quotes',
-    '/api/dashboard/summary',
     '/api/material-units'
   ].includes(path) || /^\/api\/models\/[^/]+\/personalization-items$/.test(path)
 }
@@ -234,6 +251,14 @@ function captureResponse(res){
 }
 
 function middleware(req, res, next){
+  // Estas rotas são consultas. Cada requisição recebe uma cópia isolada do
+  // estado atual e pode rodar em paralelo, sem SELECT ... FOR UPDATE e sem
+  // entrar na fila das mutações.
+  if(isParallelReadOnlyGet(req)){
+    const ctx = { store:currentCommittedStore(), dirty:false, readOnly:true }
+    return requestStore.run(ctx, () => next())
+  }
+
   if(!shouldWrap(req)) return next()
 
   const captured = captureResponse(res)
