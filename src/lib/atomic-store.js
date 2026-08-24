@@ -1,6 +1,7 @@
 'use strict'
 
 const { AsyncLocalStorage } = require('async_hooks')
+const auditV2Db = require('./audit-v2-db')
 
 const requestStore = new AsyncLocalStorage()
 let installed = false
@@ -34,6 +35,24 @@ function changedTopLevelKeys(before, after){
   return Array.from(keys).filter(key => !same(before?.[key], after?.[key]))
 }
 
+function auditEntriesFromStore(store){
+  if(!auditV2Db.isEnabled() || !store || typeof store !== 'object') return []
+  const entries = []
+  if(Array.isArray(store.__auditV2Pending)) entries.push(...store.__auditV2Pending)
+  // Captura também qualquer gravação direta ainda existente no código legado.
+  if(Array.isArray(store.auditLogs)) entries.push(...store.auditLogs)
+  return entries.filter(Boolean)
+}
+
+function storeWithoutLegacyAudit(store){
+  const next = clone(store || {})
+  if(auditV2Db.isEnabled()){
+    delete next.__auditV2Pending
+    next.auditLogs = []
+  }
+  return next
+}
+
 function enqueue(task){
   const run = mutationQueue.then(task, task)
   mutationQueue = run.catch(() => {})
@@ -58,9 +77,22 @@ async function persistOutsideChanges(){
       const latest = result.rows[0]?.value || {}
       const merged = { ...latest }
       for(const key of keys){
+        if(auditV2Db.isEnabled() && key === '__auditV2Pending') continue
+        if(auditV2Db.isEnabled() && key === 'auditLogs'){
+          merged.auditLogs = []
+          continue
+        }
         if(Object.prototype.hasOwnProperty.call(snapshot, key)) merged[key] = clone(snapshot[key])
         else delete merged[key]
       }
+
+      const pendingAudits = auditEntriesFromStore(snapshot)
+      if(pendingAudits.length) await auditV2Db.insertMany(client,pendingAudits)
+      if(auditV2Db.isEnabled()){
+        delete merged.__auditV2Pending
+        merged.auditLogs = []
+      }
+
       await client.query(
         `INSERT INTO kv_store (key, value, updated_at)
          VALUES ('main', $1::jsonb, NOW())
@@ -301,13 +333,16 @@ function middleware(req, res, next){
       })
 
       if(ctx.dirty && res.statusCode < 400){
+        const pendingAudits = auditEntriesFromStore(ctx.store)
+        const persistedStore = storeWithoutLegacyAudit(ctx.store)
+        if(pendingAudits.length) await auditV2Db.insertMany(client,pendingAudits)
         await client.query(
           `INSERT INTO kv_store (key, value, updated_at)
            VALUES ('main', $1::jsonb, NOW())
            ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
-          [JSON.stringify(ctx.store)]
+          [JSON.stringify(persistedStore)]
         )
-        committedStore = clone(ctx.store)
+        committedStore = clone(persistedStore)
         await client.query('COMMIT')
       }else{
         committedStore = fresh
