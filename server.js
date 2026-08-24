@@ -12,6 +12,7 @@ const teamManagementPermissions = require('./src/middleware/team-management-perm
 const modelsV2Db = require('./src/lib/models-v2-db')
 const quotesV2Db = require('./src/lib/quotes-v2-db')
 const personalizationV2Db = require('./src/lib/personalization-v2-db')
+const agendaV2Db = require('./src/lib/agenda-v2-db')
 const { ensurePersonalizationIsolation } = require('./src/lib/personalization-v2-hardening')
 const { runPersonalizationV2SelfTest } = require('./src/lib/personalization-v2-self-test')
 const { runModelsV2MigrationSelfTest } = require('./src/lib/models-v2-migration-self-test')
@@ -31,6 +32,7 @@ const materialUnitsRoutes = require('./src/routes/material-units')
 const modelsV2Routes = require('./src/routes/models-v2')
 const quotesV2Routes = require('./src/routes/quotes-v2')
 const personalizationV2Routes = require('./src/routes/personalization-v2')
+const agendaV2Routes = require('./src/routes/agenda-v2')
 
 function parseAllowedOrigins() {
   return String(process.env.CORS_ALLOWED_ORIGINS || '')
@@ -102,12 +104,13 @@ app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
     service: 'estofaria-saas-backend-starter',
-    version: '20260819-models-v2-cleanup-dev2',
+    version: '20260823-agenda-v2-dev1',
     storage: process.env.DATABASE_URL ? 'postgresql' : 'file',
     store_file: storeLib.STORE_FILE,
     models_v2: process.env.DATABASE_URL ? 'available' : 'postgres_required',
     quotes_v2: process.env.DATABASE_URL ? 'available' : 'postgres_required',
-    personalization_v2: process.env.DATABASE_URL ? 'available' : 'postgres_required'
+    personalization_v2: process.env.DATABASE_URL ? 'available' : 'postgres_required',
+    agenda_v2: process.env.DATABASE_URL ? 'available' : 'postgres_required'
   })
 })
 
@@ -117,6 +120,7 @@ app.use('/api/auth', authRoutes)
 app.use('/api/saas', saasRoutes)
 app.use('/api/billing', billingRoutes)
 app.use('/api', legacyApiPermissions)
+app.use('/api', agendaV2Routes)
 app.use('/api', materialUnitsRoutes)
 app.use('/api/v2/models', normalizeModelsV2BaseMeters)
 app.use('/api/v2', modelsV2Routes)
@@ -178,9 +182,18 @@ async function start() {
     await personalizationV2Db.ensureSchema()
     await ensurePersonalizationIsolation()
     const personalizationMigration = await personalizationV2Db.migrateLegacyPersonalization(storeLib.readStore())
-    console.log('[server] Models V2, Quotes V2 e Personalização V2 prontos (APIs paralelas)')
+
+    await agendaV2Db.ensureSchema()
+    const agendaMigration = await agendaV2Db.migrateLegacyAgenda(storeLib.readStore())
+
+    console.log('[server] Models V2, Quotes V2, Personalização V2 e Agenda V2 prontos')
     if (personalizationMigration.companies || personalizationMigration.model_configs) {
       console.log(`[personalization-v2] Migração inicial: ${personalizationMigration.companies} catálogo(s), ${personalizationMigration.model_configs} configuração(ões) de modelo.`)
+    }
+    if (!agendaMigration.skipped) {
+      console.log(`[agenda-v2] Migração inicial: ${agendaMigration.configs || 0} config(s), ${agendaMigration.blocos || 0} bloco(s), ${agendaMigration.orders || 0} pedido(s).`)
+    } else {
+      console.log('[agenda-v2] Migração legada já concluída anteriormente.')
     }
 
     if (String(process.env.PERSONALIZATION_V2_SELF_TEST_ON_START || '') === '1') {
