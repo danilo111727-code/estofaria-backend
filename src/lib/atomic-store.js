@@ -178,11 +178,16 @@ function install(targetStoreLib){
   const pg = targetStoreLib._pg
   if(pg && typeof pg.readAuthStore === 'function'){
     pg.readAuthStore = function(){
-      const current = targetStoreLib.readStore()
+      // A autenticação precisa apenas destas três coleções. Ler diretamente do
+      // snapshot atual evita clonar o kv_store inteiro em toda requisição.
+      if(!shadowStore){
+        const current = originalReadStore()
+        shadowStore = clone(current)
+      }
       return {
-        users: Array.isArray(current.users) ? current.users.slice() : [],
-        companies: Array.isArray(current.companies) ? current.companies.slice() : [],
-        companyUsers: Array.isArray(current.companyUsers) ? current.companyUsers.slice() : []
+        users: Array.isArray(shadowStore.users) ? shadowStore.users.slice() : [],
+        companies: Array.isArray(shadowStore.companies) ? shadowStore.companies.slice() : [],
+        companyUsers: Array.isArray(shadowStore.companyUsers) ? shadowStore.companyUsers.slice() : []
       }
     }
   }
