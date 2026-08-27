@@ -55,7 +55,9 @@ function isTrustedTestFrontend(origin) {
     const url = new URL(origin)
     if (url.protocol !== 'https:') return false
     return url.hostname === 'estofaria-frontend.pages.dev' ||
-      url.hostname.endsWith('.estofaria-frontend.pages.dev')
+      url.hostname.endsWith('.estofaria-frontend.pages.dev') ||
+      url.hostname === 'estofaria-digital.pages.dev' ||
+      url.hostname.endsWith('.estofaria-digital.pages.dev')
   } catch (_) {
     return false
   }
