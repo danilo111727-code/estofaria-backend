@@ -179,6 +179,19 @@ async function cancelStripeSubscription(company){
   }
 }
 
+function quoteImageKeysFromStore(store, companyId){
+  const keys = []
+  ;(Array.isArray(store?.quotes) ? store.quotes : []).forEach(quote => {
+    if(text(quote?.company_id) !== text(companyId)) return
+    const models = Array.isArray(quote?.payload?.modelos) ? quote.payload.modelos : []
+    models.forEach(model => {
+      const key = text(model?.quote_image_key)
+      if(key) keys.push(key)
+    })
+  })
+  return Array.from(new Set(keys))
+}
+
 async function verifyV2Clean(client, companyId){
   const tables = [
     'app_model_materials_v2',
@@ -228,7 +241,15 @@ async function deletePgData(companyId, company, actor){
       'SELECT DISTINCT object_key FROM app_model_images_v2 WHERE company_id = $1 AND object_key IS NOT NULL',
       [companyId]
     )
-    imageKeys = imageResult.rows.map(row => text(row.object_key)).filter(Boolean)
+    const quoteImageResult = await client.query(
+      "SELECT DISTINCT extra->>'quote_image_key' AS object_key FROM app_quote_models_v2 WHERE company_id = $1 AND extra ? 'quote_image_key'",
+      [companyId]
+    )
+    imageKeys = Array.from(new Set([
+      ...imageResult.rows.map(row => text(row.object_key)).filter(Boolean),
+      ...quoteImageResult.rows.map(row => text(row.object_key)).filter(Boolean),
+      ...quoteImageKeysFromStore(rawStore, companyId)
+    ]))
 
     const personalizationModels = await client.query('DELETE FROM app_model_personalization_v2 WHERE company_id = $1', [companyId])
     const personalizationCatalog = await client.query('DELETE FROM app_personalization_catalog_v2 WHERE company_id = $1', [companyId])
@@ -276,10 +297,11 @@ async function deletePgData(companyId, company, actor){
 
 async function deleteFileStoreData(companyId, company, actor){
   const current = storeLib.readStore()
+  const imageKeys = quoteImageKeysFromStore(current, companyId)
   const cleaned = cleanLegacyStore(current, companyId, company, actor)
   assertLegacyClean(cleaned.store, companyId)
   storeLib.writeStore(cleaned.store)
-  return { imageKeys:[], legacyCounts:cleaned.counts, v2Counts:{} }
+  return { imageKeys, legacyCounts:cleaned.counts, v2Counts:{} }
 }
 
 async function recordR2CleanupPending(companyId, keys){
