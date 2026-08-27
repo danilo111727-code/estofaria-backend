@@ -236,6 +236,8 @@ function shouldWrap(req){
   const method = String(req.method || '').toUpperCase()
   if(['POST','PUT','PATCH','DELETE'].includes(method)){
     const path = requestPath(req)
+    // Upload binário não altera o store e não deve abrir transação PostgreSQL.
+    if(path === '/api/quotes/free-model-images') return false
     // Agenda V2 e Financeiro V2 gravam diretamente em tabelas PostgreSQL próprias.
     if(isAgendaV2Mutation(method,path) || isFinancialV2Mutation(method,path)) return false
     if(path.startsWith('/api/v2/')) return false
