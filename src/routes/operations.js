@@ -1,6 +1,8 @@
 const express = require('express')
+const crypto = require('crypto')
 const { requireAuth } = require('../middleware/auth')
 const { readStore, writeStore, upsertAudit, nowIso } = require('../lib/store')
+const r2 = require('../lib/r2-storage')
 
 const router = express.Router()
 
@@ -914,6 +916,93 @@ router.post('/agenda/blocos/:id/pedido', (req, res) => {
   return res.status(201).json(row)
 })
 
+const QUOTE_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
+const QUOTE_IMAGE_MAX_BYTES = 5 * 1024 * 1024
+const quoteImageBody = express.raw({
+  type: ['image/jpeg', 'image/png', 'image/webp'],
+  limit: QUOTE_IMAGE_MAX_BYTES
+})
+
+function normalizeQuoteImageType(value){
+  const type = String(value || '').toLowerCase().split(';')[0].trim()
+  return type === 'image/jpg' ? 'image/jpeg' : type
+}
+
+function quoteImageKeyAllowed(companyId, objectKey){
+  const key = String(objectKey || '').trim()
+  return Boolean(key && key.startsWith(r2.quoteImagePrefix(companyId)) && !key.includes('..'))
+}
+
+function quoteImageKeys(row){
+  const models = Array.isArray(row?.payload?.modelos) ? row.payload.modelos : []
+  return Array.from(new Set(models
+    .map(model => String(model?.quote_image_key || '').trim())
+    .filter(Boolean)))
+}
+
+router.post('/quotes/free-model-images', quoteImageBody, async (req, res, next) => {
+  try{
+    const store = ensureCollections(readStore())
+    const company = getCompanyContext(req, store)
+    if(!company) return res.status(404).json({ error:'company_not_found', message:'Empresa não encontrada.' })
+    if(!r2.isConfigured()) return res.status(503).json({ error:'r2_not_configured', message:'Armazenamento de imagens ainda não foi configurado.' })
+
+    const contentType = normalizeQuoteImageType(req.headers['content-type'])
+    if(!QUOTE_IMAGE_TYPES.has(contentType)){
+      return res.status(415).json({ error:'unsupported_image_type', message:'Use JPG, PNG ou WebP.' })
+    }
+    if(!Buffer.isBuffer(req.body) || !req.body.length){
+      return res.status(400).json({ error:'image_required', message:'Selecione uma imagem válida.' })
+    }
+    if(req.body.length > QUOTE_IMAGE_MAX_BYTES){
+      return res.status(413).json({ error:'image_too_large', message:'A imagem deve ter no máximo 5 MB.' })
+    }
+
+    const objectKey = r2.buildQuoteImageKey({
+      companyId: company.id,
+      imageId: crypto.randomUUID(),
+      contentType
+    })
+    const uploaded = await r2.putObject(objectKey, req.body, contentType, {
+      purpose: 'quote-free-model',
+      company_id: company.id
+    })
+    return res.status(201).json({
+      object_key: objectKey,
+      content_type: contentType,
+      size_bytes: uploaded.sizeBytes,
+      url: await r2.presignGetUrl(objectKey, 300)
+    })
+  }catch(err){ next(err) }
+})
+
+router.get('/quotes/free-model-images/data-url', async (req, res, next) => {
+  try{
+    const store = ensureCollections(readStore())
+    const company = getCompanyContext(req, store)
+    if(!company) return res.status(404).json({ error:'company_not_found', message:'Empresa não encontrada.' })
+    if(!r2.isConfigured()) return res.status(503).json({ error:'r2_not_configured', message:'Armazenamento de imagens ainda não foi configurado.' })
+
+    const objectKey = String(req.query.object_key || '').trim()
+    if(!quoteImageKeyAllowed(company.id, objectKey)){
+      return res.status(400).json({ error:'invalid_image_key', message:'Referência de imagem inválida.' })
+    }
+    const object = await r2.getObjectBuffer(objectKey)
+    if(object.sizeBytes > QUOTE_IMAGE_MAX_BYTES){
+      return res.status(413).json({ error:'image_too_large', message:'Imagem acima do limite permitido.' })
+    }
+    return res.json({
+      object_key: objectKey,
+      data_url: `data:${object.contentType};base64,${object.body.toString('base64')}`
+    })
+  }catch(err){
+    if(err?.name === 'NoSuchKey' || err?.$metadata?.httpStatusCode === 404){
+      return res.status(404).json({ error:'image_not_found', message:'Imagem não encontrada.' })
+    }
+    next(err)
+  }
+})
+
 router.get('/quotes', (req, res) => {
   const store = ensureCollections(readStore())
   const company = getCompanyContext(req, store)
@@ -972,15 +1061,23 @@ router.patch('/quotes/:id', (req, res) => {
   return res.json(row)
 })
 
-router.delete('/quotes/:id', (req, res) => {
-  const store = ensureCollections(readStore())
-  const company = getCompanyContext(req, store)
-  const before = store.quotes.length
-  store.quotes = store.quotes.filter(item => !(String(item.company_id) === String(company?.id) && String(item.id) === String(req.params.id)))
-  if(store.quotes.length === before) return res.status(404).json({ error:'not_found', message:'Orçamento não encontrado.' })
-  audit(store, req, company.id, 'quote.delete', `Orçamento removido: ${req.params.id}`)
-  writeStore(store)
-  return res.json({ ok:true })
+router.delete('/quotes/:id', async (req, res, next) => {
+  try{
+    const store = ensureCollections(readStore())
+    const company = getCompanyContext(req, store)
+    const removed = store.quotes.find(item => String(item.company_id) === String(company?.id) && String(item.id) === String(req.params.id))
+    const before = store.quotes.length
+    store.quotes = store.quotes.filter(item => !(String(item.company_id) === String(company?.id) && String(item.id) === String(req.params.id)))
+    if(store.quotes.length === before) return res.status(404).json({ error:'not_found', message:'Orçamento não encontrado.' })
+    audit(store, req, company.id, 'quote.delete', `Orçamento removido: ${req.params.id}`)
+    writeStore(store)
+    if(r2.isConfigured()){
+      await Promise.all(quoteImageKeys(removed).map(key =>
+        quoteImageKeyAllowed(company.id, key) ? r2.deleteObject(key).catch(() => null) : null
+      ))
+    }
+    return res.json({ ok:true })
+  }catch(err){ next(err) }
 })
 
 router.post('/quotes/:id/convert-to-order', (req, res) => {

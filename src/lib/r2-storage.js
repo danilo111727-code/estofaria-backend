@@ -128,6 +128,21 @@ async function headObject(key) {
   }
 }
 
+async function getObjectBuffer(key) {
+  const { client, cfg } = getClient()
+  const response = await client.send(new GetObjectCommand({
+    Bucket: cfg.bucket,
+    Key: String(key)
+  }))
+  const bytes = await response.Body.transformToByteArray()
+  return {
+    body: Buffer.from(bytes),
+    contentType: String(response.ContentType || 'application/octet-stream'),
+    sizeBytes: Number(response.ContentLength || bytes.length || 0),
+    etag: etagValue(response.ETag)
+  }
+}
+
 async function deleteObject(key) {
   const { client, cfg } = getClient()
   await client.send(new DeleteObjectCommand({
@@ -186,16 +201,28 @@ function buildModelImageKey({ companyId, modelId, variant = 'original', contentT
   return `companies/${String(companyId)}/models/${String(modelId)}/${safeVariant}.${ext}`
 }
 
+function buildQuoteImageKey({ companyId, imageId, contentType = 'image/jpeg' }) {
+  const ext = extensionForContentType(contentType) || 'bin'
+  return `companies/${String(companyId)}/quotes/free-models/${String(imageId)}.${ext}`
+}
+
+function quoteImagePrefix(companyId) {
+  return `companies/${String(companyId)}/quotes/free-models/`
+}
+
 module.exports = {
   getConfig,
   isConfigured,
   assertConfigured,
   putObject,
   headObject,
+  getObjectBuffer,
   deleteObject,
   presignGetUrl,
   presignPutUrl,
   buildModelImageKey,
+  buildQuoteImageKey,
+  quoteImagePrefix,
   extensionForContentType,
   sha256Hex
 }
