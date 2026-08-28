@@ -48,11 +48,27 @@ function parseAllowedOrigins() {
 }
 
 const allowedOrigins = parseAllowedOrigins()
+
+function isTrustedTestFrontend(origin) {
+  try {
+    const url = new URL(origin)
+    if (url.protocol !== 'https:') return false
+    return url.hostname === 'estofaria-frontend.pages.dev' ||
+      url.hostname.endsWith('.estofaria-frontend.pages.dev') ||
+      url.hostname === 'estofaria-digital.pages.dev' ||
+      url.hostname.endsWith('.estofaria-digital.pages.dev')
+  } catch (_) {
+    return false
+  }
+}
+
 const corsOptions = {
   origin(origin, callback) {
     if (!origin) return callback(null, true)
     if (!allowedOrigins.length) return callback(null, true)
-    if (allowedOrigins.includes(origin)) return callback(null, true)
+    if (allowedOrigins.includes(origin) || isTrustedTestFrontend(origin)) {
+      return callback(null, true)
+    }
     return callback(new Error('origin_not_allowed'))
   },
   credentials: true,
