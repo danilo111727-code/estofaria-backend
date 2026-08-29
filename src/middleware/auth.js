@@ -92,6 +92,18 @@ function requireAuth(req, res, next){
     if(!sessionVersionMatches(payload, user)){
       return res.status(401).json({ error:'session_revoked', message:'Esta sessão foi encerrada após uma alteração de senha. Entre novamente.' })
     }
+    if(!hasMasterAccess(user)){
+      const companyExists = Boolean(
+        user.company_id
+        && store.companies.some(item => String(item.id) === String(user.company_id))
+      )
+      if(!companyExists){
+        return res.status(401).json({
+          error:'access_cancelled',
+          message:'A empresa desta conta não está mais disponível.'
+        })
+      }
+    }
     if(!hasMasterAccess(user) && hasInactiveMembership(store, user)){
       return res.status(401).json({ error:'access_cancelled', message:'Seu acesso foi cancelado pelo administrador da empresa.' })
     }
