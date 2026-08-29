@@ -189,6 +189,10 @@ async function verifyV2Clean(client, companyId){
     'app_quote_models_v2',
     'app_quotes_v2',
     'app_personalization_catalog_v2',
+    'app_agenda_orders_v2',
+    'app_agenda_blocos_v2',
+    'app_agenda_configs_v2',
+    'app_agenda_audit_v2',
     'app_financial_entries_v2',
     'app_financial_audit_v2',
     'app_audit_logs_v2'
@@ -234,6 +238,10 @@ async function deletePgData(companyId, company, actor){
     const personalizationCatalog = await client.query('DELETE FROM app_personalization_catalog_v2 WHERE company_id = $1', [companyId])
     const quotes = await client.query('DELETE FROM app_quotes_v2 WHERE company_id = $1', [companyId])
     const models = await client.query('DELETE FROM app_models_v2 WHERE company_id = $1', [companyId])
+    const agendaOrders = await client.query('DELETE FROM app_agenda_orders_v2 WHERE company_id = $1', [companyId])
+    const agendaBlocks = await client.query('DELETE FROM app_agenda_blocos_v2 WHERE company_id = $1', [companyId])
+    const agendaConfigs = await client.query('DELETE FROM app_agenda_configs_v2 WHERE company_id = $1', [companyId])
+    const agendaAudit = await client.query('DELETE FROM app_agenda_audit_v2 WHERE company_id = $1', [companyId])
     const financialAudit = await client.query('DELETE FROM app_financial_audit_v2 WHERE company_id = $1', [companyId])
     const financialEntries = await client.query('DELETE FROM app_financial_entries_v2 WHERE company_id = $1', [companyId])
     const auditLogs = auditV2Db.isEnabled()
@@ -243,6 +251,10 @@ async function deletePgData(companyId, company, actor){
     v2Counts.personalization_catalog = personalizationCatalog.rowCount || 0
     v2Counts.quotes = quotes.rowCount || 0
     v2Counts.models = models.rowCount || 0
+    v2Counts.agenda_orders = agendaOrders.rowCount || 0
+    v2Counts.agenda_blocks = agendaBlocks.rowCount || 0
+    v2Counts.agenda_configs = agendaConfigs.rowCount || 0
+    v2Counts.agenda_audit = agendaAudit.rowCount || 0
     v2Counts.financial_audit = financialAudit.rowCount || 0
     v2Counts.financial_entries = financialEntries.rowCount || 0
     v2Counts.audit_logs = auditLogs.rowCount || 0
