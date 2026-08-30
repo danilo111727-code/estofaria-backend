@@ -22,6 +22,7 @@ const { normalizeExistingBaseMeters } = require('./src/lib/models-v2-base-migrat
 const { runR2SmokeTest } = require('./src/lib/r2-smoke-test')
 const { migrateModels } = require('./scripts/migrate-models-v2')
 const { runControlledOrphanCleanup } = require('./src/lib/orphan-company-cleanup')
+const { runControlledInlineImageCleanup } = require('./src/lib/inline-image-cleanup')
 
 atomicStore.install(storeLib)
 auditV2Bridge.install(storeLib,auditV2Db)
@@ -210,6 +211,7 @@ async function start() {
     }
     auditV2Db.enableWrites()
     await runControlledOrphanCleanup({ storeLib, r2: require('./src/lib/r2-storage') })
+    await runControlledInlineImageCleanup({ storeLib, r2: require('./src/lib/r2-storage') })
 
     console.log('[server] Models V2, Quotes V2, Personalização V2, Agenda V2, Financeiro V2, Auditoria V2 e Dashboard V2 prontos')
     if (personalizationMigration.companies || personalizationMigration.model_configs) {
