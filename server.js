@@ -21,8 +21,7 @@ const { runPersonalizationV2SelfTest } = require('./src/lib/personalization-v2-s
 const { normalizeExistingBaseMeters } = require('./src/lib/models-v2-base-migration')
 const { runR2SmokeTest } = require('./src/lib/r2-smoke-test')
 const { migrateModels } = require('./scripts/migrate-models-v2')
-const { runControlledOrphanCleanup } = require('./src/lib/orphan-company-cleanup')
-const { runControlledInlineImageCleanup } = require('./src/lib/inline-image-cleanup')
+const { runStartupMigrations } = require('./src/lib/startup-migrations')
 
 atomicStore.install(storeLib)
 auditV2Bridge.install(storeLib,auditV2Db)
@@ -186,55 +185,40 @@ async function start() {
     await pg.init()
     await pg.bootstrapStore()
     await modelsV2Db.ensureSchema()
-    await normalizeExistingBaseMeters()
-    await runControlledModelsMigration()
     await quotesV2Db.ensureSchema()
-    await quotesV2Db.migrateLegacyQuotes(storeLib.readStore())
     await personalizationV2Db.ensureSchema()
     await ensurePersonalizationIsolation()
-    const personalizationMigration = await personalizationV2Db.migrateLegacyPersonalization(storeLib.readStore())
-
     await agendaV2Db.ensureSchema()
-    const agendaMigration = await agendaV2Db.migrateLegacyAgenda(storeLib.readStore())
-
     await financialV2Db.ensureSchema()
-    const financialMigration = await financialV2Db.migrateLegacyFinancial(storeLib.readStore())
-
     await auditV2Db.ensureSchema()
-    const auditMigration = await auditV2Db.migrateLegacyAudit(storeLib.readStore())
-    const legacyAuditStore = storeLib.readStore()
-    const legacyAuditCount = Array.isArray(legacyAuditStore.auditLogs) ? legacyAuditStore.auditLogs.length : 0
-    if(legacyAuditCount){
-      legacyAuditStore.auditLogs = []
-      storeLib.writeStore(legacyAuditStore)
-      await pg.flushNow()
-    }
+    await runControlledModelsMigration()
+    await runStartupMigrations({
+      pool: pg.pool,
+      migrations: [
+        { name: 'models-base-meters-v1', run: normalizeExistingBaseMeters },
+        { name: 'legacy-quotes-v2-v1', run: () => quotesV2Db.migrateLegacyQuotes(storeLib.readStore()) },
+        { name: 'legacy-personalization-v2-v1', run: () => personalizationV2Db.migrateLegacyPersonalization(storeLib.readStore()) },
+        { name: 'legacy-agenda-v2-v1', run: () => agendaV2Db.migrateLegacyAgenda(storeLib.readStore()) },
+        { name: 'legacy-financial-v2-v1', run: () => financialV2Db.migrateLegacyFinancial(storeLib.readStore()) },
+        {
+          name: 'legacy-audit-v2-v1',
+          run: async () => {
+            const result = await auditV2Db.migrateLegacyAudit(storeLib.readStore())
+            const legacyStore = storeLib.readStore()
+            const legacyCount = Array.isArray(legacyStore.auditLogs) ? legacyStore.auditLogs.length : 0
+            if (legacyCount) {
+              legacyStore.auditLogs = []
+              storeLib.writeStore(legacyStore)
+              await pg.flushNow()
+            }
+            return { ...result, legacy_cleared: legacyCount }
+          }
+        }
+      ]
+    })
     auditV2Db.enableWrites()
-    await runControlledOrphanCleanup({ storeLib, r2: require('./src/lib/r2-storage') })
-    await runControlledInlineImageCleanup({ storeLib, r2: require('./src/lib/r2-storage') })
 
     console.log('[server] Models V2, Quotes V2, Personalização V2, Agenda V2, Financeiro V2, Auditoria V2 e Dashboard V2 prontos')
-    if (personalizationMigration.companies || personalizationMigration.model_configs) {
-      console.log(`[personalization-v2] Migração inicial: ${personalizationMigration.companies} catálogo(s), ${personalizationMigration.model_configs} configuração(ões) de modelo.`)
-    }
-    if (!agendaMigration.skipped) {
-      console.log(`[agenda-v2] Migração inicial: ${agendaMigration.configs || 0} config(s), ${agendaMigration.blocos || 0} bloco(s), ${agendaMigration.orders || 0} pedido(s).`)
-    } else {
-      console.log('[agenda-v2] Migração legada já concluída anteriormente.')
-    }
-    if (!financialMigration.skipped) {
-      console.log(`[financial-v2] Migração inicial: ${financialMigration.entries || 0} lançamento(s).`)
-    } else {
-      console.log('[financial-v2] Migração legada já concluída anteriormente.')
-    }
-    if (!auditMigration.skipped) {
-      console.log(`[audit-v2] Migração inicial: ${auditMigration.entries || 0} registro(s); ${auditMigration.inserted || 0} inserido(s).`)
-    } else {
-      console.log(`[audit-v2] Migração legada já concluída; ${auditMigration.synced || 0} registro(s) pendente(s) sincronizado(s).`)
-    }
-    if(legacyAuditCount){
-      console.log(`[audit-v2] auditLogs legado removido do kv_store após cópia confirmada: ${legacyAuditCount} registro(s).`)
-    }
 
     if (String(process.env.PERSONALIZATION_V2_SELF_TEST_ON_START || '') === '1') {
       await runPersonalizationV2SelfTest()
