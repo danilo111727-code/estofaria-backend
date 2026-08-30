@@ -84,7 +84,7 @@ async function main(){
     }
 
     for(const table of TABLES_IN_DELETE_ORDER){
-      const rows = await client.query(`SELECT * FROM ${table} WHERE company_id = ANY($1::uuid[])`, [TARGET_IDS])
+      const rows = await client.query(`SELECT * FROM ${table} WHERE company_id::text = ANY($1::text[])`, [TARGET_IDS])
       if(rows.rows.length) backup.tables[table] = rows.rows
     }
 
@@ -95,7 +95,7 @@ async function main(){
     fs.writeFileSync(backupPath, JSON.stringify(backup, null, 2), { mode:0o600 })
 
     for(const table of TABLES_IN_DELETE_ORDER){
-      await client.query(`DELETE FROM ${table} WHERE company_id = ANY($1::uuid[])`, [TARGET_IDS])
+      await client.query(`DELETE FROM ${table} WHERE company_id::text = ANY($1::text[])`, [TARGET_IDS])
     }
 
     await client.query(
@@ -104,7 +104,7 @@ async function main(){
     )
 
     for(const table of TABLES_IN_DELETE_ORDER){
-      const check = await client.query(`SELECT COUNT(*)::int AS total FROM ${table} WHERE company_id = ANY($1::uuid[])`, [TARGET_IDS])
+      const check = await client.query(`SELECT COUNT(*)::int AS total FROM ${table} WHERE company_id::text = ANY($1::text[])`, [TARGET_IDS])
       if(Number(check.rows[0]?.total || 0) !== 0) throw new Error(`verificação falhou em ${table}`)
     }
 
