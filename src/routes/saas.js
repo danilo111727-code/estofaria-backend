@@ -2,6 +2,7 @@ const express = require('express')
 const bcrypt = require('bcryptjs')
 const { readStore, writeStore, materializeCompany, findCompanyById, upsertAudit, nowIso, planPreset } = require('../lib/store')
 const { requireAuth, requireMaster, requirePermission } = require('../middleware/auth')
+const { hasMasterAccess } = require('../lib/policies')
 
 const router = express.Router()
 
@@ -75,6 +76,50 @@ function applyCompanyAction(company, action, payload){
     const all = store.auditLogs || []
     const items = all.slice(-limit).reverse()
     res.json({ items, total: all.length })
+  })
+
+  router.post('/logout-companies', requireAuth, requireMaster, requirePermission('saas.companies.write'), (req, res) => {
+    if(String(req.body?.confirmation || '').trim().toUpperCase() !== 'DESLOGAR'){
+      return res.status(400).json({
+        error:'confirmation_required',
+        message:'Digite DESLOGAR para confirmar o encerramento das sessões.'
+      })
+    }
+
+    const store = readStore()
+    const companyUserIds = new Set((store.companyUsers || []).map(item => String(item.user_id || '')))
+    const affectedUsers = (store.users || []).filter(user =>
+      !hasMasterAccess(user)
+      && (Boolean(user.company_id) || companyUserIds.has(String(user.id || '')))
+    )
+
+    const changedAt = nowIso()
+    for(const user of affectedUsers){
+      user.session_version = Number(user.session_version || 0) + 1
+      user.updated_at = changedAt
+    }
+
+    upsertAudit(store, {
+      action:'all_company_sessions_revoked',
+      message:`${affectedUsers.length} usuário(s) de empresas foram deslogados pelo Master.`,
+      actor_user_id:req.user.id,
+      actor_name:req.user.name,
+      actor_email:req.user.email,
+      actor_role:req.user.role,
+      reason:String(req.body?.reason || 'Atualização geral do aplicativo').trim(),
+      source:'master-logout-companies',
+      ip_address:req.ip,
+      user_agent:req.headers['user-agent'] || ''
+    })
+    writeStore(store)
+
+    res.json({
+      ok:true,
+      users_revoked:affectedUsers.length,
+      companies_affected:new Set(affectedUsers.map(user => String(user.company_id || '')).filter(Boolean)).size,
+      master_preserved:true,
+      message:'As sessões das empresas foram encerradas. O Master permaneceu conectado.'
+    })
   })
 
   router.get('/companies', requireAuth, requireMaster, requirePermission('saas.companies.read'), (req, res) => {
