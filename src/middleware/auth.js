@@ -90,7 +90,7 @@ function requireAuth(req, res, next){
     const user = store.users.find(item => String(item.id) === String(payload.id) && item.is_active !== false)
     if(!user) return res.status(401).json({ error:'unauthorized', message:'Sessão inválida.' })
     if(!sessionVersionMatches(payload, user)){
-      return res.status(401).json({ error:'session_revoked', message:'Esta sessão foi encerrada após uma alteração de senha. Entre novamente.' })
+      return res.status(401).json({ error:'session_revoked', message:'Esta sessão foi encerrada pelo administrador ou após uma alteração de senha. Entre novamente.' })
     }
     if(!hasMasterAccess(user)){
       const companyExists = Boolean(
