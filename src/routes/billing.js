@@ -244,13 +244,81 @@ router.post('/stripe/create-checkout', requireAuth, async (req, res) => {
       },
       metadata: { company_id: String(company.id) },
       customer_email: company.owner_email || req.user?.email || undefined,
-      success_url: `${frontendUrl}/assinatura/?sucesso=1`,
-      cancel_url: `${frontendUrl}/assinatura/?cancelado=1`,
+      success_url: `${frontendUrl}/stripe-retorno/?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${frontendUrl}/stripe-retorno/?cancelado=1`,
       locale: 'pt-BR'
     })
     res.json({ url: session.url, session_id: session.id })
   } catch(err) {
     res.status(500).json({ error:'stripe_error', message: err.message })
+  }
+})
+
+router.post('/stripe/confirm-checkout', requireAuth, async (req, res) => {
+  if(!stripe) return res.status(503).json({ error:'stripe_not_configured', message:'Stripe não configurado.' })
+  try {
+    const sessionId = String(req.body?.session_id || '').trim()
+    if(!sessionId.startsWith('cs_')){
+      return res.status(400).json({ error:'invalid_session', message:'Sessão Stripe inválida.' })
+    }
+
+    const store = readStore()
+    const company = getCompanyFromSession(store, req)
+    if(!company) return res.status(404).json({ error:'company_not_found', message:'Empresa não encontrada.' })
+
+    const session = await stripe.checkout.sessions.retrieve(sessionId, { expand: ['subscription'] })
+    const sessionCompanyId = String(session.metadata?.company_id || '')
+    if(!sessionCompanyId || sessionCompanyId !== String(company.id)){
+      return res.status(403).json({ error:'session_company_mismatch', message:'Esta sessão não pertence à empresa autenticada.' })
+    }
+    if(session.mode !== 'subscription' || session.status !== 'complete'){
+      return res.status(409).json({ error:'checkout_not_complete', message:'O checkout ainda não foi concluído na Stripe.' })
+    }
+
+    let subscription = session.subscription || null
+    if(typeof subscription === 'string') subscription = await stripe.subscriptions.retrieve(subscription)
+    const subscriptionId = String(subscription?.id || session.subscription || '')
+    const subscriptionStatus = String(subscription?.status || '').toLowerCase()
+    if(!subscriptionId || !['trialing','active'].includes(subscriptionStatus)){
+      return res.status(409).json({ error:'subscription_not_active', message:'A assinatura ainda não está ativa ou em período grátis na Stripe.' })
+    }
+
+    const customerId = String(session.customer || '')
+    if(customerId) company.stripe_customer_id = customerId
+    company.stripe_subscription_id = subscriptionId
+    company.financial_status = subscriptionStatus
+    company.access_status = 'active'
+    company.billing_mode = 'stripe'
+    if(subscription?.trial_end) company.trial_ends_at = new Date(Number(subscription.trial_end) * 1000).toISOString()
+    if(subscription?.current_period_end) company.next_charge_at = new Date(Number(subscription.current_period_end) * 1000).toISOString()
+    else if(subscription?.trial_end) company.next_charge_at = new Date(Number(subscription.trial_end) * 1000).toISOString()
+    company.updated_at = nowIso()
+
+    upsertAudit(store, {
+      company_id: company.id,
+      action: 'checkout_confirmed',
+      message: `Checkout Stripe ${session.id} confirmado por retorno seguro.`,
+      actor_user_id: req.user?.id || '',
+      actor_name: req.user?.name || company.owner_name || 'Usuário',
+      actor_email: req.user?.email || company.owner_email || '',
+      actor_role: req.user?.role || 'owner',
+      reason: 'stripe_checkout_return',
+      request_json: { session_id: session.id },
+      after_json: JSON.parse(JSON.stringify(company)),
+      source: 'stripe-return',
+      ip_address: req.ip,
+      user_agent: req.headers['user-agent'] || ''
+    })
+
+    writeStore(store)
+    return res.json({
+      ok: true,
+      confirmed: true,
+      subscription: buildSubscriptionPayload(company, store, req).subscription
+    })
+  } catch(err) {
+    const code = err.code || 'stripe_confirm_error'
+    return res.status(500).json({ error: code, message: err.message })
   }
 })
 
