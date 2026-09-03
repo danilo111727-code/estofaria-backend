@@ -50,11 +50,14 @@ function parseAllowedOrigins() {
 }
 
 const allowedOrigins = parseAllowedOrigins()
+const disposableTestOrigins = new Set([
+  'https://adicionais-exp.estofaria-frontend.pages.dev'
+])
 const corsOptions = {
   origin(origin, callback) {
     if (!origin) return callback(null, true)
     if (!allowedOrigins.length) return callback(null, true)
-    if (allowedOrigins.includes(origin)) return callback(null, true)
+    if (allowedOrigins.includes(origin) || disposableTestOrigins.has(origin)) return callback(null, true)
     return callback(new Error('origin_not_allowed'))
   },
   credentials: true,
@@ -255,4 +258,3 @@ async function start() {
 start().catch(err => {
   console.error('[server] Erro fatal na inicialização:', err)
   process.exit(1)
-})
