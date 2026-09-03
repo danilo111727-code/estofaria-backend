@@ -148,8 +148,72 @@ router.get('/models/:id/personalization-items', requireRead, requireCompany, req
       }
     })
 
+    const fabricItems = []
+    for (const album of catalog.albums || []) {
+      const albumName = String(album?.nome || album?.name || '').trim()
+      if (!albumName) continue
+      const albumKey = albumName.toLowerCase()
+      const albumColumn = (catalog.items || []).find(item =>
+        Boolean(item?.isAlbum || item?.is_album) &&
+        String(item?.name || '').trim().toLowerCase() === albumKey
+      )
+      const consumos = modelConfig.consumos?.[albumKey] || {}
+      const albumPriceCents = Math.max(0, Math.round(Number(album?.custo || 0) * 100))
+      const priceMode = String(album?.price_mode || 'album').toLowerCase() === 'individual'
+        ? 'individual'
+        : 'album'
+      const fabrics = Array.isArray(album?.itens) ? album.itens : []
+
+      if (!fabrics.length) {
+        fabricItems.push({
+          ...(albumColumn || {}),
+          id: `fabric_album_${String(album.id || albumKey)}`,
+          name: albumName,
+          unit: String(album?.unidade || albumColumn?.unit || 'unidade'),
+          price_cents: albumPriceCents,
+          value_cents: albumPriceCents,
+          category: 'tecido',
+          isAlbum: true,
+          isFabric: true,
+          album_id: String(album?.id || ''),
+          album_name: albumName,
+          fabric_code: '',
+          model_id: req.params.id,
+          consumos,
+          values: { padrao: albumPriceCents }
+        })
+        continue
+      }
+
+      fabrics.forEach((fabric, index) => {
+        const fabricName = String(fabric?.nome || fabric?.name || '').trim()
+        const fabricCode = String(fabric?.codigo || fabric?.code || '').trim()
+        if (!fabricName && !fabricCode) return
+        const individualPrice = Math.max(0, Math.round(Number(
+          fabric?.price_cents ?? fabric?.value_cents ?? 0
+        )))
+        const priceCents = priceMode === 'individual' ? individualPrice : albumPriceCents
+        fabricItems.push({
+          id: `fabric_${String(album.id || albumKey)}_${index}`,
+          name: fabricName || fabricCode,
+          unit: String(album?.unidade || albumColumn?.unit || 'unidade'),
+          price_cents: priceCents,
+          value_cents: priceCents,
+          category: 'tecido',
+          isAlbum: false,
+          isFabric: true,
+          album_id: String(album?.id || ''),
+          album_name: albumName,
+          fabric_code: fabricCode,
+          model_id: req.params.id,
+          consumos,
+          values: { padrao: priceCents }
+        })
+      })
+    }
+
     return res.json({
-      items,
+      items: [...items, ...fabricItems],
       model_id: req.params.id,
       catalog_revision: catalog.revision,
       model_revision: modelConfig.revision,

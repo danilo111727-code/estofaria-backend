@@ -83,14 +83,21 @@ function sanitizeAlbum(album = {}) {
     .slice(0, 500)
     .map(item => ({
       nome: text(item?.nome || item?.name).replace(/\s+/g, ' ').trim().slice(0, 180),
-      codigo: text(item?.codigo || item?.code).replace(/\s+/g, ' ').trim().slice(0, 120)
+      codigo: text(item?.codigo || item?.code).replace(/\s+/g, ' ').trim().slice(0, 120),
+      price_cents: Math.max(0, Math.round(finiteNumber(
+        item?.price_cents ?? item?.value_cents ?? item?.valor_cents ?? 0
+      )))
     }))
     .filter(item => item.nome || item.codigo)
+  const priceMode = text(album.price_mode || album.priceMode || 'album').trim().toLowerCase() === 'individual'
+    ? 'individual'
+    : 'album'
   return {
     id: normalizeId(album.id, 'alb'),
     nome,
     custo: Math.max(0, finiteNumber(album.custo ?? album.cost ?? 0)),
     unidade: text(album.unidade || album.unit || '').replace(/\s+/g, ' ').trim().slice(0, 80),
+    price_mode: priceMode,
     itens: tecidos,
     createdAt: text(album.createdAt || album.created_at || '').slice(0, 80),
     updatedAt: text(album.updatedAt || album.updated_at || '').slice(0, 80)
