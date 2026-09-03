@@ -258,3 +258,4 @@ async function start() {
 start().catch(err => {
   console.error('[server] Erro fatal na inicialização:', err)
   process.exit(1)
+})
