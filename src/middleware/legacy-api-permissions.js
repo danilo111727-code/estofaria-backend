@@ -19,6 +19,10 @@ function apiPath(req) {
   return path || '/'
 }
 
+function isLegacyModelCrudPath(path) {
+  return path === '/models' || /^\/models\/[^/]+$/.test(path)
+}
+
 function requiredPermissionsFor(method, path) {
   const read = isReadMethod(method)
 
@@ -32,7 +36,7 @@ function requiredPermissionsFor(method, path) {
     return read ? MODEL_READ_PERMISSIONS : ['itens-personalizacao']
   }
 
-  if (path === '/models' || /^\/models\/[^/]+$/.test(path)) {
+  if (isLegacyModelCrudPath(path)) {
     return read ? MODEL_READ_PERMISSIONS : ['precificacao']
   }
 
@@ -51,7 +55,18 @@ function requiredPermissionsFor(method, path) {
 }
 
 function legacyApiPermissions(req, res, next) {
-  const permissions = requiredPermissionsFor(req.method, apiPath(req))
+  const path = apiPath(req)
+
+  // Models V2 é a única fonte de gravação. O legado permanece acessível apenas
+  // para leitura/rollback durante a janela de validação da migração.
+  if (isLegacyModelCrudPath(path) && !isReadMethod(req.method)) {
+    return requireAuth(req, res, () => res.status(410).json({
+      error: 'legacy_models_read_only',
+      message: 'Gravação de modelos no legado foi desativada. Use Models V2.'
+    }))
+  }
+
+  const permissions = requiredPermissionsFor(req.method, path)
   if (!permissions) return next()
 
   return requireAuth(req, res, () => {
@@ -65,5 +80,6 @@ function legacyApiPermissions(req, res, next) {
 
 legacyApiPermissions.requiredPermissionsFor = requiredPermissionsFor
 legacyApiPermissions.apiPath = apiPath
+legacyApiPermissions.isLegacyModelCrudPath = isLegacyModelCrudPath
 
 module.exports = legacyApiPermissions
