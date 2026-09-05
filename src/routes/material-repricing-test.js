@@ -155,6 +155,15 @@ router.put('/materials/:id', async (req, res, next) => {
     Object.assign(material, updatedMaterial)
     storeLib.writeStore(store)
 
+    console.log('[material-repricing-test]', JSON.stringify({
+      company_id: String(company.id),
+      material_id: String(material.id),
+      material_name: material.name,
+      material_unit: material.unit,
+      price_cents: material.price_cents,
+      ...repricing
+    }))
+
     return res.json({
       ...material,
       models_repriced: repricing.models_repriced,
@@ -164,5 +173,62 @@ router.put('/materials/:id', async (req, res, next) => {
     next(err)
   }
 })
+
+async function auditLegacyVsV2() {
+  const pool = storeLib && storeLib._pg && storeLib._pg.pool
+  if (!pool) return
+  const store = storeLib.readStore()
+  const legacyModels = (Array.isArray(store.models) ? store.models : []).map(model => ({
+    id: String(model.id ?? ''),
+    company_id: String(model.company_id ?? ''),
+    name: String(model.name || model.nome || ''),
+    updated_at: model.updated_at || model.updatedAt || '',
+    total_cost_cents: Number(model.total_cost_cents || 0),
+    target_profit_cents: Number(model.target_profit_cents || 0),
+    sale_price_cents: Number(model.sale_price_cents || 0),
+    materials: (Array.isArray(model.materials) ? model.materials : []).map(item => ({
+      material_id: item.material_id ?? null,
+      material_name: item.material_name || item.materialName || item.name || '',
+      unit: item.unit || item.unidade || '',
+      quantity: Number(item.quantity || item.quantidade || item.qtd || 0),
+      unit_price_cents: Number(item.unit_price_cents || 0),
+      total_cents: Number(item.total_cents || 0)
+    }))
+  }))
+  const v2 = await pool.query(`
+    SELECT m.id, m.company_id, m.legacy_id, m.name, m.updated_at,
+           m.total_cost_cents, m.target_profit_cents, m.sale_price_cents,
+           COALESCE(jsonb_agg(jsonb_build_object(
+             'material_id', mm.material_id,
+             'material_name', mm.material_name,
+             'unit', mm.unit,
+             'quantity', mm.quantity,
+             'unit_price_cents', mm.unit_price_cents,
+             'total_cents', mm.total_cents,
+             'is_free_cost', mm.is_free_cost
+           ) ORDER BY mm.sort_order) FILTER (WHERE mm.id IS NOT NULL), '[]'::jsonb) AS materials
+    FROM app_models_v2 m
+    LEFT JOIN app_model_materials_v2 mm ON mm.model_id = m.id AND mm.company_id = m.company_id
+    WHERE m.active = TRUE
+    GROUP BY m.id
+    ORDER BY m.name
+  `)
+  const compactLegacy = legacyModels.filter(model =>
+    /cama/i.test(model.name) || model.materials.some(item => /cola/i.test(String(item.material_name || '')))
+  )
+  const compactV2 = v2.rows.filter(model =>
+    /cama/i.test(String(model.name || '')) || (Array.isArray(model.materials) && model.materials.some(item => /cola/i.test(String(item.material_name || ''))))
+  )
+  console.log('[models-v2-audit]', JSON.stringify({
+    legacy_total: legacyModels.length,
+    v2_total: v2.rows.length,
+    legacy_focus: compactLegacy,
+    v2_focus: compactV2
+  }))
+}
+
+setTimeout(() => {
+  auditLegacyVsV2().catch(error => console.error('[models-v2-audit] falha', error))
+}, 12000)
 
 module.exports = router
