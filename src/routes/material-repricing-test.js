@@ -16,6 +16,15 @@ function num(value, fallback = 0) {
   return Number.isFinite(n) ? n : fallback
 }
 
+function normalizeName(value) {
+  return String(value || '')
+    .trim()
+    .toLocaleLowerCase('pt-BR')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+}
+
 function getCompanyContext(req, store) {
   const explicit = text(
     req.query.company_id || req.body?.company_id || req.params.companyId || req.user?.company_id || req.user?.company?.id || ''
@@ -30,7 +39,18 @@ function getCompanyContext(req, store) {
   return null
 }
 
-async function repriceModelsForMaterial(companyId, previousMaterial, updatedMaterial) {
+function companyMaterials(store, companyId) {
+  return (Array.isArray(store.materials) ? store.materials : [])
+    .filter(item => String(item.company_id) === String(companyId))
+}
+
+function canFallbackByName(materials, material) {
+  const target = normalizeName(material?.name)
+  if (!target) return false
+  return materials.filter(item => normalizeName(item?.name) === target).length === 1
+}
+
+async function repriceModelsForMaterial(companyId, previousMaterial, updatedMaterial, materials) {
   const pool = storeLib && storeLib._pg && storeLib._pg.pool
   if (!pool) {
     const err = new Error('PostgreSQL não disponível para reajustar os modelos.')
@@ -38,6 +58,7 @@ async function repriceModelsForMaterial(companyId, previousMaterial, updatedMate
     throw err
   }
 
+  const allowNameFallback = canFallbackByName(materials, updatedMaterial)
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
@@ -63,8 +84,11 @@ async function repriceModelsForMaterial(companyId, previousMaterial, updatedMate
           AND (
             mm.material_id = $2
             OR (
-              LOWER(TRIM(mm.material_name)) = LOWER(TRIM($6))
-              AND LOWER(TRIM(mm.unit)) = LOWER(TRIM($7))
+              $8 = TRUE
+              AND (
+                LOWER(TRIM(mm.material_name)) = LOWER(TRIM($6))
+                OR LOWER(TRIM(mm.material_name)) = LOWER(TRIM($3))
+              )
             )
           )
         RETURNING mm.model_id
@@ -101,13 +125,127 @@ async function repriceModelsForMaterial(companyId, previousMaterial, updatedMate
       String(updatedMaterial.unit),
       Number(updatedMaterial.price_cents || 0),
       String(previousMaterial.name || ''),
-      String(previousMaterial.unit || '')
+      String(previousMaterial.unit || ''),
+      allowNameFallback
     ])
 
     await client.query('COMMIT')
     return {
       material_rows_updated: Number(result.rows[0]?.material_rows_updated || 0),
-      models_repriced: Number(result.rows[0]?.models_repriced || 0)
+      models_repriced: Number(result.rows[0]?.models_repriced || 0),
+      name_fallback_enabled: allowNameFallback
+    }
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {})
+    throw err
+  } finally {
+    client.release()
+  }
+}
+
+async function reconcileAllV2ModelsWithMaterialCatalog() {
+  const pool = storeLib && storeLib._pg && storeLib._pg.pool
+  if (!pool) return { material_rows_updated: 0, models_repriced: 0, unresolved: 0 }
+
+  const store = storeLib.readStore()
+  const materials = Array.isArray(store.materials) ? store.materials : []
+  const byCompanyId = new Map()
+  const byCompanyName = new Map()
+
+  for (const material of materials) {
+    const companyId = String(material.company_id || '')
+    if (!companyId) continue
+    if (!byCompanyId.has(companyId)) byCompanyId.set(companyId, new Map())
+    byCompanyId.get(companyId).set(String(material.id), material)
+
+    if (!byCompanyName.has(companyId)) byCompanyName.set(companyId, new Map())
+    const name = normalizeName(material.name)
+    if (!name) continue
+    const bucket = byCompanyName.get(companyId)
+    const existing = bucket.get(name) || []
+    existing.push(material)
+    bucket.set(name, existing)
+  }
+
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const rows = await client.query(`
+      SELECT mm.id, mm.company_id, mm.model_id, mm.material_id, mm.material_name,
+             mm.unit, mm.quantity, mm.unit_price_cents, mm.total_cents
+      FROM app_model_materials_v2 mm
+      INNER JOIN app_models_v2 m
+        ON m.id = mm.model_id AND m.company_id = mm.company_id
+      WHERE m.active = TRUE AND mm.is_free_cost = FALSE
+      ORDER BY mm.id
+    `)
+
+    const affected = new Set()
+    let materialRowsUpdated = 0
+    let unresolved = 0
+
+    for (const row of rows.rows) {
+      const companyId = String(row.company_id)
+      const byId = byCompanyId.get(companyId) || new Map()
+      const byName = byCompanyName.get(companyId) || new Map()
+      let current = row.material_id ? byId.get(String(row.material_id)) : null
+      if (!current) {
+        const candidates = byName.get(normalizeName(row.material_name)) || []
+        if (candidates.length === 1) current = candidates[0]
+      }
+      if (!current) {
+        unresolved += 1
+        continue
+      }
+
+      const quantity = Number(row.quantity || 0)
+      const price = Math.max(0, Math.round(Number(current.price_cents || 0)))
+      const total = Math.round(quantity * price)
+      const needsUpdate =
+        String(row.material_id || '') !== String(current.id) ||
+        String(row.material_name || '') !== String(current.name || '') ||
+        String(row.unit || '') !== String(current.unit || '') ||
+        Number(row.unit_price_cents || 0) !== price ||
+        Number(row.total_cents || 0) !== total
+
+      if (!needsUpdate) continue
+
+      await client.query(`
+        UPDATE app_model_materials_v2
+        SET material_id = $2,
+            material_name = $3,
+            unit = $4,
+            unit_price_cents = $5,
+            total_cents = $6,
+            updated_at = NOW()
+        WHERE id = $1
+      `, [row.id, String(current.id), String(current.name || ''), String(current.unit || ''), price, total])
+      materialRowsUpdated += 1
+      affected.add(String(row.model_id))
+    }
+
+    if (affected.size) {
+      await client.query(`
+        WITH costs AS (
+          SELECT model_id, COALESCE(SUM(total_cents), 0)::bigint AS total_cost_cents
+          FROM app_model_materials_v2
+          WHERE model_id = ANY($1::text[])
+          GROUP BY model_id
+        )
+        UPDATE app_models_v2 m
+        SET total_cost_cents = costs.total_cost_cents,
+            sale_price_cents = costs.total_cost_cents + m.target_profit_cents,
+            updated_at = NOW()
+        FROM costs
+        WHERE m.id = costs.model_id AND m.active = TRUE
+      `, [Array.from(affected)])
+    }
+
+    await client.query('COMMIT')
+    return {
+      material_rows_updated: materialRowsUpdated,
+      models_repriced: affected.size,
+      unresolved
     }
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {})
@@ -150,7 +288,8 @@ router.put('/materials/:id', async (req, res, next) => {
       updated_at: new Date().toISOString()
     }
 
-    const repricing = await repriceModelsForMaterial(company.id, previousMaterial, updatedMaterial)
+    const materials = companyMaterials(store, company.id)
+    const repricing = await repriceModelsForMaterial(company.id, previousMaterial, updatedMaterial, materials)
 
     Object.assign(material, updatedMaterial)
     storeLib.writeStore(store)
@@ -159,7 +298,6 @@ router.put('/materials/:id', async (req, res, next) => {
       company_id: String(company.id),
       material_id: String(material.id),
       material_name: material.name,
-      material_unit: material.unit,
       price_cents: material.price_cents,
       ...repricing
     }))
@@ -174,61 +312,22 @@ router.put('/materials/:id', async (req, res, next) => {
   }
 })
 
-async function auditLegacyVsV2() {
-  const pool = storeLib && storeLib._pg && storeLib._pg.pool
-  if (!pool) return
-  const store = storeLib.readStore()
-  const legacyModels = (Array.isArray(store.models) ? store.models : []).map(model => ({
-    id: String(model.id ?? ''),
-    company_id: String(model.company_id ?? ''),
-    name: String(model.name || model.nome || ''),
-    updated_at: model.updated_at || model.updatedAt || '',
-    total_cost_cents: Number(model.total_cost_cents || 0),
-    target_profit_cents: Number(model.target_profit_cents || 0),
-    sale_price_cents: Number(model.sale_price_cents || 0),
-    materials: (Array.isArray(model.materials) ? model.materials : []).map(item => ({
-      material_id: item.material_id ?? null,
-      material_name: item.material_name || item.materialName || item.name || '',
-      unit: item.unit || item.unidade || '',
-      quantity: Number(item.quantity || item.quantidade || item.qtd || 0),
-      unit_price_cents: Number(item.unit_price_cents || 0),
-      total_cents: Number(item.total_cents || 0)
-    }))
-  }))
-  const v2 = await pool.query(`
-    SELECT m.id, m.company_id, m.legacy_id, m.name, m.updated_at,
-           m.total_cost_cents, m.target_profit_cents, m.sale_price_cents,
-           COALESCE(jsonb_agg(jsonb_build_object(
-             'material_id', mm.material_id,
-             'material_name', mm.material_name,
-             'unit', mm.unit,
-             'quantity', mm.quantity,
-             'unit_price_cents', mm.unit_price_cents,
-             'total_cents', mm.total_cents,
-             'is_free_cost', mm.is_free_cost
-           ) ORDER BY mm.sort_order) FILTER (WHERE mm.id IS NOT NULL), '[]'::jsonb) AS materials
-    FROM app_models_v2 m
-    LEFT JOIN app_model_materials_v2 mm ON mm.model_id = m.id AND mm.company_id = m.company_id
-    WHERE m.active = TRUE
-    GROUP BY m.id
-    ORDER BY m.name
-  `)
-  const compactLegacy = legacyModels.filter(model =>
-    /cama/i.test(model.name) || model.materials.some(item => /cola/i.test(String(item.material_name || '')))
-  )
-  const compactV2 = v2.rows.filter(model =>
-    /cama/i.test(String(model.name || '')) || (Array.isArray(model.materials) && model.materials.some(item => /cola/i.test(String(item.material_name || ''))))
-  )
-  console.log('[models-v2-audit]', JSON.stringify({
-    legacy_total: legacyModels.length,
-    v2_total: v2.rows.length,
-    legacy_focus: compactLegacy,
-    v2_focus: compactV2
-  }))
+function legacyModelWriteBlocked(_req, res) {
+  return res.status(410).json({
+    error: 'models_v2_only',
+    message: 'Models V2 é a única fonte de gravação neste ambiente de teste.'
+  })
 }
 
+router.post('/models', legacyModelWriteBlocked)
+router.put('/models/:id', legacyModelWriteBlocked)
+router.patch('/models/:id', legacyModelWriteBlocked)
+router.delete('/models/:id', legacyModelWriteBlocked)
+
 setTimeout(() => {
-  auditLegacyVsV2().catch(error => console.error('[models-v2-audit] falha', error))
+  reconcileAllV2ModelsWithMaterialCatalog()
+    .then(result => console.log('[models-v2-reconcile]', JSON.stringify(result)))
+    .catch(error => console.error('[models-v2-reconcile] falha', error))
 }, 12000)
 
 module.exports = router
