@@ -2,7 +2,6 @@
 
 const { requireAuth } = require('./auth')
 const { hasPermission } = require('../lib/policies')
-const { updateMaterialAndModels } = require('../routes/material-repricing')
 
 const MODEL_READ_PERMISSIONS = ['precificacao', 'catalogo', 'vendedor', 'itens-personalizacao']
 const TEMPLATE_PERMISSIONS = ['vendedor', 'precificacao', 'catalogo', 'configuracao']
@@ -71,18 +70,11 @@ function legacyApiPermissions(req, res, next) {
   if (!permissions) return next()
 
   return requireAuth(req, res, () => {
-    if (!permissions.some(permission => hasPermission(req.user, permission))) {
-      return res.status(403).json({
-        error: 'forbidden',
-        message: 'Permissão insuficiente para este módulo.'
-      })
-    }
-
-    const materialWrite = ['PUT', 'PATCH'].includes(String(req.method || '').toUpperCase())
-      && /^\/materials\/[^/]+$/.test(path)
-    if (materialWrite) return updateMaterialAndModels(req, res, next)
-
-    return next()
+    if (permissions.some(permission => hasPermission(req.user, permission))) return next()
+    return res.status(403).json({
+      error: 'forbidden',
+      message: 'Permissão insuficiente para este módulo.'
+    })
   })
 }
 
