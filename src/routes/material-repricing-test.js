@@ -202,6 +202,78 @@ async function updateMaterialAndModels(req, res, next) {
 router.put('/materials/:id', requireAuth, updateMaterialAndModels)
 router.patch('/materials/:id', requireAuth, updateMaterialAndModels)
 
+router.get('/diagnostics/material-repricing/:materialId', requireAuth, async (req, res, next) => {
+  try {
+    if (!canEditMaterial(req.user) && !canWriteModel(req.user)) {
+      return res.status(403).json({ error:'forbidden', message:'Sem permissão para consultar este diagnóstico.' })
+    }
+
+    const companyId = companyIdFor(req)
+    if (!companyId) return res.status(400).json({ error:'company_required', message:'Empresa não identificada.' })
+
+    const pool = storeLib?._pg?.pool
+    if (!pool) return res.status(503).json({ error:'postgres_required', message:'PostgreSQL não disponível.' })
+
+    const materialId = String(req.params.materialId || '').trim()
+    const store = storeLib.readStore()
+    const material = (Array.isArray(store.materials) ? store.materials : []).find(item =>
+      String(item.company_id) === String(companyId) && String(item.id) === materialId
+    ) || null
+
+    const result = await pool.query(`
+      SELECT
+        m.id AS model_id,
+        m.name AS model_name,
+        m.total_cost_cents,
+        m.target_profit_cents,
+        m.sale_price_cents,
+        m.updated_at AS model_updated_at,
+        mm.material_id,
+        mm.material_name,
+        mm.unit,
+        mm.quantity,
+        mm.unit_price_cents,
+        mm.total_cents,
+        mm.is_free_cost,
+        mm.updated_at AS material_link_updated_at,
+        totals.calculated_total_cost_cents
+      FROM app_model_materials_v2 mm
+      JOIN app_models_v2 m
+        ON m.id = mm.model_id
+       AND m.company_id = mm.company_id
+      LEFT JOIN LATERAL (
+        SELECT COALESCE(SUM(all_mm.total_cents), 0)::bigint AS calculated_total_cost_cents
+        FROM app_model_materials_v2 all_mm
+        WHERE all_mm.company_id = m.company_id
+          AND all_mm.model_id = m.id
+      ) totals ON TRUE
+      WHERE mm.company_id = $1
+        AND mm.material_id = $2
+        AND m.active = TRUE
+      ORDER BY m.name ASC
+    `, [companyId, materialId])
+
+    return res.json({
+      company_id: companyId,
+      material: material ? {
+        id: String(material.id),
+        name: material.name,
+        unit: material.unit,
+        price_cents: material.price_cents,
+        updated_at: material.updated_at || null
+      } : null,
+      models: result.rows.map(row => ({
+        ...row,
+        expected_sale_price_cents: Number(row.calculated_total_cost_cents || 0) + Number(row.target_profit_cents || 0),
+        cost_matches_material_sum: Number(row.total_cost_cents || 0) === Number(row.calculated_total_cost_cents || 0),
+        sale_matches_cost_plus_profit: Number(row.sale_price_cents || 0) === Number(row.calculated_total_cost_cents || 0) + Number(row.target_profit_cents || 0)
+      }))
+    })
+  } catch (err) {
+    next(err)
+  }
+})
+
 router.post('/v2/models/:id/images/:variant/upload', requireAuth, async (req, res, next) => {
   try {
     if (!canWriteModel(req.user)) return res.status(403).json({ error:'forbidden', message:'Sem permissão para alterar modelos.' })
