@@ -35,6 +35,7 @@ const billingRoutes = require('./src/routes/billing')
 const operationsRoutes = require('./src/routes/operations')
 const materialUnitsRoutes = require('./src/routes/material-units')
 const modelsV2Routes = require('./src/routes/models-v2')
+const modelsV2ImageUploadRoutes = require('./src/routes/models-v2-image-upload')
 const quotesV2Routes = require('./src/routes/quotes-v2')
 const personalizationV2Routes = require('./src/routes/personalization-v2')
 const agendaV2Routes = require('./src/routes/agenda-v2')
@@ -77,6 +78,7 @@ app.use((req, res, next) => {
 app.use(cors(corsOptions))
 app.options('*', cors(corsOptions))
 const jsonParser = express.json({ limit: '1mb' })
+const modelImageBinaryParser = express.raw({ type: ['image/jpeg','image/png','image/webp'], limit: '5mb' })
 app.use((req, res, next) => {
   const isStripeWebhook = req.path === '/api/billing/webhooks/stripe'
     || req.path === '/api/subscription/webhooks/stripe'
@@ -90,6 +92,9 @@ app.use((req, res, next) => {
       })
     }
     return next()
+  }
+  if (/^\/api\/v2\/models\/[^/]+\/images\/(?:original|thumb)\/upload$/.test(req.path)) {
+    return modelImageBinaryParser(req, res, next)
   }
   return jsonParser(req, res, next)
 })
@@ -136,6 +141,7 @@ app.use('/api', agendaV2Routes)
 app.use('/api', financialV2Routes)
 app.use('/api', materialUnitsRoutes)
 app.use('/api/v2/models', normalizeModelsV2BaseMeters)
+app.use('/api/v2', modelsV2ImageUploadRoutes)
 app.use('/api/v2', modelsV2Routes)
 app.use('/api/v2', quotesV2Routes)
 app.use('/api/v2', personalizationV2Routes)
