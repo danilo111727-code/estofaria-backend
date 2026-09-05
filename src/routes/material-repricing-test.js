@@ -43,11 +43,17 @@ async function repriceModelsByMaterial(companyId, material) {
     throw err
   }
 
+  const materialId = String(material.id)
+  const materialName = text(material.name)
+  const materialUnit = text(material.unit).toLowerCase()
+  const materialPrice = Math.max(0, Math.round(number(material.price_cents, 0)))
+
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
 
-    const affected = await client.query(`
+    let matchMode = 'id'
+    let affected = await client.query(`
       SELECT DISTINCT mm.model_id
       FROM app_model_materials_v2 mm
       JOIN app_models_v2 m
@@ -56,39 +62,64 @@ async function repriceModelsByMaterial(companyId, material) {
       WHERE mm.company_id = $1
         AND mm.material_id = $2
         AND m.active = TRUE
-    `, [companyId, String(material.id)])
+    `, [companyId, materialId])
+
+    if (!affected.rows.length && materialName && materialUnit) {
+      matchMode = 'name_unit'
+      affected = await client.query(`
+        SELECT DISTINCT mm.model_id
+        FROM app_model_materials_v2 mm
+        JOIN app_models_v2 m
+          ON m.id = mm.model_id
+         AND m.company_id = mm.company_id
+        WHERE mm.company_id = $1
+          AND LOWER(TRIM(mm.material_name)) = LOWER(TRIM($2))
+          AND LOWER(TRIM(mm.unit)) = LOWER(TRIM($3))
+          AND m.active = TRUE
+      `, [companyId, materialName, materialUnit])
+    }
 
     if (!affected.rows.length) {
       await client.query('COMMIT')
-      return { affectedModels: 0 }
+      console.log(`[material-repricing] material=${materialId} nome="${materialName}" unidade="${materialUnit}" modelos=0`)
+      return { affectedModels: 0, matchMode: 'none' }
     }
 
-    await client.query(`
-      UPDATE app_model_materials_v2 mm
-      SET material_name = $3,
-          unit = $4,
-          unit_price_cents = CASE
-            WHEN mm.is_free_cost = TRUE THEN mm.unit_price_cents
-            ELSE $5
-          END,
-          total_cents = CASE
-            WHEN mm.is_free_cost = TRUE THEN mm.total_cents
-            ELSE ROUND(mm.quantity * $5)::bigint
-          END,
-          updated_at = NOW()
-      FROM app_models_v2 m
-      WHERE mm.model_id = m.id
-        AND mm.company_id = m.company_id
-        AND mm.company_id = $1
-        AND mm.material_id = $2
-        AND m.active = TRUE
-    `, [
-      companyId,
-      String(material.id),
-      text(material.name),
-      text(material.unit).toLowerCase(),
-      Math.max(0, Math.round(number(material.price_cents, 0)))
-    ])
+    const modelIds = affected.rows.map(row => String(row.model_id))
+
+    if (matchMode === 'id') {
+      await client.query(`
+        UPDATE app_model_materials_v2 mm
+        SET material_name = $3,
+            unit = $4,
+            unit_price_cents = CASE WHEN mm.is_free_cost = TRUE THEN mm.unit_price_cents ELSE $5 END,
+            total_cents = CASE WHEN mm.is_free_cost = TRUE THEN mm.total_cents ELSE ROUND(mm.quantity * $5)::bigint END,
+            updated_at = NOW()
+        FROM app_models_v2 m
+        WHERE mm.model_id = m.id
+          AND mm.company_id = m.company_id
+          AND mm.company_id = $1
+          AND mm.material_id = $2
+          AND m.active = TRUE
+      `, [companyId, materialId, materialName, materialUnit, materialPrice])
+    } else {
+      await client.query(`
+        UPDATE app_model_materials_v2 mm
+        SET material_id = $2,
+            material_name = $3,
+            unit = $4,
+            unit_price_cents = CASE WHEN mm.is_free_cost = TRUE THEN mm.unit_price_cents ELSE $5 END,
+            total_cents = CASE WHEN mm.is_free_cost = TRUE THEN mm.total_cents ELSE ROUND(mm.quantity * $5)::bigint END,
+            updated_at = NOW()
+        FROM app_models_v2 m
+        WHERE mm.model_id = m.id
+          AND mm.company_id = m.company_id
+          AND mm.company_id = $1
+          AND LOWER(TRIM(mm.material_name)) = LOWER(TRIM($3))
+          AND LOWER(TRIM(mm.unit)) = LOWER(TRIM($4))
+          AND m.active = TRUE
+      `, [companyId, materialId, materialName, materialUnit, materialPrice])
+    }
 
     await client.query(`
       UPDATE app_models_v2 m
@@ -106,10 +137,11 @@ async function repriceModelsByMaterial(companyId, material) {
       WHERE m.company_id = $1
         AND m.id = totals.model_id
         AND m.active = TRUE
-    `, [companyId, affected.rows.map(row => String(row.model_id))])
+    `, [companyId, modelIds])
 
     await client.query('COMMIT')
-    return { affectedModels: affected.rows.length }
+    console.log(`[material-repricing] material=${materialId} nome="${materialName}" unidade="${materialUnit}" modelos=${modelIds.length} match=${matchMode}`)
+    return { affectedModels: modelIds.length, matchMode }
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {})
     throw err
@@ -159,7 +191,8 @@ async function updateMaterialAndModels(req, res, next) {
 
     return res.json({
       ...row,
-      models_v2_repriced: repriced.affectedModels
+      models_v2_repriced: repriced.affectedModels,
+      models_v2_match: repriced.matchMode
     })
   } catch (err) {
     next(err)
