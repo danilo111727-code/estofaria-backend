@@ -195,3 +195,4 @@ router.put('/materials/:id', requireAuth, updateMaterialAndModels)
 router.patch('/materials/:id', requireAuth, updateMaterialAndModels)
 
 module.exports = router
+module.exports.updateMaterialAndModels = updateMaterialAndModels
