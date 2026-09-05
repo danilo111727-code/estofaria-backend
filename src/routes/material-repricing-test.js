@@ -69,8 +69,8 @@ async function repriceModelsForMaterial(companyId, previousMaterial, updatedMate
         SET material_id = $2,
             material_name = $3,
             unit = $4,
-            unit_price_cents = $5,
-            total_cents = ROUND(mm.quantity * $5)::bigint,
+            unit_price_cents = $5::bigint,
+            total_cents = ROUND(mm.quantity * ($5::numeric))::bigint,
             updated_at = NOW()
         WHERE mm.company_id = $1
           AND mm.is_free_cost = FALSE
