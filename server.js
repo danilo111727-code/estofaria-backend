@@ -83,6 +83,7 @@ app.use((req, res, next) => {
 app.use(cors(corsOptions))
 app.options('*', cors(corsOptions))
 const jsonParser = express.json({ limit: '1mb' })
+const modelImageBinaryParser = express.raw({ type: ['image/jpeg','image/png','image/webp'], limit: '5mb' })
 app.use((req, res, next) => {
   const isStripeWebhook = req.path === '/api/billing/webhooks/stripe'
     || req.path === '/api/subscription/webhooks/stripe'
@@ -96,6 +97,9 @@ app.use((req, res, next) => {
       })
     }
     return next()
+  }
+  if (/^\/api\/v2\/models\/[^/]+\/images\/(?:original|thumb)\/upload$/.test(req.path)) {
+    return modelImageBinaryParser(req, res, next)
   }
   return jsonParser(req, res, next)
 })
@@ -218,47 +222,25 @@ async function start() {
             if (legacyCount) {
               legacyStore.auditLogs = []
               storeLib.writeStore(legacyStore)
-              await pg.flushNow()
             }
-            return { ...result, legacy_cleared: legacyCount }
+            return result
           }
         }
       ]
     })
-    auditV2Db.enableWrites()
-
-    console.log('[server] Models V2, Quotes V2, Personalização V2, Agenda V2, Financeiro V2, Auditoria V2 e Dashboard V2 prontos')
-
-    if (String(process.env.PERSONALIZATION_V2_SELF_TEST_ON_START || '') === '1') {
-      await runPersonalizationV2SelfTest()
-    }
-    if (String(process.env.R2_SMOKE_TEST_ON_START || '') === '1') {
-      await runR2SmokeTest()
-    }
-
-    process.on('SIGTERM', async () => {
-      console.log('[server] SIGTERM — salvando dados pendentes...')
-      await pg.flushNow().catch(console.error)
-      process.exit(0)
-    })
-    process.on('SIGINT', async () => {
-      console.log('[server] SIGINT — salvando dados pendentes...')
-      await pg.flushNow().catch(console.error)
-      process.exit(0)
-    })
+    await runPersonalizationV2SelfTest()
+    await runR2SmokeTest()
   } else {
-    console.log('[server] DATABASE_URL não configurada — usando store.json')
-    storeLib.ensureStore()
-    storeLib.bootstrapStore()
+    console.warn('[server] DATABASE_URL ausente — usando store em arquivo')
   }
 
-  const port = Number(process.env.PORT || 8787)
-  app.listen(port, () => {
-    console.log(`Estofaria SaaS backend rodando na porta ${port} (storage: ${process.env.DATABASE_URL ? 'postgresql' : 'file'})`)
+  const port = Number(process.env.PORT || 10000)
+  app.listen(port, '0.0.0.0', () => {
+    console.log(`[server] listening on ${port}`)
   })
 }
 
 start().catch(err => {
-  console.error('[server] Erro fatal na inicialização:', err)
+  console.error('[server] fatal startup error:', err)
   process.exit(1)
 })
