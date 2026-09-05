@@ -84,7 +84,7 @@ async function repriceModelsForMaterial(companyId, previousMaterial, updatedMate
           AND (
             mm.material_id = $2
             OR (
-              $8 = TRUE
+              $7 = TRUE
               AND (
                 LOWER(TRIM(mm.material_name)) = LOWER(TRIM($6))
                 OR LOWER(TRIM(mm.material_name)) = LOWER(TRIM($3))
@@ -125,7 +125,6 @@ async function repriceModelsForMaterial(companyId, previousMaterial, updatedMate
       String(updatedMaterial.unit),
       Number(updatedMaterial.price_cents || 0),
       String(previousMaterial.name || ''),
-      String(previousMaterial.unit || ''),
       allowNameFallback
     ])
 
