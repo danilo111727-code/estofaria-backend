@@ -52,7 +52,8 @@ function parseAllowedOrigins() {
 
 const allowedOrigins = parseAllowedOrigins()
 const disposableTestOrigins = new Set([
-  'https://adicionais-exp.estofaria-frontend.pages.dev'
+  'https://adicionais-exp.estofaria-frontend.pages.dev',
+  'https://consumos-exp.estofaria-frontend.pages.dev'
 ])
 const corsOptions = {
   origin(origin, callback) {
