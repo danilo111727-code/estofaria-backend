@@ -11,6 +11,12 @@ const router = express.Router()
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 const MAX_BYTES = { original: 5 * 1024 * 1024, thumb: 1024 * 1024 }
 
+const DEFAULT_MATERIAL_NAME_MAP = new Map([
+  ['tecido clássico', 'Tecido com custo-benefício'],
+  ['tecido premium', 'Tecido de médio custo'],
+  ['tecido alto padrão', 'Tecido de alto custo']
+])
+
 function canWriteModel(user) {
   return hasMasterAccess(user) || hasPermission(user, 'precificacao')
 }
@@ -33,6 +39,22 @@ function text(value, fallback = '') {
 function number(value, fallback = 0) {
   const n = Number(value)
   return Number.isFinite(n) ? n : fallback
+}
+
+function normalizeDefaultMaterialNames(store, companyId) {
+  if (!Array.isArray(store.materials)) store.materials = []
+  let changed = false
+  const now = storeLib.nowIso()
+  store.materials.forEach(material => {
+    if (String(material.company_id) !== String(companyId)) return
+    const current = text(material.name).toLocaleLowerCase('pt-BR')
+    const replacement = DEFAULT_MATERIAL_NAME_MAP.get(current)
+    if (!replacement || replacement === material.name) return
+    material.name = replacement
+    material.updated_at = now
+    changed = true
+  })
+  return changed
 }
 
 async function repriceModelsByMaterial(companyId, material) {
@@ -198,6 +220,24 @@ async function updateMaterialAndModels(req, res, next) {
     next(err)
   }
 }
+
+router.get('/materials', requireAuth, (req, res, next) => {
+  try {
+    const companyId = companyIdFor(req)
+    if (!companyId) return next()
+    const store = storeLib.readStore()
+    if (!Array.isArray(store.materials)) store.materials = []
+    const rowsForCompany = store.materials.filter(item => String(item.company_id) === String(companyId))
+    if (!rowsForCompany.length) return next()
+    if (normalizeDefaultMaterialNames(store, companyId)) storeLib.writeStore(store)
+    const rows = store.materials
+      .filter(item => String(item.company_id) === String(companyId))
+      .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR'))
+    return res.json(rows)
+  } catch (err) {
+    next(err)
+  }
+})
 
 router.put('/materials/:id', requireAuth, updateMaterialAndModels)
 router.patch('/materials/:id', requireAuth, updateMaterialAndModels)
