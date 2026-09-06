@@ -8,7 +8,8 @@ const router = express.Router()
 
 const DEFAULT_UNITS = [
   'metro','metro quadrado','centímetro','quilograma','grama',
-  'unidade','par','litro','mililitro','rolo','peça','caixa','placa','fardo'
+  'unidade','par','dúzia','litro','mililitro','rolo','peça','caixa','placa','fardo',
+  'pacote','jogo','kit'
 ]
 
 function normalizeUnit(value){
@@ -41,7 +42,7 @@ function getOrCreateSet(store, companyId){
     }
     sets.push(row)
   }
-  row.units = normalizeUnits(row.units)
+  row.units = normalizeUnits(DEFAULT_UNITS.concat(Array.isArray(row.units) ? row.units : []))
   return row
 }
 
@@ -55,8 +56,13 @@ router.get('/material-units', (req, res) => {
   const existing = Array.isArray(store.materialUnitSets)
     ? store.materialUnitSets.find(item => String(item.company_id) === companyId)
     : null
+  const before = existing && Array.isArray(existing.units) ? JSON.stringify(normalizeUnits(existing.units)) : ''
   const row = getOrCreateSet(store, companyId)
-  if(!existing) writeStore(store)
+  const after = JSON.stringify(row.units)
+  if(!existing || before !== after) {
+    row.updated_at = nowIso()
+    writeStore(store)
+  }
   return res.json({ units: row.units })
 })
 
@@ -67,7 +73,7 @@ router.put('/material-units', (req, res) => {
 
   const store = readStore()
   const row = getOrCreateSet(store, companyId)
-  row.units = normalizeUnits(req.body.units)
+  row.units = normalizeUnits(DEFAULT_UNITS.concat(req.body.units))
   row.updated_at = nowIso()
 
   if(Array.isArray(store.auditLogs)){
