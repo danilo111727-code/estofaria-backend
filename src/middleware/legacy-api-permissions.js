@@ -23,6 +23,10 @@ function isLegacyModelCrudPath(path) {
   return path === '/models' || /^\/models\/[^/]+$/.test(path)
 }
 
+function isLegacyModelPersonalizationPath(path) {
+  return /^\/models\/[^/]+\/personalization-items(?:\/[^/]+)?$/.test(path)
+}
+
 function requiredPermissionsFor(method, path) {
   const read = isReadMethod(method)
 
@@ -32,7 +36,7 @@ function requiredPermissionsFor(method, path) {
     return read ? ['material', 'precificacao'] : ['material']
   }
 
-  if (/^\/models\/[^/]+\/personalization-items(?:\/[^/]+)?$/.test(path)) {
+  if (isLegacyModelPersonalizationPath(path)) {
     return read ? MODEL_READ_PERMISSIONS : ['itens-personalizacao']
   }
 
@@ -57,12 +61,12 @@ function requiredPermissionsFor(method, path) {
 function legacyApiPermissions(req, res, next) {
   const path = apiPath(req)
 
-  // Models V2 é a única fonte de gravação. O legado permanece acessível apenas
-  // para leitura/rollback durante a janela de validação da migração.
-  if (isLegacyModelCrudPath(path) && !isReadMethod(req.method)) {
+  // Teste oficial Models V2: nenhuma rota legada de modelos ou personalização
+  // fica disponível. O objetivo é provar que o frontend depende apenas de V2.
+  if (isLegacyModelCrudPath(path) || isLegacyModelPersonalizationPath(path)) {
     return requireAuth(req, res, () => res.status(410).json({
-      error: 'legacy_models_read_only',
-      message: 'Gravação de modelos no legado foi desativada. Use Models V2.'
+      error: 'legacy_models_disabled',
+      message: 'Rotas legadas de modelos foram desativadas. Use Models V2.'
     }))
   }
 
@@ -81,5 +85,6 @@ function legacyApiPermissions(req, res, next) {
 legacyApiPermissions.requiredPermissionsFor = requiredPermissionsFor
 legacyApiPermissions.apiPath = apiPath
 legacyApiPermissions.isLegacyModelCrudPath = isLegacyModelCrudPath
+legacyApiPermissions.isLegacyModelPersonalizationPath = isLegacyModelPersonalizationPath
 
 module.exports = legacyApiPermissions
