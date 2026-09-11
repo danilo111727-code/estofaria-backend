@@ -1,6 +1,14 @@
 'use strict'
 
 const PLAN_CATALOG = Object.freeze({
+  individual: Object.freeze({
+    code: 'individual',
+    name: 'Plano Individual',
+    monthly_price_cents: 8990,
+    currency: 'brl',
+    interval: 'month',
+    seats_limit: 1
+  }),
   gestao: Object.freeze({
     code: 'gestao',
     name: 'Plano Gestão',
