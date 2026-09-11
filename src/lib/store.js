@@ -71,9 +71,14 @@ function nowIso(){
 }
 
 function planPreset(planCode){
-  return String(planCode || '').toLowerCase().includes('empresarial')
-    ? { code:'empresarial', name:'Plano Empresarial', seats_limit:null, monthly_price_cents:39900 }
-    : { code:'gestao', name:'Plano Gestão', seats_limit:2, monthly_price_cents:14900 }
+  const code = String(planCode || '').toLowerCase()
+  if(code.includes('individual')){
+    return { code:'individual', name:'Plano Individual', seats_limit:1, monthly_price_cents:8990 }
+  }
+  if(code.includes('empresarial')){
+    return { code:'empresarial', name:'Plano Empresarial', seats_limit:null, monthly_price_cents:39900 }
+  }
+  return { code:'gestao', name:'Plano Gestão', seats_limit:2, monthly_price_cents:14900 }
 }
 
 function upsertAudit(store, entry){
