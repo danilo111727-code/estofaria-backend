@@ -10,6 +10,7 @@ const normalizeModelsV2BaseMeters = require('./src/middleware/models-v2-base-met
 const legacyApiPermissions = require('./src/middleware/legacy-api-permissions')
 const materialRepricingAfterSave = require('./src/middleware/material-repricing-after-save')
 const teamManagementPermissions = require('./src/middleware/team-management-permissions')
+const registerWhatsapp = require('./src/middleware/register-whatsapp')
 const modelsV2Db = require('./src/lib/models-v2-db')
 const quotesV2Db = require('./src/lib/quotes-v2-db')
 const personalizationV2Db = require('./src/lib/personalization-v2-db')
@@ -133,6 +134,7 @@ app.get('/api/health', (_req, res) => {
 
 app.use('/api/auth/team', teamManagementPermissions)
 app.use('/api', companyDeletionRoutes)
+app.use('/api/auth/register', registerWhatsapp(storeLib))
 app.use('/api/auth', authRoutes)
 app.use('/api/saas', auditV2Routes)
 app.use('/api/saas', companyNameRoutes)
