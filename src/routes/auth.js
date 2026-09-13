@@ -12,21 +12,6 @@ const router = express.Router()
 const BUSINESS_MODULES = ['painel','vendedor','agenda','material','precificacao','catalogo','itens-personalizacao','assinatura','financeiro','configuracao']
 const RATE_LIMIT_BUCKETS = new Map()
 
-const DISPOSABLE_PREVIEW_KEY = 'descartavel-master'
-const DISPOSABLE_PREVIEW_ORIGIN = 'https://descartavel-master.estofaria-frontend.pages.dev'
-
-function disposableSignupPolicy(store, req){
-  const preview = String(req.query?.preview || '').trim().toLowerCase()
-  const origin = String(req.get('origin') || '').trim().toLowerCase()
-  if(preview !== DISPOSABLE_PREVIEW_KEY || origin !== DISPOSABLE_PREVIEW_ORIGIN) return null
-  const saved = store.billingConfig?.disposable_master_signup || {}
-  const days = Math.round(Number(saved.trial_days || 60))
-  return {
-    card_required: saved.card_required !== false,
-    trial_days: Number.isFinite(days) ? Math.max(1, Math.min(365, days)) : 60
-  }
-}
-
 function normalizeText(value, max = 160){
   return String(value || '').replace(/\s+/g, ' ').trim().slice(0, max)
 }
@@ -211,12 +196,6 @@ router.post('/register', (req, res) => {
   const companyId = uuidv4()
   const userId = uuidv4()
   const plan = planPreset(store.billingConfig.default_plan_code || 'gestao')
-  const signupPolicy = disposableSignupPolicy(store, req)
-  const startsWithoutCard = Boolean(signupPolicy && signupPolicy.card_required === false)
-  const trialStartedAt = startsWithoutCard ? nowIso() : ''
-  const trialEndsAt = startsWithoutCard
-    ? new Date(Date.now() + signupPolicy.trial_days * 24 * 60 * 60 * 1000).toISOString()
-    : ''
 
   const user = {
     id: userId,
@@ -242,13 +221,9 @@ router.post('/register', (req, res) => {
     owner_phone: '',
     plan_code: plan.code,
     plan_name: plan.name,
-    billing_mode: startsWithoutCard ? 'trial_no_card' : 'stripe',
-    financial_status: startsWithoutCard ? 'trialing' : 'pending_payment',
-    access_status: startsWithoutCard ? 'active' : 'pending_payment',
-    trial_started_at: trialStartedAt,
-    trial_ends_at: trialEndsAt,
-    signup_card_required: signupPolicy ? signupPolicy.card_required : true,
-    signup_trial_days: signupPolicy ? signupPolicy.trial_days : 60,
+    billing_mode: 'stripe',
+    financial_status: 'pending_payment',
+    access_status: 'pending_payment',
     seats_limit: plan.seats_limit,
     monthly_price_cents: plan.monthly_price_cents,
     notes: 'Conta criada pelo fluxo de cadastro SaaS.',
@@ -278,12 +253,7 @@ router.post('/register', (req, res) => {
   })
   writeStore(store)
   sendEmail({ to: email, ...welcomeEmail(nome, empresa) }).catch(() => {})
-  res.status(201).json({
-    token: issueToken(user),
-    user: sanitizeUser(enrichUserForResponse(store, user)),
-    signup_policy: signupPolicy || undefined,
-    trial_ends_at: trialEndsAt || undefined
-  })
+  res.status(201).json({ token: issueToken(user), user: sanitizeUser(enrichUserForResponse(store, user)) })
 })
 
 function handleForgotPassword(req, res){
