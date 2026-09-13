@@ -31,11 +31,13 @@ function getCompanyFromSession(store, req){
 
 function buildSubscriptionPayload(company, store, req){
   const cfg = store.billingConfig || {}
+  const trialEnabled = cfg.trial_enabled !== false
   if(!company){
     return {
       subscription: {
         status: cfg.enabled === false ? 'inactive' : 'trialing',
         payment_provider: cfg.payment_provider || 'stripe',
+        trial_enabled: trialEnabled,
         trial_days: Number(cfg.trial_days || 30),
         checkout_url: cfg.payment_link || '',
         payment_link: cfg.payment_link || '',
@@ -55,6 +57,7 @@ function buildSubscriptionPayload(company, store, req){
       payment_provider: cfg.payment_provider || company.billing_mode || 'stripe',
       next_charge_at: company.next_charge_at || '',
       grace_until: company.manual_grace_until || '',
+      trial_enabled: trialEnabled,
       trial_days: Number(cfg.trial_days || 30),
       checkout_url: cfg.payment_link || `${appBaseUrl(req)}/checkout-simulado?company=${encodeURIComponent(company.id)}`,
       payment_link: cfg.payment_link || `${appBaseUrl(req)}/checkout-simulado?company=${encodeURIComponent(company.id)}`,
@@ -81,6 +84,7 @@ function buildLeadPayload(lead, checkoutUrl, company, cfg){
     lead,
     subscription: {
       status: company?.financial_status || 'trialing',
+      trial_enabled: cfg.trial_enabled !== false,
       trial_days: Number(cfg.trial_days || 30),
       payment_provider: cfg.payment_provider || 'stripe',
       checkout_url: checkoutUrl,
@@ -136,8 +140,6 @@ function handleCheckout(req, res){
     company.monthly_price_cents = plan.monthly_price_cents
     company.seats_limit = plan.seats_limit
     company.billing_mode = 'stripe'
-    // access_status e financial_status só são atualizados pelo webhook Stripe,
-    // nunca pelo simples preenchimento do formulário de checkout.
 
     upsertAudit(store, {
       company_id: company.id,
@@ -163,19 +165,25 @@ function handleCheckout(req, res){
 
 router.get('/public', (req, res) => {
   const store = readStore()
-  res.json(store.billingConfig)
+  res.json({ ...(store.billingConfig || {}), trial_enabled: store.billingConfig?.trial_enabled !== false })
 })
 
 router.get('/config', requireAuth, requireMaster, requirePermission('billing.read'), (req, res) => {
-    const store = readStore()
-    res.json(store.billingConfig || {})
-  })
-
-  router.put('/config', requireAuth, requireMaster, requirePermission('billing.write'), (req, res) => {
   const store = readStore()
+  res.json({ ...(store.billingConfig || {}), trial_enabled: store.billingConfig?.trial_enabled !== false })
+})
+
+router.put('/config', requireAuth, requireMaster, requirePermission('billing.write'), (req, res) => {
+  const store = readStore()
+  const next = { ...req.body }
+  if(Object.prototype.hasOwnProperty.call(next, 'trial_enabled')) next.trial_enabled = next.trial_enabled !== false
+  if(Object.prototype.hasOwnProperty.call(next, 'trial_days')){
+    const days = Number(next.trial_days)
+    next.trial_days = Number.isFinite(days) ? Math.max(1, Math.min(365, Math.round(days))) : Number(store.billingConfig?.trial_days || 60)
+  }
   store.billingConfig = {
     ...store.billingConfig,
-    ...req.body,
+    ...next,
     updated_at: nowIso(),
     updated_by: req.user.email
   }
@@ -221,7 +229,6 @@ router.post('/stripe/create-checkout', requireAuth, async (req, res) => {
   const store = readStore()
   const company = getCompanyFromSession(store, req)
   if(!company) return res.status(404).json({ error:'company_not_found', message:'Empresa não encontrada.' })
-  // Resolve o Price ID por plano: env var específica > env var genérica > billingConfig map > billingConfig single
   const planCode = (company.plan_code || store.billingConfig?.default_plan_code || 'gestao').toLowerCase()
   const priceId = process.env[`STRIPE_PRICE_ID_${planCode.toUpperCase()}`]
     || process.env.STRIPE_PRICE_ID
@@ -230,25 +237,33 @@ router.post('/stripe/create-checkout', requireAuth, async (req, res) => {
   if(!priceId) return res.status(503).json({ error:'price_not_configured', message:'Plano não configurado.' })
   const frontendUrl = process.env.FRONTEND_URL || 'https://estofaria-digital.pages.dev'
   try {
-    const trialDays = Number(store.billingConfig?.trial_days || 60)
+    const trialEnabled = store.billingConfig?.trial_enabled !== false
+    const trialDays = Math.max(1, Number(store.billingConfig?.trial_days || 60))
+    const subscriptionData = trialEnabled
+      ? {
+          trial_period_days: trialDays,
+          trial_settings: {
+            end_behavior: { missing_payment_method: 'cancel' }
+          }
+        }
+      : {}
+
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       payment_method_types: ['card'],
       payment_method_collection: 'always',
       line_items: [{ price: priceId, quantity: 1 }],
-      subscription_data: {
-        trial_period_days: trialDays,
-        trial_settings: {
-          end_behavior: { missing_payment_method: 'cancel' }
-        }
+      subscription_data: subscriptionData,
+      metadata: {
+        company_id: String(company.id),
+        trial_enabled: trialEnabled ? '1' : '0'
       },
-      metadata: { company_id: String(company.id) },
       customer_email: company.owner_email || req.user?.email || undefined,
       success_url: `${frontendUrl}/stripe-retorno/?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${frontendUrl}/stripe-retorno/?cancelado=1`,
       locale: 'pt-BR'
     })
-    res.json({ url: session.url, session_id: session.id })
+    res.json({ url: session.url, session_id: session.id, trial_enabled: trialEnabled, trial_days: trialEnabled ? trialDays : 0 })
   } catch(err) {
     res.status(500).json({ error:'stripe_error', message: err.message })
   }
@@ -290,6 +305,7 @@ router.post('/stripe/confirm-checkout', requireAuth, async (req, res) => {
     company.access_status = 'active'
     company.billing_mode = 'stripe'
     if(subscription?.trial_end) company.trial_ends_at = new Date(Number(subscription.trial_end) * 1000).toISOString()
+    else company.trial_ends_at = ''
     if(subscription?.current_period_end) company.next_charge_at = new Date(Number(subscription.current_period_end) * 1000).toISOString()
     else if(subscription?.trial_end) company.next_charge_at = new Date(Number(subscription.trial_end) * 1000).toISOString()
     company.updated_at = nowIso()
@@ -358,8 +374,10 @@ router.post('/webhooks/stripe', express.raw({ type: 'application/json' }), (req,
       const stripeSubId = obj.subscription || ''
       if(stripeCustomerId) company.stripe_customer_id = stripeCustomerId
       if(stripeSubId) company.stripe_subscription_id = stripeSubId
-      company.financial_status = 'trialing'
+      const checkoutTrialEnabled = String(obj.metadata?.trial_enabled || '1') !== '0'
+      company.financial_status = checkoutTrialEnabled ? 'trialing' : 'active'
       company.access_status = 'active'
+      if(!checkoutTrialEnabled) company.trial_ends_at = ''
     }
     if(type === 'invoice.paid'){
       company.financial_status = 'active'
