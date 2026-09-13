@@ -46,6 +46,13 @@ function hasInactiveMembership(store, user){
   return Boolean(membership && String(membership.status || '').toLowerCase() === 'inactive')
 }
 
+function hasExpiredNoCardTrial(company){
+  if(company?.signup_card_required !== false) return false
+  if(String(company?.financial_status || '').toLowerCase() !== 'trialing') return false
+  const end = new Date(company?.trial_ends_at || '').getTime()
+  return Number.isFinite(end) && end <= Date.now()
+}
+
 function sessionVersionMatches(payload, user){
   return Number(payload?.session_version || 0) === Number(user?.session_version || 0)
 }
@@ -117,12 +124,15 @@ function requireAuth(req, res, next){
     if(!hasMasterAccess(req.user) && !isSubscriptionExempt(req)){
       const company = store.companies.find(item => String(item.id) === String(user.company_id || ''))
       const HARD_BLOCKED = ['blocked','suspended','disabled']
-      if(company && HARD_BLOCKED.includes(company.access_status)){
+      const expiredNoCardTrial = hasExpiredNoCardTrial(company)
+      if(company && (HARD_BLOCKED.includes(company.access_status) || expiredNoCardTrial)){
         return res.status(402).json({
           error:'subscription_required',
-          message:'Sua assinatura está inativa. Acesse a tela de Assinatura para regularizar.',
-          access_status: company.access_status,
-          financial_status: company.financial_status,
+          message: expiredNoCardTrial
+            ? 'Seu período grátis terminou. Acesse a tela de Assinatura para continuar.'
+            : 'Sua assinatura está inativa. Acesse a tela de Assinatura para regularizar.',
+          access_status: expiredNoCardTrial ? 'blocked' : company.access_status,
+          financial_status: expiredNoCardTrial ? 'trial_expired' : company.financial_status,
           redirect: '/assinatura/'
         })
       }

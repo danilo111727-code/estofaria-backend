@@ -35,6 +35,43 @@ function frontendBaseUrl(){
   return String(process.env.FRONTEND_URL || process.env.APP_URL || 'https://estofaria-digital.pages.dev').replace(/\/$/, '')
 }
 
+const DISPOSABLE_PREVIEW_KEY = 'descartavel-master'
+const DISPOSABLE_PREVIEW_ORIGIN = 'https://descartavel-master.estofaria-frontend.pages.dev'
+
+function isDisposablePreview(req){
+  const preview = String(req.query?.preview || req.body?.preview || '').trim().toLowerCase()
+  const origin = String(req.get('origin') || '').trim().toLowerCase()
+  return preview === DISPOSABLE_PREVIEW_KEY && origin === DISPOSABLE_PREVIEW_ORIGIN
+}
+
+function clampTrialDays(value, fallback = TRIAL_DAYS){
+  const days = Math.round(Number(value))
+  return Number.isFinite(days) ? Math.max(1, Math.min(365, days)) : fallback
+}
+
+function getDisposableSignupPolicy(store, req){
+  if(!isDisposablePreview(req)) return null
+  const saved = store.billingConfig?.disposable_master_signup || {}
+  return {
+    card_required: saved.card_required !== false,
+    trial_days: clampTrialDays(saved.trial_days, TRIAL_DAYS),
+    preview_scope: DISPOSABLE_PREVIEW_KEY
+  }
+}
+
+function publicBillingConfigForRequest(store, req){
+  const base = publicBillingConfig(store.billingConfig || {})
+  const preview = getDisposableSignupPolicy(store, req)
+  return preview ? { ...base, ...preview } : base
+}
+
+function noCardTrialExpired(company){
+  if(company?.signup_card_required !== false) return false
+  if(String(company?.financial_status || '').toLowerCase() !== 'trialing') return false
+  const end = new Date(company?.trial_ends_at || '').getTime()
+  return Number.isFinite(end) && end <= Date.now()
+}
+
 function stripeMode(){
   if(stripeSecretKey.startsWith('sk_test_')) return 'test'
   if(stripeSecretKey.startsWith('sk_live_')) return 'live'
@@ -66,13 +103,14 @@ function getPriceId(store, planCode){
 }
 
 function buildSubscriptionPayload(company, store, req){
-  const cfg = publicBillingConfig(store.billingConfig || {})
+  const cfg = publicBillingConfigForRequest(store, req)
   if(!company){
     return {
       subscription: {
         status: cfg.enabled === false ? 'inactive' : 'trialing',
         payment_provider: 'stripe',
-        trial_days: TRIAL_DAYS,
+        trial_days: Number(cfg.trial_days || TRIAL_DAYS),
+        card_required: cfg.card_required !== false,
         checkout_url: '',
         payment_link: '',
         customer_portal_available: false,
@@ -83,17 +121,21 @@ function buildSubscriptionPayload(company, store, req){
     }
   }
 
+  const expiredNoCardTrial = noCardTrialExpired(company)
+  const effectiveFinancialStatus = expiredNoCardTrial ? 'trial_expired' : (company.financial_status || 'inactive')
+  const effectiveAccessStatus = expiredNoCardTrial ? 'blocked' : (company.access_status || 'inactive')
   return {
     subscription: {
       company_id: company.id,
-      status: company.financial_status || 'inactive',
-      financial_status: company.financial_status || 'inactive',
-      access_status: company.access_status || 'inactive',
+      status: effectiveFinancialStatus,
+      financial_status: effectiveFinancialStatus,
+      access_status: effectiveAccessStatus,
       payment_provider: 'stripe',
       next_charge_at: company.next_charge_at || '',
       grace_until: company.manual_grace_until || '',
       trial_ends_at: company.trial_ends_at || '',
-      trial_days: TRIAL_DAYS,
+      trial_days: Number(company.signup_trial_days || cfg.trial_days || TRIAL_DAYS),
+      card_required: company.signup_card_required !== false,
       checkout_url: '',
       payment_link: '',
       customer_portal_available: Boolean(company.stripe_customer_id),
@@ -209,11 +251,27 @@ router.get('/public', (req, res) => {
 
 router.get('/config', requireAuth, requireMaster, requirePermission('billing.read'), (req, res) => {
   const store = readStore()
-  res.json(publicBillingConfig(store.billingConfig || {}))
+  res.json(publicBillingConfigForRequest(store, req))
 })
 
 router.put('/config', requireAuth, requireMaster, requirePermission('billing.write'), (req, res) => {
   const store = readStore()
+
+  if(isDisposablePreview(req)){
+    const current = getDisposableSignupPolicy(store, req)
+    store.billingConfig = {
+      ...store.billingConfig,
+      disposable_master_signup: {
+        card_required: req.body?.card_required !== false,
+        trial_days: clampTrialDays(req.body?.trial_days, current.trial_days),
+        updated_at: nowIso(),
+        updated_by: req.user.email
+      }
+    }
+    writeStore(store)
+    return res.json(publicBillingConfigForRequest(store, req))
+  }
+
   store.billingConfig = {
     ...store.billingConfig,
     ...req.body,
@@ -277,6 +335,7 @@ router.post('/stripe/create-checkout', requireAuth, async (req, res) => {
     const company = getCompanyFromSession(store, req)
     if(!company) return res.status(404).json({ error:'company_not_found', message:'Empresa não encontrada.' })
 
+    const signupPolicy = getDisposableSignupPolicy(store, req)
     const requestedPlanCode = String(req.body?.plan_code || company.plan_code || store.billingConfig?.default_plan_code || 'gestao').toLowerCase()
     const plan = PLAN_CATALOG[requestedPlanCode]
     if(!plan) return res.status(400).json({ error:'invalid_plan', message:'Plano inválido.' })
@@ -305,17 +364,34 @@ router.post('/stripe/create-checkout', requireAuth, async (req, res) => {
     company.updated_at = nowIso()
     writeStore(store)
 
+    const subscriptionMetadata = { company_id: String(company.id), plan_code: plan.code }
+    let subscriptionData = {
+      trial_period_days: signupPolicy ? signupPolicy.trial_days : TRIAL_DAYS,
+      metadata: subscriptionMetadata,
+      trial_settings: { end_behavior: { missing_payment_method: 'cancel' } }
+    }
+
+    if(signupPolicy && company.signup_card_required === false){
+      const trialEndMs = new Date(company.trial_ends_at || '').getTime()
+      const minimumStripeTrialMs = 2 * 24 * 60 * 60 * 1000
+      if(Number.isFinite(trialEndMs) && trialEndMs - Date.now() >= minimumStripeTrialMs){
+        subscriptionData = {
+          trial_end: Math.floor(trialEndMs / 1000),
+          metadata: subscriptionMetadata,
+          trial_settings: { end_behavior: { missing_payment_method: 'cancel' } }
+        }
+      }else{
+        subscriptionData = { metadata: subscriptionMetadata }
+      }
+    }
+
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       payment_method_types: ['card'],
       payment_method_collection: 'always',
       customer: customerId,
       line_items: [{ price: priceId, quantity: 1 }],
-      subscription_data: {
-        trial_period_days: TRIAL_DAYS,
-        metadata: { company_id: String(company.id), plan_code: plan.code },
-        trial_settings: { end_behavior: { missing_payment_method: 'cancel' } }
-      },
+      subscription_data: subscriptionData,
       metadata: { company_id: String(company.id), plan_code: plan.code },
       success_url: `${frontendBaseUrl()}/stripe-retorno/?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${frontendBaseUrl()}/stripe-retorno/?cancelado=1`,
