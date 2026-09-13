@@ -35,6 +35,20 @@ function frontendBaseUrl(){
   return String(process.env.FRONTEND_URL || process.env.APP_URL || 'https://estofaria-digital.pages.dev').replace(/\/$/, '')
 }
 
+function isDisposableCourtesyPreview(req){
+  return String(req.get('origin') || '').trim().toLowerCase()
+    === 'https://descartavel-master.estofaria-frontend.pages.dev'
+}
+
+function hasUsedManualCourtesy(store, company){
+  if(!company) return false
+  if(String(company.courtesy_until || '').trim()) return true
+  return (store.auditLogs || []).some(item =>
+    String(item.company_id || '') === String(company.id || '')
+    && ['courtesy','endCourtesy'].includes(String(item.action || ''))
+  )
+}
+
 function stripeMode(){
   if(stripeSecretKey.startsWith('sk_test_')) return 'test'
   if(stripeSecretKey.startsWith('sk_live_')) return 'live'
@@ -305,17 +319,23 @@ router.post('/stripe/create-checkout', requireAuth, async (req, res) => {
     company.updated_at = nowIso()
     writeStore(store)
 
+    const subscriptionMetadata = { company_id: String(company.id), plan_code: plan.code }
+    const courtesyAlreadyUsed = isDisposableCourtesyPreview(req) && hasUsedManualCourtesy(store, company)
+    const subscriptionData = courtesyAlreadyUsed
+      ? { metadata: subscriptionMetadata }
+      : {
+          trial_period_days: TRIAL_DAYS,
+          metadata: subscriptionMetadata,
+          trial_settings: { end_behavior: { missing_payment_method: 'cancel' } }
+        }
+
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       payment_method_types: ['card'],
       payment_method_collection: 'always',
       customer: customerId,
       line_items: [{ price: priceId, quantity: 1 }],
-      subscription_data: {
-        trial_period_days: TRIAL_DAYS,
-        metadata: { company_id: String(company.id), plan_code: plan.code },
-        trial_settings: { end_behavior: { missing_payment_method: 'cancel' } }
-      },
+      subscription_data: subscriptionData,
       metadata: { company_id: String(company.id), plan_code: plan.code },
       success_url: `${frontendBaseUrl()}/stripe-retorno/?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${frontendBaseUrl()}/stripe-retorno/?cancelado=1`,
