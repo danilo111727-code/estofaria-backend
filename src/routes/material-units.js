@@ -7,7 +7,7 @@ const { readStore, writeStore, nowIso, upsertAudit } = require('../lib/store')
 const router = express.Router()
 
 const DEFAULT_UNITS = [
-  'metro','metro quadrado','centímetro','quilograma','grama',
+  'metro','metro linear','metro quadrado','centímetro','quilograma','grama',
   'unidade','par','dúzia','litro','mililitro','rolo','peça','caixa','placa','fardo',
   'pacote','jogo','kit'
 ]
