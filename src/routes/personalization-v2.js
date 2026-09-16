@@ -40,7 +40,6 @@ function companyIdFor(req) {
   if (hasMasterAccess(req.user)) {
     return String(req.query?.company_id || req.body?.company_id || req.user?.company_id || '').trim()
   }
-  // Usuário comum nunca escolhe a empresa pelo navegador.
   return String(req.user?.company_id || '').trim()
 }
 
@@ -84,6 +83,36 @@ function handleWriteError(err, res, next) {
   next(err)
 }
 
+function normalizeFoamCatalog(input = {}) {
+  if (!Array.isArray(input.items)) return input
+  return {
+    ...input,
+    items: input.items.map(item => {
+      if (String(item?.category || '').trim().toLowerCase() !== 'espuma') return item
+      return { ...item, unit: 'metro linear' }
+    })
+  }
+}
+
+function foamLinearConsumos(item, modelConfig) {
+  const key = String(item?.name || '').trim().toLowerCase()
+  const saved = modelConfig.consumos?.[key]
+  const result = saved && typeof saved === 'object' && !Array.isArray(saved)
+    ? { ...saved }
+    : {}
+
+  if (String(item?.category || '').trim().toLowerCase() !== 'espuma') return result
+
+  ;(Array.isArray(modelConfig.metragens) ? modelConfig.metragens : []).forEach(rawMeter => {
+    const meter = Number(String(rawMeter).replace(',', '.'))
+    if (!Number.isFinite(meter) || meter <= 0) return
+    const keyMeter = meter.toFixed(meter % 1 === 0 ? 1 : 2)
+    const current = Number(result[keyMeter])
+    if (!Number.isFinite(current) || current <= 0) result[keyMeter] = meter
+  })
+  return result
+}
+
 router.get('/personalization/config', requireRead, requireCompany, async (req, res, next) => {
   try {
     const data = await personalizationDb.getCatalog(req.personalizationV2CompanyId)
@@ -95,9 +124,10 @@ router.get('/personalization/config', requireRead, requireCompany, async (req, r
 
 router.put('/personalization/config', requireWrite, requireCompany, async (req, res, next) => {
   try {
+    const body = normalizeFoamCatalog(req.body || {})
     const data = await personalizationDb.saveCatalog(
       req.personalizationV2CompanyId,
-      req.body || {},
+      body,
       expectedRevision(req.body)
     )
     return res.json(data)
@@ -137,10 +167,11 @@ router.get('/models/:id/personalization-items', requireRead, requireCompany, req
     ])
 
     const items = catalog.items.map(item => {
-      const key = String(item.name || '').trim().toLowerCase()
-      const consumos = modelConfig.consumos?.[key] || {}
+      const isFoam = String(item?.category || '').trim().toLowerCase() === 'espuma'
+      const consumos = foamLinearConsumos(item, modelConfig)
       return {
         ...item,
+        unit: isFoam ? 'metro linear' : item.unit,
         model_id: req.params.id,
         consumos,
         values: { padrao: Number(item.price_cents || 0) },
