@@ -2,7 +2,7 @@
 
 const express = require('express')
 const { hasMasterAccess } = require('../lib/policies')
-const db = require('../lib/dashboard-v2-db')
+const db = require('../lib/dashboard-v2-retro')
 
 const router = express.Router()
 
