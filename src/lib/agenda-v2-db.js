@@ -623,7 +623,39 @@ async function createBlockOrder(companyId,blockId,input={}){
         AND COALESCE(status,'') NOT IN ('entregue','cancelado','indisponivel')
     `,[text(companyId),text(blockId)])
     const occupied = Number(occupiedRes.rows[0]?.count || 0)
+
+    // Diagnóstico temporário apenas no backend de teste:
+    // mostra exatamente o que o banco considera ocupado no bloco.
+    const diagOrdersRes = await client.query(`
+      SELECT id, cliente, status, bloco_id, prod_date, ent_date, created_at, updated_at
+      FROM app_agenda_orders_v2
+      WHERE company_id=$1 AND bloco_id=$2
+      ORDER BY created_at ASC, id ASC
+    `,[text(companyId),text(blockId)])
+    console.log('[AGENDA-DIAG:createBlockOrder]', JSON.stringify({
+      companyId:text(companyId),
+      blockId:text(blockId),
+      qtd_vagas:Number(bloco.qtd_vagas || 0),
+      occupied,
+      allOrders:diagOrdersRes.rows.map(row => ({
+        id:row.id,
+        cliente:row.cliente,
+        status:row.status,
+        bloco_id:row.bloco_id,
+        prod_date:row.prod_date,
+        ent_date:row.ent_date,
+        created_at:row.created_at,
+        updated_at:row.updated_at
+      }))
+    }))
+
     if(occupied >= bloco.qtd_vagas){
+      console.warn('[AGENDA-DIAG:block-full]', JSON.stringify({
+        companyId:text(companyId),
+        blockId:text(blockId),
+        qtd_vagas:Number(bloco.qtd_vagas || 0),
+        occupied
+      }))
       await client.query('ROLLBACK')
       return { full:true, bloco, occupied }
     }
