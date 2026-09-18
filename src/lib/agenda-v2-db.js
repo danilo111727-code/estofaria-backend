@@ -616,6 +616,26 @@ async function createBlockOrder(companyId,blockId,input={}){
       await client.query('ROLLBACK')
       return { notFound:true }
     }
+
+    const sourceQuoteId = text(input.source_quote_id)
+    if(sourceQuoteId){
+      // Serializa tentativas concorrentes do mesmo orçamento e torna o agendamento idempotente.
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[
+        text(companyId) + ':' + sourceQuoteId
+      ])
+      const existingRes = await client.query(`
+        SELECT * FROM app_agenda_orders_v2
+        WHERE company_id=$1 AND source_quote_id=$2
+        ORDER BY created_at DESC
+        LIMIT 1
+      `,[text(companyId),sourceQuoteId])
+      if(existingRes.rows.length){
+        const row = orderFromRow(existingRes.rows[0])
+        await client.query('COMMIT')
+        return { row, alreadyExists:true }
+      }
+    }
+
     const occupiedRes = await client.query(`
       SELECT COUNT(*)::int AS count
       FROM app_agenda_orders_v2
