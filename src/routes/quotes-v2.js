@@ -75,6 +75,30 @@ router.delete('/quotes/:id',async(req,res,next)=>{
   }catch(err){ next(err) }
 })
 
+router.post('/quotes/:id/finalize-and-schedule',async(req,res,next)=>{
+  try{
+    const result=await db.finalizeQuoteAndSchedule(
+      req.quotesV2CompanyId,
+      req.params.id,
+      req.body || {}
+    )
+    if(result.notFound) return res.status(404).json({error:'not_found',message:'Orçamento não encontrado.'})
+    if(result.blockRequired) return res.status(400).json({error:'block_required',message:'Selecione uma vaga da Agenda.'})
+    if(result.blockNotFound) return res.status(404).json({error:'block_not_found',message:'Bloco da Agenda não encontrado.'})
+    if(result.blockFull) return res.status(409).json({
+      error:'block_full',
+      message:'Todas as vagas deste bloco já estão ocupadas.',
+      occupied:result.occupied,
+      capacity:result.capacity
+    })
+    if(result.alreadyOrder) return res.status(409).json({
+      error:'already_order',
+      message:'Este orçamento já foi finalizado por outro fluxo.'
+    })
+    return res.json(result)
+  }catch(err){ next(err) }
+})
+
 router.post('/quotes/:id/convert-to-order',async(req,res,next)=>{
   try{
     const row=await db.updateQuote(req.quotesV2CompanyId,req.params.id,{status:'pedido'})
