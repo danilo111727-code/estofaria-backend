@@ -344,6 +344,216 @@ async function updateQuote(companyId,id,patch={}){
   return getQuote(companyId,id)
 }
 
+
+function agendaOrderFromRow(row){
+  if(!row) return null
+  return {
+    ...(row.payload || {}),
+    id:row.id,
+    company_id:row.company_id,
+    bloco_id:row.bloco_id || undefined,
+    cliente:row.cliente || 'Cliente',
+    descricao:row.descricao || 'Pedido',
+    prod_date:row.prod_date || '',
+    ent_date:row.ent_date || '',
+    status:row.status || 'pendente',
+    tecido:row.tecido || '',
+    qtd:Number(row.qtd || 1),
+    tecido_comprado:Boolean(row.tecido_comprado),
+    source_quote_id:row.source_quote_id || null,
+    created_at:row.created_at,
+    updated_at:row.updated_at
+  }
+}
+
+async function finalizeQuoteAndSchedule(companyId,id,input={}){
+  const blockId=text(input.block_id || input.bloco_id).trim()
+  if(!blockId) return { blockRequired:true }
+
+  const pool=getPool()
+  const client=await pool.connect()
+  let agendaRow=null
+  let blockRow=null
+  try{
+    await client.query('BEGIN')
+
+    // Serializa finalizações concorrentes do mesmo orçamento.
+    const quoteRes=await client.query(`
+      SELECT * FROM app_quotes_v2
+      WHERE company_id=$1 AND id=$2 AND active=TRUE
+      LIMIT 1
+      FOR UPDATE
+    `,[companyId,id])
+    const quoteRow=quoteRes.rows[0]
+    if(!quoteRow){
+      await client.query('ROLLBACK')
+      return { notFound:true }
+    }
+
+    // Idempotência: um orçamento só pode gerar um pedido de Agenda.
+    const existingAgendaRes=await client.query(`
+      SELECT * FROM app_agenda_orders_v2
+      WHERE company_id=$1 AND source_quote_id=$2
+      ORDER BY created_at ASC
+      LIMIT 1
+    `,[companyId,id])
+    const existingAgenda=existingAgendaRes.rows[0]
+    if(existingAgenda){
+      await client.query('COMMIT')
+      return {
+        alreadyFinalized:true,
+        agenda_order:agendaOrderFromRow(existingAgenda),
+        quote:await getQuote(companyId,id)
+      }
+    }
+
+    // Evita reprocessar pedidos antigos que já foram finalizados por outro fluxo.
+    if(String(quoteRow.status || '').toLowerCase()==='pedido'){
+      await client.query('ROLLBACK')
+      return { alreadyOrder:true }
+    }
+
+    // Serializa qualquer inclusão concorrente no mesmo bloco.
+    const blockRes=await client.query(`
+      SELECT * FROM app_agenda_blocos_v2
+      WHERE company_id=$1 AND id=$2
+      LIMIT 1
+      FOR UPDATE
+    `,[companyId,blockId])
+    blockRow=blockRes.rows[0]
+    if(!blockRow){
+      await client.query('ROLLBACK')
+      return { blockNotFound:true }
+    }
+
+    const occupiedRes=await client.query(`
+      SELECT COUNT(*)::int AS count
+      FROM app_agenda_orders_v2
+      WHERE company_id=$1 AND bloco_id=$2
+        AND COALESCE(status,'') NOT IN ('entregue','cancelado','indisponivel')
+    `,[companyId,blockId])
+    const occupied=Number(occupiedRes.rows[0]?.count || 0)
+    const capacity=Math.max(0,Number(blockRow.qtd_vagas || 0))
+    if(occupied >= capacity){
+      await client.query('ROLLBACK')
+      return { blockFull:true, occupied, capacity }
+    }
+
+    const modelRes=await client.query(`
+      SELECT
+        qm.id,
+        qm.model_id,
+        qm.model_name,
+        qm.meters,
+        COUNT(qi.quote_model_id)::int AS items_count
+      FROM app_quote_models_v2 qm
+      LEFT JOIN app_quote_model_items_v2 qi ON qi.quote_model_id=qm.id
+      WHERE qm.company_id=$1 AND qm.quote_id=$2
+      GROUP BY qm.id,qm.model_id,qm.model_name,qm.meters,qm.sort_order
+      ORDER BY qm.sort_order
+    `,[companyId,id])
+
+    const agendaModels=modelRes.rows.map(model=>({
+      id:String(model.model_id || ''),
+      name:String(model.model_name || '').trim()
+    })).filter(model=>model.name)
+
+    const descricao=modelRes.rows.length
+      ? modelRes.rows.map(model=>{
+          const nome=String(model.model_name || 'Modelo').trim()
+          const meters=Number(model.meters || 0)
+          const metragemTxt=meters > 0 ? ' ' + meters.toFixed(2) + 'm' : ''
+          const itemsCount=Number(model.items_count || 0)
+          const extras=itemsCount > 0 ? ' + ' + itemsCount + ' item(ns)' : ''
+          return (nome + metragemTxt + extras).trim()
+        }).join(' | ')
+      : 'Pedido vindo da aba vendedor'
+
+    const finalization=sanitize(
+      input.finalization && typeof input.finalization==='object'
+        ? input.finalization
+        : {}
+    ) || {}
+    const nextPayloadMeta={
+      ...(quoteRow.payload_meta || {}),
+      ...finalization
+    }
+    const totalCents=Math.max(
+      0,
+      Math.round(number(
+        input.total_cents !== undefined ? input.total_cents : quoteRow.total_cents,
+        quoteRow.total_cents
+      ))
+    )
+    const valor=totalCents/100
+
+    const now=new Date().toISOString()
+    const agendaId=crypto.randomUUID()
+    const agendaPayload={
+      id:agendaId,
+      company_id:companyId,
+      bloco_id:blockId,
+      cliente:String(quoteRow.cliente || 'Cliente').trim() || 'Cliente',
+      descricao,
+      prod_date:String(blockRow.data_producao || ''),
+      ent_date:String(blockRow.data_entrega || ''),
+      status:'pendente',
+      tecido:'',
+      qtd:1,
+      tecido_comprado:false,
+      source_quote_id:id,
+      valor,
+      valor_total:valor,
+      modelos:agendaModels,
+      created_at:now,
+      updated_at:now
+    }
+
+    const agendaInsert=await client.query(`
+      INSERT INTO app_agenda_orders_v2 (
+        company_id,id,bloco_id,cliente,descricao,prod_date,ent_date,status,tecido,qtd,
+        tecido_comprado,source_quote_id,payload,created_at,updated_at
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15)
+      RETURNING *
+    `,[
+      companyId,agendaId,blockId,agendaPayload.cliente,descricao,
+      agendaPayload.prod_date,agendaPayload.ent_date,'pendente','',1,false,id,
+      JSON.stringify(agendaPayload),now,now
+    ])
+    agendaRow=agendaInsert.rows[0]
+
+    await client.query(`
+      UPDATE app_quotes_v2
+      SET status='pedido',total_cents=$3,payload_meta=$4::jsonb,updated_at=NOW()
+      WHERE company_id=$1 AND id=$2 AND active=TRUE
+    `,[companyId,id,totalCents,JSON.stringify(nextPayloadMeta)])
+
+    await client.query('COMMIT')
+
+    return {
+      quote:await getQuote(companyId,id),
+      agenda_order:agendaOrderFromRow(agendaRow),
+      bloco:{
+        ...(blockRow.payload || {}),
+        id:blockRow.id,
+        company_id:blockRow.company_id,
+        data_producao:blockRow.data_producao || '',
+        data_entrega:blockRow.data_entrega || '',
+        qtd_vagas:Number(blockRow.qtd_vagas || 0),
+        created_at:blockRow.created_at,
+        updated_at:blockRow.updated_at
+      },
+      occupied:occupied+1,
+      capacity
+    }
+  }catch(err){
+    await client.query('ROLLBACK').catch(()=>{})
+    throw err
+  }finally{
+    client.release()
+  }
+}
+
 async function deleteQuote(companyId,id){
   const pool=getPool()
   const res=await pool.query('DELETE FROM app_quotes_v2 WHERE company_id=$1 AND id=$2 RETURNING id',[companyId,id])
@@ -378,6 +588,7 @@ module.exports={
   getQuote,
   createQuote,
   updateQuote,
+  finalizeQuoteAndSchedule,
   deleteQuote,
   migrateLegacyQuotes,
   sanitize
