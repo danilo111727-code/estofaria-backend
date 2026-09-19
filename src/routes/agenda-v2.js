@@ -108,6 +108,15 @@ router.get('/agenda/blocos',async(req,res,next)=>{
   }catch(err){ next(err) }
 })
 
+router.post('/agenda/orders/:id/entregar',async(req,res,next)=>{
+  try{
+    const result = await db.deliverOrderAndConsumeSlot(req.agendaV2CompanyId,req.params.id)
+    if(result.notFound) return res.status(404).json({error:'not_found',message:'Pedido não encontrado.'})
+    audit(req,'agenda.order.deliver',`Pedido entregue e vaga consumida: ${req.params.id}`)
+    return res.json(result)
+  }catch(err){ next(err) }
+})
+
 router.post('/agenda/blocos',async(req,res,next)=>{
   try{
     const row = await db.createBlock(req.agendaV2CompanyId,req.body || {})
