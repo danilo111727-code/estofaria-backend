@@ -668,11 +668,15 @@ async function createBlockOrder(companyId,blockId,input={}){
   const client = await pool.connect()
   try{
     await client.query('BEGIN')
-    const bloco = await getBlock(companyId,blockId,client)
-    if(!bloco){
+    const lockRes = await client.query(
+      'SELECT id FROM app_agenda_blocos_v2 WHERE company_id=$1 AND id=$2 LIMIT 1 FOR UPDATE',
+      [text(companyId),text(blockId)]
+    )
+    if(!lockRes.rows.length){
       await client.query('ROLLBACK')
       return { notFound:true }
     }
+    const bloco = await getBlock(companyId,blockId,client)
     const occupiedRes = await client.query(`
       SELECT COUNT(*)::int AS count
       FROM app_agenda_orders_v2
