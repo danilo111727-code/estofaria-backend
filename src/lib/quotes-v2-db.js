@@ -391,6 +391,29 @@ async function finalizeQuoteAndSchedule(companyId,id,input={}){
     }
 
     // Idempotência: um orçamento só pode gerar um pedido de Agenda.
+    const finalization=sanitize(
+      input.finalization && typeof input.finalization==='object'
+        ? input.finalization
+        : {}
+    ) || {}
+    const nextPayloadMeta={
+      ...(quoteRow.payload_meta || {}),
+      ...finalization
+    }
+    if(finalization.totais && typeof finalization.totais==='object'){
+      nextPayloadMeta.totais={
+        ...((quoteRow.payload_meta || {}).totais || {}),
+        ...finalization.totais
+      }
+    }
+    const totalCents=Math.max(
+      0,
+      Math.round(number(
+        input.total_cents !== undefined ? input.total_cents : quoteRow.total_cents,
+        quoteRow.total_cents
+      ))
+    )
+
     const existingAgendaRes=await client.query(`
       SELECT * FROM app_agenda_orders_v2
       WHERE company_id=$1 AND source_quote_id=$2
@@ -399,9 +422,16 @@ async function finalizeQuoteAndSchedule(companyId,id,input={}){
     `,[companyId,id])
     const existingAgenda=existingAgendaRes.rows[0]
     if(existingAgenda){
+      // Recupera com segurança uma tentativa cuja Agenda já confirmou.
+      await client.query(`
+        UPDATE app_quotes_v2
+        SET status='pedido',total_cents=$3,payload_meta=$4::jsonb,updated_at=NOW()
+        WHERE company_id=$1 AND id=$2 AND active=TRUE
+      `,[companyId,id,totalCents,JSON.stringify(nextPayloadMeta)])
       await client.query('COMMIT')
       return {
         alreadyFinalized:true,
+        recovered:true,
         agenda_order:agendaOrderFromRow(existingAgenda),
         quote:await getQuote(companyId,id)
       }
@@ -469,22 +499,6 @@ async function finalizeQuoteAndSchedule(companyId,id,input={}){
         }).join(' | ')
       : 'Pedido vindo da aba vendedor'
 
-    const finalization=sanitize(
-      input.finalization && typeof input.finalization==='object'
-        ? input.finalization
-        : {}
-    ) || {}
-    const nextPayloadMeta={
-      ...(quoteRow.payload_meta || {}),
-      ...finalization
-    }
-    const totalCents=Math.max(
-      0,
-      Math.round(number(
-        input.total_cents !== undefined ? input.total_cents : quoteRow.total_cents,
-        quoteRow.total_cents
-      ))
-    )
     const valor=totalCents/100
 
     const now=new Date().toISOString()
