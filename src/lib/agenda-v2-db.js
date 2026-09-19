@@ -651,6 +651,64 @@ async function createBlockOrder(companyId,blockId,input={}){
   }finally{ client.release() }
 }
 
+async function deliverOrderAndConsumeSlot(companyId,id){
+  const pool = getPool()
+  const client = await pool.connect()
+  try{
+    await client.query('BEGIN')
+    const existing = await getOrder(companyId,id,client)
+    if(!existing){
+      await client.query('ROLLBACK')
+      return { notFound:true }
+    }
+
+    // Se já foi entregue, não reduz a vaga novamente.
+    if(String(existing.status || '').toLowerCase() === 'entregue'){
+      await client.query('ROLLBACK')
+      return { row:existing, bloco:existing.bloco_id ? await getBlock(companyId,existing.bloco_id) : null, alreadyDelivered:true }
+    }
+
+    // Preserva integralmente o pedido; altera somente o status.
+    const next = { ...existing, status:'entregue', updated_at:new Date().toISOString() }
+    const orderResult = await client.query(`
+      UPDATE app_agenda_orders_v2 SET
+        status='entregue',payload=$3::jsonb,updated_at=NOW()
+      WHERE company_id=$1 AND id=$2
+      RETURNING *
+    `,[text(companyId),text(id),JSON.stringify(next)])
+    const delivered = orderFromRow(orderResult.rows[0])
+
+    let bloco = null
+    if(existing.bloco_id){
+      const currentBlock = await getBlock(companyId,existing.bloco_id,client)
+      if(currentBlock){
+        const activeRes = await client.query(`
+          SELECT COUNT(*)::int AS count
+          FROM app_agenda_orders_v2
+          WHERE company_id=$1 AND bloco_id=$2
+            AND COALESCE(status,'') NOT IN ('entregue','cancelado','indisponivel')
+        `,[text(companyId),text(existing.bloco_id)])
+        const active = Number(activeRes.rows[0]?.count || 0)
+        const nextSlots = Math.max(active, Number(currentBlock.qtd_vagas || 0) - 1)
+
+        const blockResult = await client.query(`
+          UPDATE app_agenda_blocos_v2
+          SET qtd_vagas=$3,payload=jsonb_set(COALESCE(payload,'{}'::jsonb),'{qtd_vagas}',to_jsonb($3::int),true),updated_at=NOW()
+          WHERE company_id=$1 AND id=$2
+          RETURNING *
+        `,[text(companyId),text(existing.bloco_id),nextSlots])
+        bloco = blockFromRow(blockResult.rows[0])
+      }
+    }
+
+    await client.query('COMMIT')
+    return { row:delivered, bloco }
+  }catch(err){
+    await client.query('ROLLBACK').catch(()=>{})
+    throw err
+  }finally{ client.release() }
+}
+
 async function auditEvent(companyId,action,detail,user={}){
   const pool = getPool()
   await pool.query(`
@@ -680,5 +738,6 @@ module.exports = {
   deleteBlock,
   changeSlots,
   createBlockOrder,
+  deliverOrderAndConsumeSlot,
   auditEvent
 }
