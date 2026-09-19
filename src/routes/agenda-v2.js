@@ -83,6 +83,15 @@ router.post('/agenda/orders',async(req,res,next)=>{
   }catch(err){ next(err) }
 })
 
+router.post('/agenda/orders/:id/entregar',async(req,res,next)=>{
+  try{
+    const result = await db.deliverOrderAndConsumeSlot(req.agendaV2CompanyId,req.params.id)
+    if(result.notFound) return res.status(404).json({error:'not_found',message:'Pedido não encontrado.'})
+    audit(req,'agenda.order.deliver',`Pedido entregue e vaga consumida: ${req.params.id}`)
+    return res.json(result)
+  }catch(err){ next(err) }
+})
+
 router.patch('/agenda/orders/:id',async(req,res,next)=>{
   try{
     const row = await db.updateOrder(req.agendaV2CompanyId,req.params.id,req.body || {})
