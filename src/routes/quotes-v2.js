@@ -100,6 +100,33 @@ router.post('/quotes/:id/finalize-and-schedule',async(req,res,next)=>{
   }catch(err){ next(err) }
 })
 
+
+router.post('/quotes/:id/finalize-and-schedule',async(req,res,next)=>{
+  try{
+    const result=await db.finalizeQuoteAndSchedule(req.quotesV2CompanyId,req.params.id,req.body || {})
+    if(result.notFound) return res.status(404).json({error:'not_found',message:'Orçamento não encontrado.'})
+    if(result.invalidMode) return res.status(400).json({error:'invalid_schedule_mode',message:'Modo de agendamento inválido.'})
+    if(result.missingBlock) return res.status(400).json({error:'agenda_block_required',message:'Selecione uma vaga da Agenda.'})
+    if(result.blockNotFound) return res.status(404).json({error:'agenda_block_not_found',message:'Bloco da Agenda não encontrado.'})
+    if(result.full) return res.status(409).json({
+      error:'agenda_block_full',
+      message:'Todas as vagas deste bloco estão ocupadas.',
+      occupied:result.occupied,
+      qtd_vagas:result.qtd_vagas
+    })
+    if(result.duplicate) return res.status(409).json({
+      error:'agenda_duplicate',
+      message:'Este pedido já está vinculado à Agenda.'
+    })
+    return res.json({
+      pedido:result.quote,
+      agenda:result.agendaOrder || null,
+      schedule_mode:result.scheduleMode
+    })
+  }catch(err){ next(err) }
+})
+
+
 router.post('/quotes/:id/convert-to-order',async(req,res,next)=>{
   try{
     const row=await db.updateQuote(req.quotesV2CompanyId,req.params.id,{status:'pedido'})
