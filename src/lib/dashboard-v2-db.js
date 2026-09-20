@@ -130,7 +130,11 @@ function buildOrderKey(order,index){
 }
 
 function onlyAgendaOrders(orders){
-  return (Array.isArray(orders) ? orders : []).filter(order => !isVendorHistoryOrder(order))
+  // A fonte do Dashboard já é exclusivamente app_agenda_orders_v2.
+  // Pedidos vindos do Vendedor continuam sendo pedidos reais da Agenda e
+  // devem contar normalmente. A deduplicação permanece sendo feita por ID
+  // em uniqueFiltered(), sem excluir source_quote_id.
+  return Array.isArray(orders) ? orders : []
 }
 
 function uniqueFiltered(orders,predicate){
