@@ -358,7 +358,14 @@ async function finalizeQuoteAndSchedule(companyId,id,input={}){
     await client.query('BEGIN')
 
     const requestedQuoteId=text(id).trim()
-    const quoteRes=await client.query(`
+
+    // Serializa a ponte legado -> V2 para o mesmo orçamento/empresa.
+    await client.query(
+      'SELECT pg_advisory_xact_lock(hashtext($1))',
+      [`quote-v2-bridge:${companyId}:${requestedQuoteId}`]
+    )
+
+    let quoteRes=await client.query(`
       SELECT * FROM app_quotes_v2
       WHERE company_id=$1
         AND active=TRUE
@@ -367,10 +374,47 @@ async function finalizeQuoteAndSchedule(companyId,id,input={}){
       LIMIT 1
       FOR UPDATE
     `,[companyId,requestedQuoteId])
-    const existing=quoteRes.rows[0]
+    let existing=quoteRes.rows[0]
+
+    // Orçamentos do Vendedor atual ainda nascem no store legado (/api/quotes).
+    // Se ainda não houver representação V2, cria dentro da MESMA transação.
     if(!existing){
-      await client.query('ROLLBACK')
-      return { notFound:true }
+      const legacyStore=storeLib.readStore()
+      const legacyQuote=(Array.isArray(legacyStore?.quotes) ? legacyStore.quotes : [])
+        .find(item =>
+          String(item?.company_id || '') === String(companyId) &&
+          String(item?.id || '') === requestedQuoteId
+        )
+
+      if(!legacyQuote){
+        await client.query('ROLLBACK')
+        return { notFound:true }
+      }
+
+      const legacyNormalized=normalizePayload({
+        payload:legacyQuote.payload && typeof legacyQuote.payload === 'object'
+          ? legacyQuote.payload
+          : {}
+      })
+      const bridgedId=crypto.randomUUID()
+      const legacyCliente=text(legacyQuote.cliente ?? 'Cliente').trim() || 'Cliente'
+      const legacyStatus=text(legacyQuote.status ?? 'orcamento').trim().toLowerCase() || 'orcamento'
+      const legacyTotalCents=Math.max(0,Math.round(number(legacyQuote.total_cents,0)))
+      const legacyCreatedAt=legacyQuote.created_at || new Date().toISOString()
+      const legacyUpdatedAt=legacyQuote.updated_at || legacyCreatedAt
+
+      const inserted=await client.query(`
+        INSERT INTO app_quotes_v2 (
+          id,company_id,legacy_id,cliente,status,total_cents,payload_meta,active,created_at,updated_at
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,TRUE,$8,$9)
+        RETURNING *
+      `,[
+        bridgedId,companyId,requestedQuoteId,legacyCliente,legacyStatus,legacyTotalCents,
+        JSON.stringify(legacyNormalized.payloadMeta),legacyCreatedAt,legacyUpdatedAt
+      ])
+
+      await replaceModels(client,companyId,bridgedId,legacyNormalized.models)
+      existing=inserted.rows[0]
     }
 
     const canonicalQuoteId=text(existing.id).trim()
@@ -378,6 +422,30 @@ async function finalizeQuoteAndSchedule(companyId,id,input={}){
     const quoteRefs=[canonicalQuoteId,legacyQuoteId,requestedQuoteId].filter(Boolean)
     const uniqueQuoteRefs=[...new Set(quoteRefs)]
     const tecidoRefs=uniqueQuoteRefs.map(ref => `quote:${ref}`)
+
+    const syncLegacyPedido=async()=>{
+      try{
+        storeLib.updateStore(store=>{
+          const quotes=Array.isArray(store?.quotes) ? store.quotes : []
+          const legacy=quotes.find(item =>
+            String(item?.company_id || '') === String(companyId) &&
+            uniqueQuoteRefs.includes(String(item?.id || ''))
+          )
+          if(!legacy) return store
+          legacy.status='pedido'
+          legacy.cliente=text(input.cliente ?? legacy.cliente).trim() || legacy.cliente || 'Cliente'
+          legacy.total_cents=totalCents
+          legacy.payload=patchPayload
+          legacy.updated_at=new Date().toISOString()
+          return store
+        })
+        if(storeLib._pg && typeof storeLib._pg.flushNow === 'function'){
+          await storeLib._pg.flushNow()
+        }
+      }catch(err){
+        console.warn('[quotes-v2] Falha ao sincronizar status no orçamento legado após COMMIT:', err?.message || err)
+      }
+    }
 
     if(!['agenda','later'].includes(scheduleMode)){
       await client.query('ROLLBACK')
@@ -410,6 +478,7 @@ async function finalizeQuoteAndSchedule(companyId,id,input={}){
         if(String(duplicateOrder.bloco_id || '') === blockId && String(existing.status || '').toLowerCase() === 'pedido'){
           await client.query('ROLLBACK')
           const quote=await getQuote(companyId,canonicalQuoteId)
+          await syncLegacyPedido()
           return { quote, agendaOrder:duplicateOrder, scheduleMode:'agenda', idempotent:true }
         }
         await client.query('ROLLBACK')
@@ -497,6 +566,7 @@ async function finalizeQuoteAndSchedule(companyId,id,input={}){
 
     await client.query('COMMIT')
     const quote=await getQuote(companyId,canonicalQuoteId)
+    await syncLegacyPedido()
     return { quote, agendaOrder, scheduleMode }
   }catch(err){
     await client.query('ROLLBACK').catch(()=>{})
