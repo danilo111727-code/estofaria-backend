@@ -391,8 +391,14 @@ async function finalizeQuoteAndSchedule(companyId,id,input={}){
       `,[companyId,id])
 
       if(duplicateRes.rows[0]){
+        const duplicateOrder=duplicateRes.rows[0]
+        if(String(duplicateOrder.bloco_id || '') === blockId && String(existing.status || '').toLowerCase() === 'pedido'){
+          await client.query('ROLLBACK')
+          const quote=await getQuote(companyId,id)
+          return { quote, agendaOrder:duplicateOrder, scheduleMode:'agenda', idempotent:true }
+        }
         await client.query('ROLLBACK')
-        return { duplicate:true, agendaOrder:duplicateRes.rows[0] }
+        return { duplicate:true, agendaOrder:duplicateOrder }
       }
 
       const blockRes=await client.query(`
