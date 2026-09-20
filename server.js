@@ -59,6 +59,7 @@ const disposableTestOrigins = new Set([
   'https://agenda-vaga-preview.estofaria-frontend.pages.dev',
   'https://agenda-clean-preview.estofaria-frontend.pages.dev',
   'https://agenda-manual-preview.estofaria-frontend.pages.dev',
+  'https://order-agenda-atomic-v2.estofaria-frontend.pages.dev',
   'https://agenda-clean-v5.estofaria-frontend.pages.dev',
   'https://agenda-entregue-v2.estofaria-frontend.pages.dev',
   'https://agenda-entregue-clean-v1.estofaria-frontend.pages.dev',
