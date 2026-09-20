@@ -344,6 +344,153 @@ async function updateQuote(companyId,id,patch={}){
   return getQuote(companyId,id)
 }
 
+
+async function finalizeQuoteAndSchedule(companyId,id,input={}){
+  const pool=getPool()
+  const client=await pool.connect()
+  const scheduleMode=text(input.schedule_mode ?? 'agenda').trim().toLowerCase()
+  const blockId=text(input.bloco_id ?? '').trim()
+  const patchPayload=input.payload && typeof input.payload === 'object' ? input.payload : {}
+  const totalCents=Math.max(0,Math.round(number(input.total_cents,0)))
+  const agendaInput=input.agenda && typeof input.agenda === 'object' ? input.agenda : {}
+
+  try{
+    await client.query('BEGIN')
+
+    const quoteRes=await client.query(`
+      SELECT * FROM app_quotes_v2
+      WHERE company_id=$1 AND id=$2 AND active=TRUE
+      FOR UPDATE
+    `,[companyId,id])
+    const existing=quoteRes.rows[0]
+    if(!existing){
+      await client.query('ROLLBACK')
+      return { notFound:true }
+    }
+
+    if(!['agenda','later'].includes(scheduleMode)){
+      await client.query('ROLLBACK')
+      return { invalidMode:true }
+    }
+
+    let agendaOrder=null
+    let bloco=null
+
+    if(scheduleMode === 'agenda'){
+      if(!blockId){
+        await client.query('ROLLBACK')
+        return { missingBlock:true }
+      }
+
+      const duplicateRes=await client.query(`
+        SELECT * FROM app_agenda_orders_v2
+        WHERE company_id=$1 AND source_quote_id=$2
+          AND COALESCE(status,'') NOT IN ('cancelado','indisponivel')
+        LIMIT 1
+        FOR UPDATE
+      `,[companyId,id])
+
+      if(duplicateRes.rows[0]){
+        const duplicateOrder=duplicateRes.rows[0]
+        if(String(duplicateOrder.bloco_id || '') === blockId && String(existing.status || '').toLowerCase() === 'pedido'){
+          await client.query('ROLLBACK')
+          const quote=await getQuote(companyId,id)
+          return { quote, agendaOrder:duplicateOrder, scheduleMode:'agenda', idempotent:true }
+        }
+        await client.query('ROLLBACK')
+        return { duplicate:true, agendaOrder:duplicateOrder }
+      }
+
+      const blockRes=await client.query(`
+        SELECT * FROM app_agenda_blocos_v2
+        WHERE company_id=$1 AND id=$2
+        FOR UPDATE
+      `,[companyId,blockId])
+      bloco=blockRes.rows[0]
+      if(!bloco){
+        await client.query('ROLLBACK')
+        return { blockNotFound:true }
+      }
+
+      const occupiedRes=await client.query(`
+        SELECT COUNT(*)::int AS count
+        FROM app_agenda_orders_v2
+        WHERE company_id=$1 AND bloco_id=$2
+          AND COALESCE(status,'') NOT IN ('entregue','cancelado','indisponivel')
+      `,[companyId,blockId])
+      const occupied=Number(occupiedRes.rows[0]?.count || 0)
+      if(occupied >= Number(bloco.qtd_vagas || 0)){
+        await client.query('ROLLBACK')
+        return { full:true, occupied, qtd_vagas:Number(bloco.qtd_vagas || 0) }
+      }
+    }
+
+    const normalized=normalizePayload({payload:patchPayload})
+    const cliente=text(input.cliente ?? existing.cliente).trim() || existing.cliente
+    await client.query(`
+      UPDATE app_quotes_v2
+      SET cliente=$3,status='pedido',total_cents=$4,payload_meta=$5::jsonb,updated_at=NOW()
+      WHERE company_id=$1 AND id=$2 AND active=TRUE
+    `,[companyId,id,cliente,totalCents,JSON.stringify(normalized.payloadMeta)])
+    await replaceModels(client,companyId,id,normalized.models)
+
+    if(scheduleMode === 'agenda'){
+      const agendaId=crypto.randomUUID()
+      const now=new Date().toISOString()
+      const modelos=Array.isArray(agendaInput.modelos)
+        ? agendaInput.modelos.map(m=>({id:String(m?.id || ''),name:String(m?.name || '')}))
+        : []
+      const agendaPayload={
+        id:agendaId,
+        company_id:companyId,
+        bloco_id:blockId,
+        cliente:text(agendaInput.cliente ?? cliente).trim() || cliente,
+        descricao:text(agendaInput.descricao ?? 'Pedido').trim() || 'Pedido',
+        prod_date:text(bloco.data_producao),
+        ent_date:text(bloco.data_entrega),
+        status:'pendente',
+        tecido:text(agendaInput.tecido ?? ''),
+        qtd:1,
+        tecido_comprado:false,
+        source_quote_id:id,
+        valor:number(agendaInput.valor, totalCents/100),
+        valor_total:number(agendaInput.valor_total, totalCents/100),
+        modelos,
+        created_at:now,
+        updated_at:now
+      }
+
+      const agendaRes=await client.query(`
+        INSERT INTO app_agenda_orders_v2 (
+          company_id,id,bloco_id,cliente,descricao,prod_date,ent_date,status,tecido,qtd,
+          tecido_comprado,source_quote_id,payload,created_at,updated_at
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,'pendente',$8,1,FALSE,$9,$10::jsonb,$11,$11)
+        RETURNING *
+      `,[
+        companyId,agendaId,blockId,agendaPayload.cliente,agendaPayload.descricao,
+        agendaPayload.prod_date,agendaPayload.ent_date,agendaPayload.tecido,id,
+        JSON.stringify(agendaPayload),now
+      ])
+      agendaOrder=agendaRes.rows[0]
+    }else{
+      const pendingPayload={...normalized.payloadMeta,agenda_status:'pendente'}
+      await client.query(`
+        UPDATE app_quotes_v2 SET payload_meta=$3::jsonb,updated_at=NOW()
+        WHERE company_id=$1 AND id=$2
+      `,[companyId,id,JSON.stringify(pendingPayload)])
+    }
+
+    await client.query('COMMIT')
+    const quote=await getQuote(companyId,id)
+    return { quote, agendaOrder, scheduleMode }
+  }catch(err){
+    await client.query('ROLLBACK').catch(()=>{})
+    throw err
+  }finally{
+    client.release()
+  }
+}
+
 async function deleteQuote(companyId,id){
   const pool=getPool()
   const res=await pool.query('DELETE FROM app_quotes_v2 WHERE company_id=$1 AND id=$2 RETURNING id',[companyId,id])
@@ -378,6 +525,7 @@ module.exports={
   getQuote,
   createQuote,
   updateQuote,
+  finalizeQuoteAndSchedule,
   deleteQuote,
   migrateLegacyQuotes,
   sanitize
