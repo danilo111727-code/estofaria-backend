@@ -357,16 +357,27 @@ async function finalizeQuoteAndSchedule(companyId,id,input={}){
   try{
     await client.query('BEGIN')
 
+    const requestedQuoteId=text(id).trim()
     const quoteRes=await client.query(`
       SELECT * FROM app_quotes_v2
-      WHERE company_id=$1 AND id=$2 AND active=TRUE
+      WHERE company_id=$1
+        AND active=TRUE
+        AND (id=$2 OR legacy_id=$2)
+      ORDER BY CASE WHEN id=$2 THEN 0 ELSE 1 END
+      LIMIT 1
       FOR UPDATE
-    `,[companyId,id])
+    `,[companyId,requestedQuoteId])
     const existing=quoteRes.rows[0]
     if(!existing){
       await client.query('ROLLBACK')
       return { notFound:true }
     }
+
+    const canonicalQuoteId=text(existing.id).trim()
+    const legacyQuoteId=text(existing.legacy_id).trim()
+    const quoteRefs=[canonicalQuoteId,legacyQuoteId,requestedQuoteId].filter(Boolean)
+    const uniqueQuoteRefs=[...new Set(quoteRefs)]
+    const tecidoRefs=uniqueQuoteRefs.map(ref => `quote:${ref}`)
 
     if(!['agenda','later'].includes(scheduleMode)){
       await client.query('ROLLBACK')
@@ -384,17 +395,21 @@ async function finalizeQuoteAndSchedule(companyId,id,input={}){
 
       const duplicateRes=await client.query(`
         SELECT * FROM app_agenda_orders_v2
-        WHERE company_id=$1 AND source_quote_id=$2
+        WHERE company_id=$1
+          AND (
+            source_quote_id = ANY($2::text[])
+            OR tecido = ANY($3::text[])
+          )
           AND COALESCE(status,'') NOT IN ('cancelado','indisponivel')
         LIMIT 1
         FOR UPDATE
-      `,[companyId,id])
+      `,[companyId,uniqueQuoteRefs,tecidoRefs])
 
       if(duplicateRes.rows[0]){
         const duplicateOrder=duplicateRes.rows[0]
         if(String(duplicateOrder.bloco_id || '') === blockId && String(existing.status || '').toLowerCase() === 'pedido'){
           await client.query('ROLLBACK')
-          const quote=await getQuote(companyId,id)
+          const quote=await getQuote(companyId,canonicalQuoteId)
           return { quote, agendaOrder:duplicateOrder, scheduleMode:'agenda', idempotent:true }
         }
         await client.query('ROLLBACK')
@@ -431,8 +446,8 @@ async function finalizeQuoteAndSchedule(companyId,id,input={}){
       UPDATE app_quotes_v2
       SET cliente=$3,status='pedido',total_cents=$4,payload_meta=$5::jsonb,updated_at=NOW()
       WHERE company_id=$1 AND id=$2 AND active=TRUE
-    `,[companyId,id,cliente,totalCents,JSON.stringify(normalized.payloadMeta)])
-    await replaceModels(client,companyId,id,normalized.models)
+    `,[companyId,canonicalQuoteId,cliente,totalCents,JSON.stringify(normalized.payloadMeta)])
+    await replaceModels(client,companyId,canonicalQuoteId,normalized.models)
 
     if(scheduleMode === 'agenda'){
       const agendaId=crypto.randomUUID()
@@ -452,7 +467,7 @@ async function finalizeQuoteAndSchedule(companyId,id,input={}){
         tecido:text(agendaInput.tecido ?? ''),
         qtd:1,
         tecido_comprado:false,
-        source_quote_id:id,
+        source_quote_id:canonicalQuoteId,
         valor:number(agendaInput.valor, totalCents/100),
         valor_total:number(agendaInput.valor_total, totalCents/100),
         modelos,
@@ -468,7 +483,7 @@ async function finalizeQuoteAndSchedule(companyId,id,input={}){
         RETURNING *
       `,[
         companyId,agendaId,blockId,agendaPayload.cliente,agendaPayload.descricao,
-        agendaPayload.prod_date,agendaPayload.ent_date,agendaPayload.tecido,id,
+        agendaPayload.prod_date,agendaPayload.ent_date,agendaPayload.tecido,canonicalQuoteId,
         JSON.stringify(agendaPayload),now
       ])
       agendaOrder=agendaRes.rows[0]
@@ -477,11 +492,11 @@ async function finalizeQuoteAndSchedule(companyId,id,input={}){
       await client.query(`
         UPDATE app_quotes_v2 SET payload_meta=$3::jsonb,updated_at=NOW()
         WHERE company_id=$1 AND id=$2
-      `,[companyId,id,JSON.stringify(pendingPayload)])
+      `,[companyId,canonicalQuoteId,JSON.stringify(pendingPayload)])
     }
 
     await client.query('COMMIT')
-    const quote=await getQuote(companyId,id)
+    const quote=await getQuote(companyId,canonicalQuoteId)
     return { quote, agendaOrder, scheduleMode }
   }catch(err){
     await client.query('ROLLBACK').catch(()=>{})
