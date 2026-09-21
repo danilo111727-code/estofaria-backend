@@ -408,6 +408,7 @@ async function updateOrder(companyId,id,patch={}){
     if(patch.status !== undefined) next.status = text(patch.status,existing.status).toLowerCase()
     if(patch.valor !== undefined) next.valor = num(patch.valor,num(existing.valor,0))
     if(patch.valor_total !== undefined) next.valor_total = num(patch.valor_total,num(existing.valor_total,0))
+    if(patch.saldo_restante !== undefined) next.saldo_restante = num(patch.saldo_restante,num(existing.saldo_restante,0))
     if(patch.modelos !== undefined){
       next.modelos = Array.isArray(patch.modelos)
         ? patch.modelos.map(m=>({id:String(m?.id || ''),name:String(m?.name || '')})) : []
