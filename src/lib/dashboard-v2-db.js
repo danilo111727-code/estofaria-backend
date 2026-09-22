@@ -108,6 +108,9 @@ function extractQuoteRef(order){
 }
 
 function isVendorHistoryOrder(order){
+  // Pedido vinculado a bloco é um pedido real da Agenda, mesmo quando nasceu
+  // de um orçamento no Vendedor.
+  if(text(order?.bloco_id || order?.blocoId)) return false
   if(extractQuoteRef(order)) return true
   const origem = normalize(order?.origem || order?.source || order?.tipo || order?.kind)
   return ['quote','orcamento','pedido-orcamento','pedido de orcamento'].includes(origem)
