@@ -5,6 +5,7 @@ const { requireAuth } = require('../middleware/auth')
 const { hasMasterAccess, hasPermission } = require('../lib/policies')
 const modelsDb = require('../lib/models-v2-db')
 const personalizationDb = require('../lib/personalization-v2-db')
+const consumption = require('../lib/personalization-v2-consumption')
 
 const router = express.Router()
 router.use(requireAuth)
@@ -95,25 +96,6 @@ function normalizeFoamCatalog(input = {}) {
   }
 }
 
-function foamLinearConsumos(item, modelConfig) {
-  const key = String(item?.name || '').trim().toLowerCase()
-  const saved = modelConfig.consumos?.[key]
-  const result = saved && typeof saved === 'object' && !Array.isArray(saved)
-    ? { ...saved }
-    : {}
-
-  if (String(item?.category || '').trim().toLowerCase() !== 'espuma') return result
-
-  ;(Array.isArray(modelConfig.metragens) ? modelConfig.metragens : []).forEach(rawMeter => {
-    const meter = Number(String(rawMeter).replace(',', '.'))
-    if (!Number.isFinite(meter) || meter <= 0) return
-    const keyMeter = meter.toFixed(meter % 1 === 0 ? 1 : 2)
-    const current = Number(result[keyMeter])
-    if (!Number.isFinite(current) || current <= 0) result[keyMeter] = meter
-  })
-  return result
-}
-
 router.get('/personalization/config', requireRead, requireCompany, async (req, res, next) => {
   try {
     const data = await personalizationDb.getCatalog(req.personalizationV2CompanyId)
@@ -139,8 +121,11 @@ router.put('/personalization/config', requireWrite, requireCompany, async (req, 
 
 router.get('/models/:id/personalization-config', requireRead, requireCompany, requireModel, async (req, res, next) => {
   try {
-    const data = await personalizationDb.getModelConfig(req.personalizationV2CompanyId, req.params.id)
-    return res.json(data)
+    const [catalog, modelConfig] = await Promise.all([
+      personalizationDb.getCatalog(req.personalizationV2CompanyId),
+      personalizationDb.getModelConfig(req.personalizationV2CompanyId, req.params.id)
+    ])
+    return res.json(consumption.resolveModelConfig(catalog, modelConfig))
   } catch (err) {
     next(err)
   }
@@ -167,9 +152,11 @@ router.get('/models/:id/personalization-items', requireRead, requireCompany, req
       personalizationDb.getModelConfig(req.personalizationV2CompanyId, req.params.id)
     ])
 
+    const resolvedConfig = consumption.resolveModelConfig(catalog, modelConfig)
+
     const items = catalog.items.map(item => {
       const isFoam = String(item?.category || '').trim().toLowerCase() === 'espuma'
-      const consumos = foamLinearConsumos(item, modelConfig)
+      const consumos = consumption.resolveItemConsumptions(item, resolvedConfig)
       return {
         ...item,
         unit: isFoam ? 'metro linear' : item.unit,
@@ -185,7 +172,7 @@ router.get('/models/:id/personalization-items', requireRead, requireCompany, req
       model_id: req.params.id,
       catalog_revision: catalog.revision,
       model_revision: modelConfig.revision,
-      metragens: modelConfig.metragens
+      metragens: resolvedConfig.metragens
     })
   } catch (err) {
     next(err)
