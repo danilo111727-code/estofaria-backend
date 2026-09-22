@@ -95,14 +95,17 @@ function normalizeFoamCatalog(input = {}) {
   }
 }
 
-function foamLinearConsumos(item, modelConfig) {
+function automaticMetricConsumos(item, modelConfig) {
   const key = String(item?.name || '').trim().toLowerCase()
   const saved = modelConfig.consumos?.[key]
   const result = saved && typeof saved === 'object' && !Array.isArray(saved)
     ? { ...saved }
     : {}
+  const category = String(item?.category || '').trim().toLowerCase()
 
-  if (String(item?.category || '').trim().toLowerCase() !== 'espuma') return result
+  // Tecido e espuma são blocos especiais do Vendedor. Quando a tabela não
+  // possui consumo válido, ambos usam a própria metragem como padrão seguro.
+  if (!['tecido', 'espuma'].includes(category)) return result
 
   ;(Array.isArray(modelConfig.metragens) ? modelConfig.metragens : []).forEach(rawMeter => {
     const meter = Number(String(rawMeter).replace(',', '.'))
@@ -169,7 +172,7 @@ router.get('/models/:id/personalization-items', requireRead, requireCompany, req
 
     const items = catalog.items.map(item => {
       const isFoam = String(item?.category || '').trim().toLowerCase() === 'espuma'
-      const consumos = foamLinearConsumos(item, modelConfig)
+      const consumos = automaticMetricConsumos(item, modelConfig)
       return {
         ...item,
         unit: isFoam ? 'metro linear' : item.unit,
