@@ -108,6 +108,9 @@ function extractQuoteRef(order){
 }
 
 function isVendorHistoryOrder(order){
+  // Pedidos vinculados a um bloco são pedidos reais da Agenda, mesmo quando
+  // foram originados por um orçamento no Vendedor.
+  if(text(order?.bloco_id || order?.blocoId)) return false
   if(extractQuoteRef(order)) return true
   const origem = normalize(order?.origem || order?.source || order?.tipo || order?.kind)
   return ['quote','orcamento','pedido-orcamento','pedido de orcamento'].includes(origem)
@@ -130,11 +133,7 @@ function buildOrderKey(order,index){
 }
 
 function onlyAgendaOrders(orders){
-  // A fonte do Dashboard já é exclusivamente app_agenda_orders_v2.
-  // Pedidos vindos do Vendedor continuam sendo pedidos reais da Agenda e
-  // devem contar normalmente. A deduplicação permanece sendo feita por ID
-  // em uniqueFiltered(), sem excluir source_quote_id.
-  return Array.isArray(orders) ? orders : []
+  return (Array.isArray(orders) ? orders : []).filter(order => !isVendorHistoryOrder(order))
 }
 
 function uniqueFiltered(orders,predicate){
