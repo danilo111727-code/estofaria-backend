@@ -57,6 +57,7 @@ const disposableTestOrigins = new Set([
   'https://adicionais-exp.estofaria-frontend.pages.dev',
   'https://consumos-exp.estofaria-frontend.pages.dev',
   'https://agenda-vaga-preview.estofaria-frontend.pages.dev',
+  'https://pdf-paginacao-preview.estofaria-frontend.pages.dev',
   'https://agenda-clean-preview.estofaria-frontend.pages.dev',
   'https://agenda-manual-preview.estofaria-frontend.pages.dev',
   'https://order-agenda-atomic-v2.estofaria-frontend.pages.dev',
