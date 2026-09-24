@@ -284,6 +284,34 @@ router.get('/models/:id/images/:variant/url', requireModelRead, requireCompany, 
   }
 })
 
+router.get('/models/:id/images/:variant/data-url', requireModelRead, requireCompany, async (req, res, next) => {
+  try {
+    const variant = String(req.params.variant || '')
+    if (!validVariant(variant)) return res.status(400).json({ error: 'invalid_variant', message: 'Variante inválida.' })
+    if (!r2.isConfigured()) return res.status(503).json({ error: 'r2_not_configured', message: 'Armazenamento de imagens ainda não foi configurado.' })
+
+    const model = await db.getModel(req.modelsV2CompanyId, req.params.id, { includeInactive: false })
+    if (!model) return res.status(404).json({ error: 'not_found', message: 'Modelo não encontrado.' })
+    const meta = await db.getImageMeta(req.modelsV2CompanyId, req.params.id, variant)
+    if (!meta) return res.status(404).json({ error: 'image_not_found', message: 'Imagem não encontrada.' })
+
+    const object = await r2.getObjectBuffer(meta.object_key)
+    if (object.sizeBytes > imageLimitFor(variant)) {
+      return res.status(413).json({ error: 'image_too_large', message: 'Imagem acima do limite permitido.' })
+    }
+
+    return res.json({
+      variant,
+      data_url: `data:${object.contentType};base64,${object.body.toString('base64')}`
+    })
+  } catch (err) {
+    if (err?.name === 'NoSuchKey' || err?.$metadata?.httpStatusCode === 404) {
+      return res.status(404).json({ error: 'image_not_found', message: 'Imagem não encontrada.' })
+    }
+    next(err)
+  }
+})
+
 router.delete('/models/:id/images/:variant', requireModelWrite, requireCompany, async (req, res, next) => {
   try {
     const variant = String(req.params.variant || '')
