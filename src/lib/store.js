@@ -105,8 +105,13 @@ function activeMembershipCount(store, companyId){
 function materializeCompany(store, company){
   if(!company) return null
   const plan = planPreset(company.plan_code || company.current_plan_code)
-  const members = store.companyUsers
+  const companyLinks = store.companyUsers
     .filter(item => String(item.company_id) === String(company.id))
+  const lastLoginAt = companyLinks
+    .map(item => String(item.last_login_at || '').trim())
+    .filter(Boolean)
+    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] || ''
+  const members = companyLinks
     .map(link => {
       const user = store.users.find(u => String(u.id) === String(link.user_id)) || {}
       return {
@@ -131,6 +136,7 @@ function materializeCompany(store, company){
     access_status: company.access_status || 'active',
     seats_limit: company.seats_limit === undefined ? plan.seats_limit : company.seats_limit,
     seats_used: activeMembershipCount(store, company.id),
+    last_login_at: lastLoginAt,
     next_charge_at: company.next_charge_at || '',
     last_payment_at: company.last_payment_at || '',
     courtesy_until: company.courtesy_until || '',
