@@ -66,6 +66,7 @@ const disposableTestOrigins = new Set([
   'https://agenda-entregue-v2.estofaria-frontend.pages.dev',
   'https://agenda-entregue-clean-v1.estofaria-frontend.pages.dev',
   'https://onboarding-config.estofaria-frontend.pages.dev',
+  'https://ca50e5ac.estofaria-frontend.pages.dev',
   'https://6b080ed9.estofaria-frontend.pages.dev',
   'https://76acbd0f.estofaria-frontend.pages.dev'
 ])
