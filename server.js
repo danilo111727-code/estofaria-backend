@@ -44,6 +44,8 @@ const personalizationV2Routes = require('./src/routes/personalization-v2')
 const agendaV2Routes = require('./src/routes/agenda-v2')
 const financialV2Routes = require('./src/routes/financial-v2')
 const dashboardV2Routes = require('./src/routes/dashboard-v2')
+const pdfConfigRoutes = require('./src/routes/pdf-config')
+const pdfConfigDb = require('./src/lib/pdf-config-db')
 
 function parseAllowedOrigins() {
   return String(process.env.CORS_ALLOWED_ORIGINS || '')
@@ -142,6 +144,7 @@ app.use('/api/saas', saasRoutes)
 app.use('/api/billing', billingRoutes)
 app.use('/api', legacyApiPermissions)
 app.use('/api', dashboardV2Routes)
+app.use('/api', pdfConfigRoutes)
 app.use('/api', agendaV2Routes)
 app.use('/api', financialV2Routes)
 app.use('/api', materialUnitsRoutes)
@@ -206,6 +209,7 @@ async function start() {
     await agendaV2Db.ensureSchema()
     await financialV2Db.ensureSchema()
     await auditV2Db.ensureSchema()
+    await pdfConfigDb.ensureSchema()
     await runControlledModelsMigration()
     await runStartupMigrations({
       pool: pg.pool,
