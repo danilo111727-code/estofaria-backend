@@ -344,6 +344,49 @@ function handleResetPassword(req, res){
 router.post('/reset-password', handleResetPassword)
 router.post('/password/reset', handleResetPassword)
 
+router.get('/onboarding', requireAuth, (req, res) => {
+  const store = readStore()
+  const company = getCompanyContext(req, store)
+  if(!company) return res.status(404).json({ error:'company_not_found', message:'Empresa não encontrada.' })
+
+  const currentVersion = 1
+  const completedVersion = Math.max(0, Number(company.onboarding_completed_version || 0) || 0)
+  const step = Math.max(0, Math.min(6, Number(company.onboarding_step || 0) || 0))
+  const completed = completedVersion >= currentVersion
+
+  res.json({
+    version: currentVersion,
+    step: completed ? 6 : step,
+    completed,
+    completed_at: completed ? String(company.onboarding_completed_at || '') : ''
+  })
+})
+
+router.patch('/onboarding', requireAuth, (req, res) => {
+  const store = readStore()
+  const company = getCompanyContext(req, store)
+  if(!company) return res.status(404).json({ error:'company_not_found', message:'Empresa não encontrada.' })
+
+  const currentVersion = 1
+  const requestedStep = Math.max(0, Math.min(6, Number(req.body?.step || 0) || 0))
+  const completed = req.body?.completed === true
+
+  company.onboarding_step = completed ? 6 : requestedStep
+  if(completed){
+    company.onboarding_completed_version = currentVersion
+    company.onboarding_completed_at = nowIso()
+  }
+  company.updated_at = nowIso()
+  writeStore(store)
+
+  res.json({
+    version: currentVersion,
+    step: company.onboarding_step,
+    completed,
+    completed_at: completed ? company.onboarding_completed_at : ''
+  })
+})
+
 router.get('/me', requireAuth, (req, res) => {
   res.json({ user: req.user })
 })
