@@ -208,7 +208,7 @@ function defaultReformItem(companyId, name) {
   return {
     id: `itm_${digest}`,
     name,
-    unit: 'unidade',
+    unit: 'metro linear',
     price_cents: 0,
     category: 'outro',
     isAlbum: false,
@@ -255,13 +255,24 @@ async function ensureDefaultReformItems(companyId) {
     const items = Array.isArray(row.items) ? row.items.slice() : []
     const existingNames = new Set(items.map(item => itemNameKey(item?.name || item?.nome)).filter(Boolean))
     const missing = DEFAULT_REFORM_ITEMS.filter(name => !existingNames.has(itemNameKey(name)))
+    let updatedSeededUnits = 0
 
-    if (!missing.length) {
+    const normalizedItems = items.map(item => {
+      const itemName = text(item?.name || item?.nome).replace(/\s+/g, ' ').trim()
+      if (!DEFAULT_REFORM_ITEMS.includes(itemName)) return item
+      const expectedId = defaultReformItem(cleanCompanyId, itemName).id
+      if (String(item?.id || '') !== expectedId) return item
+      if (String(item?.unit || item?.unidade || '').trim().toLowerCase() === 'metro linear') return item
+      updatedSeededUnits += 1
+      return { ...item, unit:'metro linear' }
+    })
+
+    if (!missing.length && !updatedSeededUnits) {
       await client.query('COMMIT')
-      return { added: 0, revision: Number(row.revision || 0) }
+      return { added: 0, updated_units: 0, revision: Number(row.revision || 0) }
     }
 
-    const nextItems = items.concat(missing.map(name => defaultReformItem(cleanCompanyId, name)))
+    const nextItems = normalizedItems.concat(missing.map(name => defaultReformItem(cleanCompanyId, name)))
     const nextRevision = Number(row.revision || 0) + 1
     await client.query(`
       UPDATE app_personalization_catalog_v2
@@ -269,7 +280,7 @@ async function ensureDefaultReformItems(companyId) {
       WHERE company_id=$1
     `, [cleanCompanyId, nextRevision, JSON.stringify(nextItems)])
     await client.query('COMMIT')
-    return { added: missing.length, revision: nextRevision }
+    return { added: missing.length, updated_units: updatedSeededUnits, revision: nextRevision }
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {})
     throw err
@@ -289,12 +300,14 @@ async function seedDefaultReformItemsForCompanies(companyIds = []) {
     .filter(Boolean)))
   let companies = 0
   let items = 0
+  let unitsUpdated = 0
   for (const companyId of ids) {
     const result = await ensureDefaultReformItems(companyId)
-    if (result.added > 0) companies += 1
+    if (result.added > 0 || result.updated_units > 0) companies += 1
     items += Number(result.added || 0)
+    unitsUpdated += Number(result.updated_units || 0)
   }
-  return { companies_checked: ids.length, companies_updated: companies, items_added: items }
+  return { companies_checked: ids.length, companies_updated: companies, items_added: items, units_updated: unitsUpdated }
 }
 
 function conflictError(currentRevision) {
