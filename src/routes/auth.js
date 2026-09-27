@@ -7,6 +7,7 @@ const { issueToken, sanitizeUser, normalizeArray } = require('../lib/auth')
 const { requireAuth } = require('../middleware/auth')
 const { hasMasterAccess } = require('../lib/policies')
 const { sendEmail, welcomeEmail, passwordResetEmail } = require('../lib/email')
+const personalizationDb = require('../lib/personalization-v2-db')
 
 const router = express.Router()
 const BUSINESS_MODULES = ['painel','vendedor','agenda','material','precificacao','catalogo','itens-personalizacao','assinatura','financeiro','configuracao']
@@ -178,7 +179,7 @@ router.post('/login', (req, res) => {
   res.json({ token, user: sanitizeUser(enrichUserForResponse(store, user)) })
 })
 
-router.post('/register', (req, res) => {
+router.post('/register', async (req, res) => {
   const empresa = normalizeText(req.body?.empresa, 120)
   const nome = normalizeText(req.body?.nome, 120)
   const password = String(req.body?.password || '')
@@ -252,6 +253,26 @@ router.post('/register', (req, res) => {
     source: 'public-register'
   })
   writeStore(store)
+
+  try{
+    const globals = store.globalPersonalizationDefaults && Array.isArray(store.globalPersonalizationDefaults.additionals)
+      ? store.globalPersonalizationDefaults.additionals.filter(item => item && item.active !== false)
+      : []
+    if(globals.length){
+      await personalizationDb.addCatalogItems(companyId, globals.map(item => ({
+        id:'global_' + String(item.id || ''),
+        name:item.name,
+        unit:item.unit,
+        price_cents:item.price_cents,
+        category:'outro',
+        isAlbum:false,
+        isGrupo:false
+      })))
+    }
+  }catch(err){
+    console.warn('[auth/register] Não foi possível aplicar adicionais globais:', err && err.message ? err.message : err)
+  }
+
   sendEmail({ to: email, ...welcomeEmail(nome, empresa) }).catch(() => {})
   res.status(201).json({ token: issueToken(user), user: sanitizeUser(enrichUserForResponse(store, user)) })
 })
