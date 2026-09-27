@@ -325,6 +325,144 @@ async function seedDefaultReformItemsForCompanies(companyIds = []) {
   }
 }
 
+async function addCatalogItems(companyId, incomingItems = []) {
+  const cleanCompanyId = text(companyId).trim()
+  if (!cleanCompanyId) return { added: 0, revision: 0 }
+
+  const normalizedIncoming = (Array.isArray(incomingItems) ? incomingItems : [])
+    .map(sanitizeItem)
+    .filter(Boolean)
+  if (!normalizedIncoming.length) {
+    const current = await getCatalog(cleanCompanyId)
+    return { added: 0, revision: current.revision }
+  }
+
+  const pool = getPool()
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const currentRes = await client.query(`
+      SELECT revision, items, albums, groups
+      FROM app_personalization_catalog_v2
+      WHERE company_id = $1
+      FOR UPDATE
+    `, [cleanCompanyId])
+
+    const row = currentRes.rows[0] || { revision:0, items:[], albums:[], groups:[] }
+    const items = Array.isArray(row.items) ? row.items.slice() : []
+    const existingNames = new Set(items.map(item => itemNameKey(item?.name || item?.nome)).filter(Boolean))
+    const additions = []
+
+    for (const item of normalizedIncoming) {
+      const key = itemNameKey(item.name)
+      if (!key || existingNames.has(key)) continue
+      existingNames.add(key)
+      additions.push(item)
+    }
+
+    if (!additions.length) {
+      await client.query('COMMIT')
+      return { added: 0, revision: Number(row.revision || 0) }
+    }
+
+    const nextRevision = Number(row.revision || 0) + 1
+    const nextItems = items.concat(additions)
+
+    await client.query(`
+      INSERT INTO app_personalization_catalog_v2 (
+        company_id, revision, items, albums, groups, created_at, updated_at
+      ) VALUES ($1,$2,$3::jsonb,$4::jsonb,$5::jsonb,NOW(),NOW())
+      ON CONFLICT (company_id) DO UPDATE SET
+        revision = EXCLUDED.revision,
+        items = EXCLUDED.items,
+        updated_at = NOW()
+    `, [
+      cleanCompanyId,
+      nextRevision,
+      JSON.stringify(nextItems),
+      JSON.stringify(Array.isArray(row.albums) ? row.albums : []),
+      JSON.stringify(Array.isArray(row.groups) ? row.groups : [])
+    ])
+
+    await client.query('COMMIT')
+    return { added: additions.length, revision: nextRevision }
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {})
+    throw err
+  } finally {
+    client.release()
+  }
+}
+
+async function addCatalogAlbums(companyId, incomingAlbums = []) {
+  const cleanCompanyId = text(companyId).trim()
+  if (!cleanCompanyId) return { added: 0, revision: 0 }
+
+  const normalizedIncoming = (Array.isArray(incomingAlbums) ? incomingAlbums : [])
+    .map(sanitizeAlbum)
+    .filter(Boolean)
+  if (!normalizedIncoming.length) {
+    const current = await getCatalog(cleanCompanyId)
+    return { added: 0, revision: current.revision }
+  }
+
+  const pool = getPool()
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const currentRes = await client.query(`
+      SELECT revision, items, albums, groups
+      FROM app_personalization_catalog_v2
+      WHERE company_id = $1
+      FOR UPDATE
+    `, [cleanCompanyId])
+
+    const row = currentRes.rows[0] || { revision:0, items:[], albums:[], groups:[] }
+    const albums = Array.isArray(row.albums) ? row.albums.slice() : []
+    const existingNames = new Set(albums.map(album => itemNameKey(album?.nome || album?.name)).filter(Boolean))
+    const additions = []
+
+    for (const album of normalizedIncoming) {
+      const key = itemNameKey(album.nome)
+      if (!key || existingNames.has(key)) continue
+      existingNames.add(key)
+      additions.push(album)
+    }
+
+    if (!additions.length) {
+      await client.query('COMMIT')
+      return { added: 0, revision: Number(row.revision || 0) }
+    }
+
+    const nextRevision = Number(row.revision || 0) + 1
+    const nextAlbums = albums.concat(additions)
+
+    await client.query(`
+      INSERT INTO app_personalization_catalog_v2 (
+        company_id, revision, items, albums, groups, created_at, updated_at
+      ) VALUES ($1,$2,$3::jsonb,$4::jsonb,$5::jsonb,NOW(),NOW())
+      ON CONFLICT (company_id) DO UPDATE SET
+        revision = EXCLUDED.revision,
+        albums = EXCLUDED.albums,
+        updated_at = NOW()
+    `, [
+      cleanCompanyId,
+      nextRevision,
+      JSON.stringify(Array.isArray(row.items) ? row.items : []),
+      JSON.stringify(nextAlbums),
+      JSON.stringify(Array.isArray(row.groups) ? row.groups : [])
+    ])
+
+    await client.query('COMMIT')
+    return { added: additions.length, revision: nextRevision }
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {})
+    throw err
+  } finally {
+    client.release()
+  }
+}
+
 function conflictError(currentRevision) {
   const err = new Error('A configuração foi alterada em outro dispositivo. Recarregue antes de salvar novamente.')
   err.code = 'revision_conflict'
@@ -537,6 +675,8 @@ module.exports = {
   getCatalogWithDefaultReformItems,
   ensureDefaultReformItems,
   seedDefaultReformItemsForCompanies,
+  addCatalogItems,
+  addCatalogAlbums,
   saveCatalog,
   getModelConfig,
   saveModelConfig,
