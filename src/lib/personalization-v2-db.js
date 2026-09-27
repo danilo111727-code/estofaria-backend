@@ -191,6 +191,135 @@ async function getCatalog(companyId) {
   return result.rows.length ? rowToCatalog(result.rows[0]) : rowToCatalog(null)
 }
 
+const DEFAULT_REFORM_ITEMS = [
+  'Reforma: Troca de espuma',
+  'Reforma: Acréscimo de espuma',
+  'Reforma: Troca de percinta',
+  'Reforma: Troca de mola',
+  'Reforma: Reforço de estrutura',
+  'Reforma: Troca de pés'
+]
+
+const DEFAULT_REFORM_EXCLUDED_OWNER_EMAILS = new Set([
+  'messiasconfort@gmail.com'
+])
+
+function isDefaultReformItemsExcluded(companyId) {
+  const cleanCompanyId = text(companyId).trim()
+  if (!cleanCompanyId) return true
+  const store = storeLib.readStore()
+  const company = (Array.isArray(store?.companies) ? store.companies : [])
+    .find(item => String(item?.id || '') === cleanCompanyId)
+  const ownerEmail = text(company?.owner_email).trim().toLowerCase()
+  return !!(ownerEmail && DEFAULT_REFORM_EXCLUDED_OWNER_EMAILS.has(ownerEmail))
+}
+
+function defaultReformItem(companyId, name) {
+  const digest = crypto.createHash('sha256')
+    .update(`default-reform-item:${companyId}:${String(name).toLowerCase()}`)
+    .digest('hex')
+    .slice(0, 24)
+  return {
+    id: `itm_${digest}`,
+    name,
+    unit: 'metro linear',
+    price_cents: 0,
+    category: 'outro',
+    isAlbum: false,
+    isGrupo: false
+  }
+}
+
+function itemNameKey(value) {
+  return text(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+}
+
+async function ensureDefaultReformItems(companyId) {
+  const cleanCompanyId = text(companyId).trim()
+  if (!cleanCompanyId || isDefaultReformItemsExcluded(cleanCompanyId)) {
+    return { added: 0, skipped: true, revision: 0 }
+  }
+
+  const pool = getPool()
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const currentRes = await client.query(`
+      SELECT revision, items
+      FROM app_personalization_catalog_v2
+      WHERE company_id = $1
+      FOR UPDATE
+    `, [cleanCompanyId])
+
+    if (!currentRes.rows.length) {
+      const items = DEFAULT_REFORM_ITEMS.map(name => defaultReformItem(cleanCompanyId, name))
+      await client.query(`
+        INSERT INTO app_personalization_catalog_v2 (
+          company_id, revision, items, albums, groups, created_at, updated_at
+        ) VALUES ($1,1,$2::jsonb,'[]'::jsonb,'[]'::jsonb,NOW(),NOW())
+      `, [cleanCompanyId, JSON.stringify(items)])
+      await client.query('COMMIT')
+      return { added: items.length, skipped: false, revision: 1 }
+    }
+
+    const row = currentRes.rows[0]
+    const items = Array.isArray(row.items) ? row.items.slice() : []
+    const existingNames = new Set(items.map(item => itemNameKey(item?.name || item?.nome)).filter(Boolean))
+    const missing = DEFAULT_REFORM_ITEMS.filter(name => !existingNames.has(itemNameKey(name)))
+
+    if (!missing.length) {
+      await client.query('COMMIT')
+      return { added: 0, skipped: false, revision: Number(row.revision || 0) }
+    }
+
+    const nextItems = items.concat(missing.map(name => defaultReformItem(cleanCompanyId, name)))
+    const nextRevision = Number(row.revision || 0) + 1
+    await client.query(`
+      UPDATE app_personalization_catalog_v2
+      SET revision=$2, items=$3::jsonb, updated_at=NOW()
+      WHERE company_id=$1
+    `, [cleanCompanyId, nextRevision, JSON.stringify(nextItems)])
+    await client.query('COMMIT')
+    return { added: missing.length, skipped: false, revision: nextRevision }
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {})
+    throw err
+  } finally {
+    client.release()
+  }
+}
+
+async function getCatalogWithDefaultReformItems(companyId) {
+  await ensureDefaultReformItems(companyId)
+  return getCatalog(companyId)
+}
+
+async function seedDefaultReformItemsForCompanies(companyIds = []) {
+  const ids = Array.from(new Set((Array.isArray(companyIds) ? companyIds : [])
+    .map(value => text(value).trim())
+    .filter(Boolean)))
+  let companiesUpdated = 0
+  let companiesSkipped = 0
+  let itemsAdded = 0
+  for (const companyId of ids) {
+    const result = await ensureDefaultReformItems(companyId)
+    if (result.skipped) companiesSkipped += 1
+    if (result.added > 0) companiesUpdated += 1
+    itemsAdded += Number(result.added || 0)
+  }
+  return {
+    companies_checked: ids.length,
+    companies_updated: companiesUpdated,
+    companies_skipped: companiesSkipped,
+    items_added: itemsAdded
+  }
+}
+
 function conflictError(currentRevision) {
   const err = new Error('A configuração foi alterada em outro dispositivo. Recarregue antes de salvar novamente.')
   err.code = 'revision_conflict'
@@ -400,6 +529,9 @@ module.exports = {
   sanitizeMetragens,
   sanitizeConsumos,
   getCatalog,
+  getCatalogWithDefaultReformItems,
+  ensureDefaultReformItems,
+  seedDefaultReformItemsForCompanies,
   saveCatalog,
   getModelConfig,
   saveModelConfig,
