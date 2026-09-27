@@ -217,6 +217,66 @@ function selectedCompanyIds(store, body){
   return requested.filter(id => validIds.has(id))
 }
 
+function normalizeGlobalStatusName(value){
+  return String(value || '').trim().toLowerCase()
+}
+
+async function buildGlobalCompanyStatus(store, type, item){
+  const companies = Array.isArray(store.companies) ? store.companies : []
+  const targetName = normalizeGlobalStatusName(item?.name)
+  const targetGlobalId = 'global_' + String(item?.id || '')
+  const rows = []
+
+  for(const company of companies){
+    const companyId = String(company?.id || '').trim()
+    if(!companyId) continue
+
+    let received = false
+    try{
+      const catalog = await personalizationDb.getCatalog(companyId)
+      if(type === 'album'){
+        const albums = Array.isArray(catalog?.albums) ? catalog.albums : []
+        received = albums.some(entry =>
+          String(entry?.id || '') === targetGlobalId ||
+          normalizeGlobalStatusName(entry?.nome || entry?.name) === targetName
+        )
+      }else{
+        const items = Array.isArray(catalog?.items) ? catalog.items : []
+        received = items.some(entry =>
+          String(entry?.id || '') === targetGlobalId ||
+          normalizeGlobalStatusName(entry?.name || entry?.nome) === targetName
+        )
+      }
+    }catch(_){}
+
+    rows.push({
+      company_id: companyId,
+      received
+    })
+  }
+
+  return rows
+}
+
+router.get('/global-defaults/:type/:itemId/company-status', requireAuth, requireMaster, requirePermission('saas.companies.read'), async (req, res, next) => {
+  try{
+    const typeMap = {
+      additional: 'additionals',
+      foam: 'foams',
+      album: 'albums'
+    }
+    const collectionKey = typeMap[String(req.params.type || '').trim()]
+    if(!collectionKey) return res.status(400).json({ error:'invalid_type', message:'Tipo global inválido.' })
+
+    const store = readStore()
+    const item = globalDefaultsCollection(store, collectionKey).find(entry => String(entry.id) === String(req.params.itemId))
+    if(!item) return res.status(404).json({ error:'not_found', message:'Padrão global não encontrado.' })
+
+    const companies = await buildGlobalCompanyStatus(store, String(req.params.type || '').trim(), item)
+    return res.json({ companies })
+  }catch(err){ next(err) }
+})
+
 router.get('/global-defaults/additionals', requireAuth, requireMaster, requirePermission('saas.companies.read'), (req, res) => {
   const store = readStore()
   return res.json({ items: globalDefaultsCollection(store, 'additionals') })
