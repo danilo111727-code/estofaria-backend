@@ -397,19 +397,44 @@ function handleResetPassword(req, res){
 router.post('/reset-password', handleResetPassword)
 router.post('/password/reset', handleResetPassword)
 
+const CURRENT_ONBOARDING_VERSION = 2
+const ONBOARDING_V2_LAST_STEP = 4
+
+function mapLegacyOnboardingStep(value){
+  const legacyStep = Math.max(0, Math.min(6, Number(value) || 0))
+  return [0, 1, 1, 2, 3, 3, 3][legacyStep]
+}
+
+function migrateCompanyOnboarding(company){
+  const storedVersion = Math.max(0, Number(company.onboarding_steps_version || 0) || 0)
+  if(storedVersion >= CURRENT_ONBOARDING_VERSION) return false
+
+  const completedVersion = Math.max(0, Number(company.onboarding_completed_version || 0) || 0)
+  if(completedVersion >= 1){
+    company.onboarding_completed_version = Math.max(completedVersion, CURRENT_ONBOARDING_VERSION)
+  }else{
+    company.onboarding_step = mapLegacyOnboardingStep(company.onboarding_step)
+  }
+
+  company.onboarding_steps_version = CURRENT_ONBOARDING_VERSION
+  company.updated_at = nowIso()
+  return true
+}
+
 router.get('/onboarding', requireAuth, (req, res) => {
   const store = readStore()
   const company = getCompanyContext(req, store)
   if(!company) return res.status(404).json({ error:'company_not_found', message:'Empresa não encontrada.' })
 
-  const currentVersion = 1
+  const currentVersion = CURRENT_ONBOARDING_VERSION
+  if(migrateCompanyOnboarding(company)) writeStore(store)
   const completedVersion = Math.max(0, Number(company.onboarding_completed_version || 0) || 0)
-  const step = Math.max(0, Math.min(6, Number(company.onboarding_step || 0) || 0))
+  const step = Math.max(0, Math.min(ONBOARDING_V2_LAST_STEP, Number(company.onboarding_step || 0) || 0))
   const completed = completedVersion >= currentVersion
 
   res.json({
     version: currentVersion,
-    step: completed ? 6 : step,
+    step: completed ? ONBOARDING_V2_LAST_STEP : step,
     completed,
     completed_at: completed ? String(company.onboarding_completed_at || '') : ''
   })
@@ -420,14 +445,32 @@ router.patch('/onboarding', requireAuth, (req, res) => {
   const company = getCompanyContext(req, store)
   if(!company) return res.status(404).json({ error:'company_not_found', message:'Empresa não encontrada.' })
 
-  const currentVersion = 1
-  const requestedStep = Math.max(0, Math.min(6, Number(req.body?.step || 0) || 0))
+  const currentVersion = CURRENT_ONBOARDING_VERSION
+  if(req.body?.reset === true){
+    company.onboarding_step = 0
+    company.onboarding_steps_version = currentVersion
+    company.onboarding_completed_version = 0
+    company.onboarding_completed_at = ''
+    company.updated_at = nowIso()
+    writeStore(store)
+    return res.json({ version:currentVersion, step:0, completed:false, completed_at:'' })
+  }
+
+  const clientVersion = Math.max(1, Number(req.body?.version || 1) || 1)
+  const rawStep = Number(req.body?.step || 0) || 0
+  const requestedStep = clientVersion >= currentVersion
+    ? Math.max(0, Math.min(ONBOARDING_V2_LAST_STEP, rawStep))
+    : mapLegacyOnboardingStep(rawStep)
   const completed = req.body?.completed === true
 
-  company.onboarding_step = completed ? 6 : requestedStep
+  company.onboarding_steps_version = currentVersion
+  company.onboarding_step = completed ? ONBOARDING_V2_LAST_STEP : requestedStep
   if(completed){
-    company.onboarding_completed_version = currentVersion
-    company.onboarding_completed_at = nowIso()
+    company.onboarding_completed_version = Math.max(
+      currentVersion,
+      Number(company.onboarding_completed_version || 0) || 0
+    )
+    company.onboarding_completed_at = company.onboarding_completed_at || nowIso()
   }
   company.updated_at = nowIso()
   writeStore(store)
