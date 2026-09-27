@@ -98,7 +98,7 @@ function normalizeFoamCatalog(input = {}) {
 
 router.get('/personalization/config', requireRead, requireCompany, async (req, res, next) => {
   try {
-    const data = await personalizationDb.getCatalog(req.personalizationV2CompanyId)
+    const data = await personalizationDb.getCatalogWithDefaultReformItems(req.personalizationV2CompanyId)
     return res.json(data)
   } catch (err) {
     next(err)
@@ -122,7 +122,7 @@ router.put('/personalization/config', requireWrite, requireCompany, async (req, 
 router.get('/models/:id/personalization-config', requireRead, requireCompany, requireModel, async (req, res, next) => {
   try {
     const [catalog, modelConfig] = await Promise.all([
-      personalizationDb.getCatalog(req.personalizationV2CompanyId),
+      personalizationDb.getCatalogWithDefaultReformItems(req.personalizationV2CompanyId),
       personalizationDb.getModelConfig(req.personalizationV2CompanyId, req.params.id)
     ])
     return res.json(consumption.resolveModelConfig(catalog, modelConfig))
@@ -148,7 +148,7 @@ router.put('/models/:id/personalization-config', requireWrite, requireCompany, r
 router.get('/models/:id/personalization-items', requireRead, requireCompany, requireModel, async (req, res, next) => {
   try {
     const [catalog, modelConfig] = await Promise.all([
-      personalizationDb.getCatalog(req.personalizationV2CompanyId),
+      personalizationDb.getCatalogWithDefaultReformItems(req.personalizationV2CompanyId),
       personalizationDb.getModelConfig(req.personalizationV2CompanyId, req.params.id)
     ])
 
