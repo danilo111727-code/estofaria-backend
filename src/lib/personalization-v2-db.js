@@ -200,6 +200,10 @@ const DEFAULT_REFORM_ITEMS = [
   'Reforma: Troca de pés'
 ]
 
+const DEFAULT_REFORM_EXCLUDED_COMPANY_IDS = new Set([
+  'e48283ef-98ec-4e15-9ad8-befba5c4d662'
+])
+
 const DEFAULT_REFORM_EXCLUDED_OWNER_EMAILS = new Set([
   'messiasconfort@gmail.com'
 ])
@@ -207,6 +211,7 @@ const DEFAULT_REFORM_EXCLUDED_OWNER_EMAILS = new Set([
 function isDefaultReformItemsExcluded(companyId) {
   const cleanCompanyId = text(companyId).trim()
   if (!cleanCompanyId) return true
+  if (DEFAULT_REFORM_EXCLUDED_COMPANY_IDS.has(cleanCompanyId)) return true
   const store = storeLib.readStore()
   const company = (Array.isArray(store?.companies) ? store.companies : [])
     .find(item => String(item?.id || '') === cleanCompanyId)
