@@ -7,6 +7,7 @@ const { issueToken, sanitizeUser, normalizeArray } = require('../lib/auth')
 const { requireAuth } = require('../middleware/auth')
 const { hasMasterAccess } = require('../lib/policies')
 const { sendEmail, welcomeEmail, passwordResetEmail } = require('../lib/email')
+const personalizationDb = require('../lib/personalization-v2-db')
 
 const router = express.Router()
 const BUSINESS_MODULES = ['painel','vendedor','agenda','material','precificacao','catalogo','itens-personalizacao','assinatura','financeiro','configuracao']
@@ -178,7 +179,7 @@ router.post('/login', (req, res) => {
   res.json({ token, user: sanitizeUser(enrichUserForResponse(store, user)) })
 })
 
-router.post('/register', (req, res) => {
+router.post('/register', async (req, res) => {
   const empresa = normalizeText(req.body?.empresa, 120)
   const nome = normalizeText(req.body?.nome, 120)
   const password = String(req.body?.password || '')
@@ -252,6 +253,58 @@ router.post('/register', (req, res) => {
     source: 'public-register'
   })
   writeStore(store)
+
+  try{
+    const defaults = store.globalPersonalizationDefaults && typeof store.globalPersonalizationDefaults === 'object'
+      ? store.globalPersonalizationDefaults
+      : {}
+
+    const additionals = Array.isArray(defaults.additionals)
+      ? defaults.additionals.filter(item => item && item.active !== false)
+      : []
+    const foams = Array.isArray(defaults.foams)
+      ? defaults.foams.filter(item => item && item.active !== false)
+      : []
+    const albums = Array.isArray(defaults.albums)
+      ? defaults.albums.filter(item => item && item.active !== false)
+      : []
+
+    const items = [
+      ...additionals.map(item => ({
+        id:'global_' + String(item.id || ''),
+        name:item.name,
+        unit:item.unit || 'unidade',
+        price_cents:0,
+        category:'outro',
+        isAlbum:false,
+        isGrupo:false
+      })),
+      ...foams.map(item => ({
+        id:'global_' + String(item.id || ''),
+        name:item.name,
+        unit:'metro linear',
+        price_cents:0,
+        category:'espuma',
+        isAlbum:false,
+        isGrupo:false
+      }))
+    ]
+
+    if(items.length) await personalizationDb.addCatalogItems(companyId, items)
+
+    if(albums.length){
+      await personalizationDb.addCatalogAlbums(companyId, albums.map(item => ({
+        id:'global_' + String(item.id || ''),
+        nome:item.name,
+        custo:0,
+        unidade:'metro',
+        itens:(Array.isArray(item.fabrics) ? item.fabrics : []).map(nome => ({ nome, codigo:'' }))
+      })))
+    }
+  }catch(err){
+    console.warn('[auth/register] Não foi possível aplicar padrões globais:', err && err.message ? err.message : err)
+  }
+
   sendEmail({ to: email, ...welcomeEmail(nome, empresa) }).catch(() => {})
   res.status(201).json({ token: issueToken(user), user: sanitizeUser(enrichUserForResponse(store, user)) })
 })
