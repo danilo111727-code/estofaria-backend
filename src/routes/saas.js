@@ -148,46 +148,86 @@ function applyCompanyAction(company, action, payload){
   res.json({ items: items.slice(start, start + pageSize), page, page_size: pageSize, total })
 })
 
-function globalAdditionals(store){
+function globalDefaultsRoot(store){
   if(!store.globalPersonalizationDefaults || typeof store.globalPersonalizationDefaults !== 'object'){
     store.globalPersonalizationDefaults = {}
   }
-  if(!Array.isArray(store.globalPersonalizationDefaults.additionals)){
-    store.globalPersonalizationDefaults.additionals = []
+  for(const key of ['additionals','foams','albums']){
+    if(!Array.isArray(store.globalPersonalizationDefaults[key])) store.globalPersonalizationDefaults[key] = []
   }
-  return store.globalPersonalizationDefaults.additionals
+  return store.globalPersonalizationDefaults
 }
 
-function cleanGlobalAdditional(input = {}, existing = null){
+function globalDefaultsCollection(store, key){
+  return globalDefaultsRoot(store)[key]
+}
+
+function cleanGlobalItem(input = {}, existing = null, type = 'additional'){
   const name = String(input.name ?? input.nome ?? existing?.name ?? '').replace(/\s+/g, ' ').trim().slice(0, 180)
-  const unit = String(input.unit ?? input.unidade ?? existing?.unit ?? 'unidade').replace(/\s+/g, ' ').trim().slice(0, 80) || 'unidade'
-  const rawPrice = input.price_cents ?? input.valor_cents ?? (input.price != null ? Number(input.price) * 100 : undefined)
-  const priceCents = rawPrice === undefined ? Number(existing?.price_cents || 0) : Math.max(0, Math.round(Number(rawPrice) || 0))
+  const defaultUnit = type === 'foam' ? 'metro linear' : 'unidade'
+  const unit = String(input.unit ?? input.unidade ?? existing?.unit ?? defaultUnit).replace(/\s+/g, ' ').trim().slice(0, 80) || defaultUnit
   return {
-    id: String(existing?.id || input.id || ('gadd_' + crypto.randomUUID())),
+    id: String(existing?.id || input.id || ((type === 'foam' ? 'gfoam_' : 'gadd_') + crypto.randomUUID())),
     name,
     unit,
-    price_cents: priceCents,
-    category: 'outro',
+    price_cents: 0,
+    category: type === 'foam' ? 'espuma' : 'outro',
     active: input.active === undefined ? (existing ? existing.active !== false : true) : Boolean(input.active),
     created_at: existing?.created_at || nowIso(),
     updated_at: nowIso()
   }
 }
 
+function cleanGlobalAlbum(input = {}, existing = null){
+  const name = String(input.name ?? input.nome ?? existing?.name ?? existing?.nome ?? '').replace(/\s+/g, ' ').trim().slice(0, 180)
+  const rawFabrics = Array.isArray(input.fabrics) ? input.fabrics
+    : Array.isArray(input.itens) ? input.itens
+    : Array.isArray(existing?.fabrics) ? existing.fabrics
+    : []
+  const fabrics = rawFabrics
+    .map(item => typeof item === 'string' ? item : (item?.name ?? item?.nome ?? ''))
+    .map(value => String(value || '').replace(/\s+/g, ' ').trim().slice(0, 180))
+    .filter(Boolean)
+    .filter((value, index, arr) => arr.findIndex(other => other.toLowerCase() === value.toLowerCase()) === index)
+    .slice(0, 500)
+  return {
+    id: String(existing?.id || input.id || ('galb_' + crypto.randomUUID())),
+    name,
+    fabrics,
+    active: input.active === undefined ? (existing ? existing.active !== false : true) : Boolean(input.active),
+    created_at: existing?.created_at || nowIso(),
+    updated_at: nowIso()
+  }
+}
+
+function findGlobalById(items, itemId){
+  return items.findIndex(item => String(item.id) === String(itemId))
+}
+
+function hasDuplicateGlobalName(items, name, ignoreIndex = -1){
+  const key = String(name || '').trim().toLowerCase()
+  return items.some((item, index) => index !== ignoreIndex && String(item.name || item.nome || '').trim().toLowerCase() === key)
+}
+
+function selectedCompanyIds(store, body){
+  const requested = Array.from(new Set((Array.isArray(body?.company_ids) ? body.company_ids : [])
+    .map(value => String(value || '').trim())
+    .filter(Boolean)))
+  const validIds = new Set((store.companies || []).map(company => String(company.id)))
+  return requested.filter(id => validIds.has(id))
+}
+
 router.get('/global-defaults/additionals', requireAuth, requireMaster, requirePermission('saas.companies.read'), (req, res) => {
   const store = readStore()
-  const items = globalAdditionals(store)
-  return res.json({ items })
+  return res.json({ items: globalDefaultsCollection(store, 'additionals') })
 })
 
 router.post('/global-defaults/additionals', requireAuth, requireMaster, requirePermission('saas.companies.write'), (req, res) => {
   const store = readStore()
-  const items = globalAdditionals(store)
-  const item = cleanGlobalAdditional(req.body || {})
+  const items = globalDefaultsCollection(store, 'additionals')
+  const item = cleanGlobalItem(req.body || {}, null, 'additional')
   if(!item.name) return res.status(400).json({ error:'invalid_request', message:'Informe o nome do adicional.' })
-  const duplicate = items.some(existing => String(existing.name || '').trim().toLowerCase() === item.name.toLowerCase())
-  if(duplicate) return res.status(409).json({ error:'duplicate_name', message:'Já existe um adicional global com esse nome.' })
+  if(hasDuplicateGlobalName(items, item.name)) return res.status(409).json({ error:'duplicate_name', message:'Já existe um adicional global com esse nome.' })
   items.push(item)
   writeStore(store)
   return res.status(201).json({ ok:true, item })
@@ -195,13 +235,12 @@ router.post('/global-defaults/additionals', requireAuth, requireMaster, requireP
 
 router.patch('/global-defaults/additionals/:itemId', requireAuth, requireMaster, requirePermission('saas.companies.write'), (req, res) => {
   const store = readStore()
-  const items = globalAdditionals(store)
-  const index = items.findIndex(item => String(item.id) === String(req.params.itemId))
+  const items = globalDefaultsCollection(store, 'additionals')
+  const index = findGlobalById(items, req.params.itemId)
   if(index < 0) return res.status(404).json({ error:'not_found', message:'Adicional global não encontrado.' })
-  const item = cleanGlobalAdditional(req.body || {}, items[index])
+  const item = cleanGlobalItem(req.body || {}, items[index], 'additional')
   if(!item.name) return res.status(400).json({ error:'invalid_request', message:'Informe o nome do adicional.' })
-  const duplicate = items.some((existing, i) => i !== index && String(existing.name || '').trim().toLowerCase() === item.name.toLowerCase())
-  if(duplicate) return res.status(409).json({ error:'duplicate_name', message:'Já existe um adicional global com esse nome.' })
+  if(hasDuplicateGlobalName(items, item.name, index)) return res.status(409).json({ error:'duplicate_name', message:'Já existe um adicional global com esse nome.' })
   items[index] = item
   writeStore(store)
   return res.json({ ok:true, item })
@@ -209,8 +248,8 @@ router.patch('/global-defaults/additionals/:itemId', requireAuth, requireMaster,
 
 router.delete('/global-defaults/additionals/:itemId', requireAuth, requireMaster, requirePermission('saas.companies.write'), (req, res) => {
   const store = readStore()
-  const items = globalAdditionals(store)
-  const index = items.findIndex(item => String(item.id) === String(req.params.itemId))
+  const items = globalDefaultsCollection(store, 'additionals')
+  const index = findGlobalById(items, req.params.itemId)
   if(index < 0) return res.status(404).json({ error:'not_found', message:'Adicional global não encontrado.' })
   const [removed] = items.splice(index, 1)
   writeStore(store)
@@ -220,25 +259,18 @@ router.delete('/global-defaults/additionals/:itemId', requireAuth, requireMaster
 router.post('/global-defaults/additionals/:itemId/apply', requireAuth, requireMaster, requirePermission('saas.companies.write'), async (req, res, next) => {
   try{
     const store = readStore()
-    const item = globalAdditionals(store).find(entry => String(entry.id) === String(req.params.itemId))
+    const item = globalDefaultsCollection(store, 'additionals').find(entry => String(entry.id) === String(req.params.itemId))
     if(!item) return res.status(404).json({ error:'not_found', message:'Adicional global não encontrado.' })
-
-    const companyIds = Array.from(new Set((Array.isArray(req.body?.company_ids) ? req.body.company_ids : [])
-      .map(value => String(value || '').trim())
-      .filter(Boolean)))
+    const companyIds = selectedCompanyIds(store, req.body)
     if(!companyIds.length) return res.status(400).json({ error:'company_required', message:'Selecione pelo menos uma empresa.' })
-
-    const validIds = new Set((store.companies || []).map(company => String(company.id)))
-    const selected = companyIds.filter(id => validIds.has(id))
     let companiesUpdated = 0
     let itemsAdded = 0
-
-    for(const companyId of selected){
+    for(const companyId of companyIds){
       const result = await personalizationDb.addCatalogItems(companyId, [{
         id:'global_' + String(item.id),
         name:item.name,
         unit:item.unit,
-        price_cents:item.price_cents,
+        price_cents:0,
         category:'outro',
         isAlbum:false,
         isGrupo:false
@@ -246,16 +278,136 @@ router.post('/global-defaults/additionals/:itemId/apply', requireAuth, requireMa
       if(Number(result.added || 0) > 0) companiesUpdated += 1
       itemsAdded += Number(result.added || 0)
     }
+    return res.json({ ok:true, companies_selected:companyIds.length, companies_updated:companiesUpdated, items_added:itemsAdded })
+  }catch(err){ next(err) }
+})
 
-    return res.json({
-      ok:true,
-      companies_selected:selected.length,
-      companies_updated:companiesUpdated,
-      items_added:itemsAdded
-    })
-  }catch(err){
-    next(err)
-  }
+router.get('/global-defaults/foams', requireAuth, requireMaster, requirePermission('saas.companies.read'), (req, res) => {
+  const store = readStore()
+  return res.json({ items: globalDefaultsCollection(store, 'foams') })
+})
+
+router.post('/global-defaults/foams', requireAuth, requireMaster, requirePermission('saas.companies.write'), (req, res) => {
+  const store = readStore()
+  const items = globalDefaultsCollection(store, 'foams')
+  const item = cleanGlobalItem(req.body || {}, null, 'foam')
+  if(!item.name) return res.status(400).json({ error:'invalid_request', message:'Informe o nome da espuma.' })
+  if(hasDuplicateGlobalName(items, item.name)) return res.status(409).json({ error:'duplicate_name', message:'Já existe uma espuma global com esse nome.' })
+  items.push(item)
+  writeStore(store)
+  return res.status(201).json({ ok:true, item })
+})
+
+router.patch('/global-defaults/foams/:itemId', requireAuth, requireMaster, requirePermission('saas.companies.write'), (req, res) => {
+  const store = readStore()
+  const items = globalDefaultsCollection(store, 'foams')
+  const index = findGlobalById(items, req.params.itemId)
+  if(index < 0) return res.status(404).json({ error:'not_found', message:'Espuma global não encontrada.' })
+  const item = cleanGlobalItem(req.body || {}, items[index], 'foam')
+  if(!item.name) return res.status(400).json({ error:'invalid_request', message:'Informe o nome da espuma.' })
+  if(hasDuplicateGlobalName(items, item.name, index)) return res.status(409).json({ error:'duplicate_name', message:'Já existe uma espuma global com esse nome.' })
+  items[index] = item
+  writeStore(store)
+  return res.json({ ok:true, item })
+})
+
+router.delete('/global-defaults/foams/:itemId', requireAuth, requireMaster, requirePermission('saas.companies.write'), (req, res) => {
+  const store = readStore()
+  const items = globalDefaultsCollection(store, 'foams')
+  const index = findGlobalById(items, req.params.itemId)
+  if(index < 0) return res.status(404).json({ error:'not_found', message:'Espuma global não encontrada.' })
+  const [removed] = items.splice(index, 1)
+  writeStore(store)
+  return res.json({ ok:true, removed })
+})
+
+router.post('/global-defaults/foams/:itemId/apply', requireAuth, requireMaster, requirePermission('saas.companies.write'), async (req, res, next) => {
+  try{
+    const store = readStore()
+    const item = globalDefaultsCollection(store, 'foams').find(entry => String(entry.id) === String(req.params.itemId))
+    if(!item) return res.status(404).json({ error:'not_found', message:'Espuma global não encontrada.' })
+    const companyIds = selectedCompanyIds(store, req.body)
+    if(!companyIds.length) return res.status(400).json({ error:'company_required', message:'Selecione pelo menos uma empresa.' })
+    let companiesUpdated = 0
+    let itemsAdded = 0
+    for(const companyId of companyIds){
+      const result = await personalizationDb.addCatalogItems(companyId, [{
+        id:'global_' + String(item.id),
+        name:item.name,
+        unit:'metro linear',
+        price_cents:0,
+        category:'espuma',
+        isAlbum:false,
+        isGrupo:false
+      }])
+      if(Number(result.added || 0) > 0) companiesUpdated += 1
+      itemsAdded += Number(result.added || 0)
+    }
+    return res.json({ ok:true, companies_selected:companyIds.length, companies_updated:companiesUpdated, items_added:itemsAdded })
+  }catch(err){ next(err) }
+})
+
+router.get('/global-defaults/albums', requireAuth, requireMaster, requirePermission('saas.companies.read'), (req, res) => {
+  const store = readStore()
+  return res.json({ items: globalDefaultsCollection(store, 'albums') })
+})
+
+router.post('/global-defaults/albums', requireAuth, requireMaster, requirePermission('saas.companies.write'), (req, res) => {
+  const store = readStore()
+  const items = globalDefaultsCollection(store, 'albums')
+  const item = cleanGlobalAlbum(req.body || {})
+  if(!item.name) return res.status(400).json({ error:'invalid_request', message:'Informe o nome do álbum.' })
+  if(hasDuplicateGlobalName(items, item.name)) return res.status(409).json({ error:'duplicate_name', message:'Já existe um álbum global com esse nome.' })
+  items.push(item)
+  writeStore(store)
+  return res.status(201).json({ ok:true, item })
+})
+
+router.patch('/global-defaults/albums/:itemId', requireAuth, requireMaster, requirePermission('saas.companies.write'), (req, res) => {
+  const store = readStore()
+  const items = globalDefaultsCollection(store, 'albums')
+  const index = findGlobalById(items, req.params.itemId)
+  if(index < 0) return res.status(404).json({ error:'not_found', message:'Álbum global não encontrado.' })
+  const item = cleanGlobalAlbum(req.body || {}, items[index])
+  if(!item.name) return res.status(400).json({ error:'invalid_request', message:'Informe o nome do álbum.' })
+  if(hasDuplicateGlobalName(items, item.name, index)) return res.status(409).json({ error:'duplicate_name', message:'Já existe um álbum global com esse nome.' })
+  items[index] = item
+  writeStore(store)
+  return res.json({ ok:true, item })
+})
+
+router.delete('/global-defaults/albums/:itemId', requireAuth, requireMaster, requirePermission('saas.companies.write'), (req, res) => {
+  const store = readStore()
+  const items = globalDefaultsCollection(store, 'albums')
+  const index = findGlobalById(items, req.params.itemId)
+  if(index < 0) return res.status(404).json({ error:'not_found', message:'Álbum global não encontrado.' })
+  const [removed] = items.splice(index, 1)
+  writeStore(store)
+  return res.json({ ok:true, removed })
+})
+
+router.post('/global-defaults/albums/:itemId/apply', requireAuth, requireMaster, requirePermission('saas.companies.write'), async (req, res, next) => {
+  try{
+    const store = readStore()
+    const item = globalDefaultsCollection(store, 'albums').find(entry => String(entry.id) === String(req.params.itemId))
+    if(!item) return res.status(404).json({ error:'not_found', message:'Álbum global não encontrado.' })
+    const companyIds = selectedCompanyIds(store, req.body)
+    if(!companyIds.length) return res.status(400).json({ error:'company_required', message:'Selecione pelo menos uma empresa.' })
+    let companiesUpdated = 0
+    let albumsAdded = 0
+    for(const companyId of companyIds){
+      const result = await personalizationDb.addCatalogAlbums(companyId, [{
+        id:'global_' + String(item.id),
+        nome:item.name,
+        custo:0,
+        unidade:'metro',
+        itens:(item.fabrics || []).map(nome => ({ nome, codigo:'' }))
+      }])
+      if(Number(result.added || 0) > 0) companiesUpdated += 1
+      albumsAdded += Number(result.added || 0)
+    }
+    return res.json({ ok:true, companies_selected:companyIds.length, companies_updated:companiesUpdated, albums_added:albumsAdded })
+  }catch(err){ next(err) }
 })
 
 router.post('/companies/:companyId/actions', requireAuth, requireMaster, requirePermission('saas.companies.write'), (req, res) => {
