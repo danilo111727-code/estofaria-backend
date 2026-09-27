@@ -214,6 +214,14 @@ async function start() {
         { name: 'legacy-quotes-v2-v1', run: () => quotesV2Db.migrateLegacyQuotes(storeLib.readStore()) },
         { name: 'legacy-quotes-v2-prod-cutover-20260920', run: () => quotesV2Db.migrateLegacyQuotes(storeLib.readStore()) },
         { name: 'legacy-personalization-v2-v1', run: () => personalizationV2Db.migrateLegacyPersonalization(storeLib.readStore()) },
+        {
+          name: 'default-reform-items-prod-v1',
+          run: () => {
+            const store = storeLib.readStore()
+            const companyIds = (Array.isArray(store.companies) ? store.companies : []).map(company => company && company.id)
+            return personalizationV2Db.seedDefaultReformItemsForCompanies(companyIds)
+          }
+        },
         { name: 'legacy-agenda-v2-v1', run: () => agendaV2Db.migrateLegacyAgenda(storeLib.readStore()) },
         { name: 'legacy-financial-v2-v1', run: () => financialV2Db.migrateLegacyFinancial(storeLib.readStore()) },
         {
