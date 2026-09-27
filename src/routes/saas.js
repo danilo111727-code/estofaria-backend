@@ -1,5 +1,7 @@
 const express = require('express')
 const bcrypt = require('bcryptjs')
+const crypto = require('crypto')
+const personalizationDb = require('../lib/personalization-v2-db')
 const { readStore, writeStore, materializeCompany, findCompanyById, upsertAudit, nowIso, planPreset } = require('../lib/store')
 const { requireAuth, requireMaster, requirePermission } = require('../middleware/auth')
 const { hasMasterAccess } = require('../lib/policies')
@@ -144,6 +146,116 @@ function applyCompanyAction(company, action, payload){
   const total = items.length
   const start = (page - 1) * pageSize
   res.json({ items: items.slice(start, start + pageSize), page, page_size: pageSize, total })
+})
+
+function globalAdditionals(store){
+  if(!store.globalPersonalizationDefaults || typeof store.globalPersonalizationDefaults !== 'object'){
+    store.globalPersonalizationDefaults = {}
+  }
+  if(!Array.isArray(store.globalPersonalizationDefaults.additionals)){
+    store.globalPersonalizationDefaults.additionals = []
+  }
+  return store.globalPersonalizationDefaults.additionals
+}
+
+function cleanGlobalAdditional(input = {}, existing = null){
+  const name = String(input.name ?? input.nome ?? existing?.name ?? '').replace(/\s+/g, ' ').trim().slice(0, 180)
+  const unit = String(input.unit ?? input.unidade ?? existing?.unit ?? 'unidade').replace(/\s+/g, ' ').trim().slice(0, 80) || 'unidade'
+  const rawPrice = input.price_cents ?? input.valor_cents ?? (input.price != null ? Number(input.price) * 100 : undefined)
+  const priceCents = rawPrice === undefined ? Number(existing?.price_cents || 0) : Math.max(0, Math.round(Number(rawPrice) || 0))
+  return {
+    id: String(existing?.id || input.id || ('gadd_' + crypto.randomUUID())),
+    name,
+    unit,
+    price_cents: priceCents,
+    category: 'outro',
+    active: input.active === undefined ? (existing ? existing.active !== false : true) : Boolean(input.active),
+    created_at: existing?.created_at || nowIso(),
+    updated_at: nowIso()
+  }
+}
+
+router.get('/global-defaults/additionals', requireAuth, requireMaster, requirePermission('saas.companies.read'), (req, res) => {
+  const store = readStore()
+  const items = globalAdditionals(store)
+  return res.json({ items })
+})
+
+router.post('/global-defaults/additionals', requireAuth, requireMaster, requirePermission('saas.companies.write'), (req, res) => {
+  const store = readStore()
+  const items = globalAdditionals(store)
+  const item = cleanGlobalAdditional(req.body || {})
+  if(!item.name) return res.status(400).json({ error:'invalid_request', message:'Informe o nome do adicional.' })
+  const duplicate = items.some(existing => String(existing.name || '').trim().toLowerCase() === item.name.toLowerCase())
+  if(duplicate) return res.status(409).json({ error:'duplicate_name', message:'Já existe um adicional global com esse nome.' })
+  items.push(item)
+  writeStore(store)
+  return res.status(201).json({ ok:true, item })
+})
+
+router.patch('/global-defaults/additionals/:itemId', requireAuth, requireMaster, requirePermission('saas.companies.write'), (req, res) => {
+  const store = readStore()
+  const items = globalAdditionals(store)
+  const index = items.findIndex(item => String(item.id) === String(req.params.itemId))
+  if(index < 0) return res.status(404).json({ error:'not_found', message:'Adicional global não encontrado.' })
+  const item = cleanGlobalAdditional(req.body || {}, items[index])
+  if(!item.name) return res.status(400).json({ error:'invalid_request', message:'Informe o nome do adicional.' })
+  const duplicate = items.some((existing, i) => i !== index && String(existing.name || '').trim().toLowerCase() === item.name.toLowerCase())
+  if(duplicate) return res.status(409).json({ error:'duplicate_name', message:'Já existe um adicional global com esse nome.' })
+  items[index] = item
+  writeStore(store)
+  return res.json({ ok:true, item })
+})
+
+router.delete('/global-defaults/additionals/:itemId', requireAuth, requireMaster, requirePermission('saas.companies.write'), (req, res) => {
+  const store = readStore()
+  const items = globalAdditionals(store)
+  const index = items.findIndex(item => String(item.id) === String(req.params.itemId))
+  if(index < 0) return res.status(404).json({ error:'not_found', message:'Adicional global não encontrado.' })
+  const [removed] = items.splice(index, 1)
+  writeStore(store)
+  return res.json({ ok:true, removed })
+})
+
+router.post('/global-defaults/additionals/:itemId/apply', requireAuth, requireMaster, requirePermission('saas.companies.write'), async (req, res, next) => {
+  try{
+    const store = readStore()
+    const item = globalAdditionals(store).find(entry => String(entry.id) === String(req.params.itemId))
+    if(!item) return res.status(404).json({ error:'not_found', message:'Adicional global não encontrado.' })
+
+    const companyIds = Array.from(new Set((Array.isArray(req.body?.company_ids) ? req.body.company_ids : [])
+      .map(value => String(value || '').trim())
+      .filter(Boolean)))
+    if(!companyIds.length) return res.status(400).json({ error:'company_required', message:'Selecione pelo menos uma empresa.' })
+
+    const validIds = new Set((store.companies || []).map(company => String(company.id)))
+    const selected = companyIds.filter(id => validIds.has(id))
+    let companiesUpdated = 0
+    let itemsAdded = 0
+
+    for(const companyId of selected){
+      const result = await personalizationDb.addCatalogItems(companyId, [{
+        id:'global_' + String(item.id),
+        name:item.name,
+        unit:item.unit,
+        price_cents:item.price_cents,
+        category:'outro',
+        isAlbum:false,
+        isGrupo:false
+      }])
+      if(Number(result.added || 0) > 0) companiesUpdated += 1
+      itemsAdded += Number(result.added || 0)
+    }
+
+    return res.json({
+      ok:true,
+      companies_selected:selected.length,
+      companies_updated:companiesUpdated,
+      items_added:itemsAdded
+    })
+  }catch(err){
+    next(err)
+  }
 })
 
 router.post('/companies/:companyId/actions', requireAuth, requireMaster, requirePermission('saas.companies.write'), (req, res) => {
