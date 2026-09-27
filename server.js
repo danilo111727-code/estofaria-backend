@@ -71,7 +71,8 @@ const disposableTestOrigins = new Set([
   'https://prod-clone-global-defaults-f.estofaria-frontend.pages.dev',
   'https://ca50e5ac.estofaria-frontend.pages.dev',
   'https://6b080ed9.estofaria-frontend.pages.dev',
-  'https://76acbd0f.estofaria-frontend.pages.dev'
+  'https://76acbd0f.estofaria-frontend.pages.dev',
+  'https://teste-oficial.estofaria-frontend.pages.dev'
 ])
 const corsOptions = {
   origin(origin, callback) {
