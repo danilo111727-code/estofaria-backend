@@ -56,6 +56,7 @@ function parseAllowedOrigins() {
 
 const allowedOrigins = parseAllowedOrigins()
 const disposableTestOrigins = new Set([
+  'https://estofaria-frontend.pages.dev',
   'https://teste-oficial.estofaria-frontend.pages.dev'
 ])
 const corsOptions = {
