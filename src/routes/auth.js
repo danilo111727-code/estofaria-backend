@@ -197,6 +197,9 @@ router.post('/register', async (req, res) => {
   const companyId = uuidv4()
   const userId = uuidv4()
   const plan = planPreset(store.billingConfig.default_plan_code || 'gestao')
+  const courtesyDays = 60
+  const courtesyStartedAt = nowIso()
+  const courtesyUntil = new Date(Date.now() + (courtesyDays * 24 * 60 * 60 * 1000)).toISOString()
 
   const user = {
     id: userId,
@@ -222,14 +225,16 @@ router.post('/register', async (req, res) => {
     owner_phone: '',
     plan_code: plan.code,
     plan_name: plan.name,
-    billing_mode: 'stripe',
-    financial_status: 'pending_payment',
-    access_status: 'pending_payment',
+    billing_mode: 'courtesy',
+    financial_status: 'active',
+    access_status: 'courtesy_active',
+    courtesy_started_at: courtesyStartedAt,
+    courtesy_until: courtesyUntil,
     seats_limit: plan.seats_limit,
     monthly_price_cents: plan.monthly_price_cents,
-    notes: 'Conta criada pelo fluxo de cadastro SaaS.',
-    created_at: nowIso(),
-    updated_at: nowIso()
+    notes: 'Conta criada com 60 dias de cortesia automática.',
+    created_at: courtesyStartedAt,
+    updated_at: courtesyStartedAt
   })
   store.companyUsers.push({
     id: uuidv4(),
@@ -245,7 +250,7 @@ router.post('/register', async (req, res) => {
   upsertAudit(store, {
     company_id: companyId,
     action: 'register',
-    message: 'Empresa criada pelo fluxo público de cadastro.',
+    message: 'Empresa criada pelo fluxo público de cadastro com 60 dias de cortesia automática.',
     actor_user_id: userId,
     actor_name: nome,
     actor_email: email,
