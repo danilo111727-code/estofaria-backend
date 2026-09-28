@@ -228,6 +228,10 @@ router.post('/register', async (req, res) => {
     seats_limit: plan.seats_limit,
     monthly_price_cents: plan.monthly_price_cents,
     notes: 'Conta criada pelo fluxo de cadastro SaaS.',
+    onboarding_step: 0,
+    onboarding_steps_version: 3,
+    onboarding_completed_version: 0,
+    onboarding_completed_at: '',
     created_at: nowIso(),
     updated_at: nowIso()
   })
@@ -397,8 +401,8 @@ function handleResetPassword(req, res){
 router.post('/reset-password', handleResetPassword)
 router.post('/password/reset', handleResetPassword)
 
-const CURRENT_ONBOARDING_VERSION = 2
-const ONBOARDING_V2_LAST_STEP = 4
+const CURRENT_ONBOARDING_VERSION = 3
+const ONBOARDING_V3_LAST_STEP = 5
 
 function mapLegacyOnboardingStep(value){
   const legacyStep = Math.max(0, Math.min(6, Number(value) || 0))
@@ -410,10 +414,18 @@ function migrateCompanyOnboarding(company){
   if(storedVersion >= CURRENT_ONBOARDING_VERSION) return false
 
   const completedVersion = Math.max(0, Number(company.onboarding_completed_version || 0) || 0)
+
+  // Quem já concluiu o onboarding antigo continua concluído.
   if(completedVersion >= 1){
-    company.onboarding_completed_version = Math.max(completedVersion, CURRENT_ONBOARDING_VERSION)
+    company.onboarding_completed_version = CURRENT_ONBOARDING_VERSION
+  }else if(storedVersion >= 2){
+    // No v3 entrou a nova etapa 1 (adicionar à tela inicial).
+    // Empresas que já estavam no fluxo v2 mantêm seu progresso nas etapas antigas.
+    const oldStep = Math.max(0, Math.min(4, Number(company.onboarding_step || 0) || 0))
+    company.onboarding_step = Math.min(ONBOARDING_V3_LAST_STEP, oldStep + 1)
   }else{
-    company.onboarding_step = mapLegacyOnboardingStep(company.onboarding_step)
+    // Fluxos legados também são preservados nas etapas equivalentes.
+    company.onboarding_step = Math.min(ONBOARDING_V3_LAST_STEP, mapLegacyOnboardingStep(company.onboarding_step) + 1)
   }
 
   company.onboarding_steps_version = CURRENT_ONBOARDING_VERSION
@@ -429,12 +441,12 @@ router.get('/onboarding', requireAuth, (req, res) => {
   const currentVersion = CURRENT_ONBOARDING_VERSION
   if(migrateCompanyOnboarding(company)) writeStore(store)
   const completedVersion = Math.max(0, Number(company.onboarding_completed_version || 0) || 0)
-  const step = Math.max(0, Math.min(ONBOARDING_V2_LAST_STEP, Number(company.onboarding_step || 0) || 0))
+  const step = Math.max(0, Math.min(ONBOARDING_V3_LAST_STEP, Number(company.onboarding_step || 0) || 0))
   const completed = completedVersion >= currentVersion
 
   res.json({
     version: currentVersion,
-    step: completed ? ONBOARDING_V2_LAST_STEP : step,
+    step: completed ? ONBOARDING_V3_LAST_STEP : step,
     completed,
     completed_at: completed ? String(company.onboarding_completed_at || '') : ''
   })
@@ -459,12 +471,12 @@ router.patch('/onboarding', requireAuth, (req, res) => {
   const clientVersion = Math.max(1, Number(req.body?.version || 1) || 1)
   const rawStep = Number(req.body?.step || 0) || 0
   const requestedStep = clientVersion >= currentVersion
-    ? Math.max(0, Math.min(ONBOARDING_V2_LAST_STEP, rawStep))
+    ? Math.max(0, Math.min(ONBOARDING_V3_LAST_STEP, rawStep))
     : mapLegacyOnboardingStep(rawStep)
   const completed = req.body?.completed === true
 
   company.onboarding_steps_version = currentVersion
-  company.onboarding_step = completed ? ONBOARDING_V2_LAST_STEP : requestedStep
+  company.onboarding_step = completed ? ONBOARDING_V3_LAST_STEP : requestedStep
   if(completed){
     company.onboarding_completed_version = Math.max(
       currentVersion,
