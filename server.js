@@ -60,7 +60,8 @@ const disposableTestOrigins = new Set([
   'https://estofaria-frontend.pages.dev',
   'https://teste-oficial.estofaria-frontend.pages.dev',
   'https://inclusos-fix.estofaria-frontend.pages.dev',
-  'https://vendedor-clean.estofaria-frontend.pages.dev'
+  'https://vendedor-clean.estofaria-frontend.pages.dev',
+  'https://fix-cartao-layout-from-produ.estofaria-frontend.pages.dev'
 ])
 const corsOptions = {
   origin(origin, callback) {
