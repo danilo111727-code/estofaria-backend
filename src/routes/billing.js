@@ -29,6 +29,40 @@ function getCompanyFromSession(store, req){
   return null
 }
 
+function expireCourtesyIfNeeded(store, company){
+  if(!company) return false
+  const accessStatus = String(company.access_status || '').toLowerCase()
+  const billingMode = String(company.billing_mode || '').toLowerCase()
+  if(accessStatus !== 'courtesy_active' && billingMode !== 'courtesy') return false
+
+  const courtesyUntil = String(company.courtesy_until || '').trim()
+  if(!courtesyUntil) return false
+  const courtesyUntilMs = new Date(courtesyUntil).getTime()
+  if(!Number.isFinite(courtesyUntilMs) || courtesyUntilMs > Date.now()) return false
+
+  const before = JSON.parse(JSON.stringify(company))
+  company.billing_mode = 'stripe'
+  company.financial_status = 'pending_payment'
+  company.access_status = 'pending_payment'
+  company.courtesy_expired_at = nowIso()
+  company.updated_at = nowIso()
+
+  upsertAudit(store, {
+    company_id: company.id,
+    action: 'courtesy_expired',
+    message: 'Cortesia automática de 60 dias encerrada. Assinatura necessária para continuar.',
+    actor_name: 'system',
+    actor_email: 'system@estofariadigital',
+    actor_role: 'system',
+    reason: 'automatic_courtesy_expiration',
+    before_json: before,
+    after_json: JSON.parse(JSON.stringify(company)),
+    source: 'billing'
+  })
+  writeStore(store)
+  return true
+}
+
 function buildSubscriptionPayload(company, store, req){
   const cfg = store.billingConfig || {}
   if(!company){
@@ -55,6 +89,8 @@ function buildSubscriptionPayload(company, store, req){
       payment_provider: cfg.payment_provider || company.billing_mode || 'stripe',
       next_charge_at: company.next_charge_at || '',
       grace_until: company.manual_grace_until || '',
+      courtesy_started_at: company.courtesy_started_at || '',
+      courtesy_until: company.courtesy_until || '',
       trial_days: Number(cfg.trial_days || 30),
       checkout_url: cfg.payment_link || `${appBaseUrl(req)}/checkout-simulado?company=${encodeURIComponent(company.id)}`,
       payment_link: cfg.payment_link || `${appBaseUrl(req)}/checkout-simulado?company=${encodeURIComponent(company.id)}`,
@@ -196,12 +232,14 @@ router.get('/checkout-requests', requireAuth, (req, res) => {
 router.get('/', requireAuth, (req, res) => {
   const store = readStore()
   const company = getCompanyFromSession(store, req)
+  expireCourtesyIfNeeded(store, company)
   res.json(buildSubscriptionPayload(company, store, req))
 })
 
 router.get('/subscription', requireAuth, (req, res) => {
   const store = readStore()
   const company = getCompanyFromSession(store, req)
+  expireCourtesyIfNeeded(store, company)
   res.json(buildSubscriptionPayload(company, store, req))
 })
 
