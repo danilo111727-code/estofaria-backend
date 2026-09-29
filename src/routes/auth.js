@@ -12,6 +12,7 @@ const personalizationDb = require('../lib/personalization-v2-db')
 const router = express.Router()
 const BUSINESS_MODULES = ['painel','vendedor','agenda','material','precificacao','catalogo','itens-personalizacao','assinatura','financeiro','configuracao']
 const RATE_LIMIT_BUCKETS = new Map()
+const ACTIVITY_TOUCH_INTERVAL_MS = 60 * 60 * 1000
 
 function normalizeText(value, max = 160){
   return String(value || '').replace(/\s+/g, ' ').trim().slice(0, max)
@@ -170,8 +171,10 @@ router.post('/login', (req, res) => {
   }
   if(!bcrypt.compareSync(password, String(user.password_hash || ''))) return res.status(401).json({ error:'unauthorized', message:'E-mail ou senha inválidos.' })
   if(membership){
+    const accessAt = nowIso()
     membership.status = 'active'
-    membership.last_login_at = nowIso()
+    membership.last_login_at = accessAt
+    membership.last_seen_at = accessAt
   }
   const token = issueToken(user)
   user.updated_at = nowIso()
@@ -245,6 +248,7 @@ router.post('/register', async (req, res) => {
     modules: BUSINESS_MODULES,
     invited_at: nowIso(),
     last_login_at: nowIso(),
+    last_seen_at: nowIso(),
     is_owner: true
   })
   upsertAudit(store, {
@@ -504,6 +508,31 @@ router.patch('/onboarding', requireAuth, (req, res) => {
     step: company.onboarding_step,
     completed,
     completed_at: completed ? company.onboarding_completed_at : ''
+  })
+})
+
+router.post('/activity', requireAuth, (req, res) => {
+  const store = readStore()
+  const membership = getUserMembership(store, req.user)
+
+  if(!membership || hasMasterAccess(req.user)){
+    return res.json({ ok:true, updated:false, last_seen_at:'' })
+  }
+
+  const now = Date.now()
+  const previousTime = new Date(membership.last_seen_at || '').getTime()
+  const shouldUpdate = !Number.isFinite(previousTime)
+    || now - previousTime >= ACTIVITY_TOUCH_INTERVAL_MS
+
+  if(shouldUpdate){
+    membership.last_seen_at = new Date(now).toISOString()
+    writeStore(store)
+  }
+
+  res.json({
+    ok:true,
+    updated:shouldUpdate,
+    last_seen_at:membership.last_seen_at || membership.last_login_at || ''
   })
 })
 
