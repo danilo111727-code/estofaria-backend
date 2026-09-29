@@ -111,6 +111,10 @@ function materializeCompany(store, company){
     .map(item => String(item.last_login_at || '').trim())
     .filter(Boolean)
     .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] || ''
+  const lastSeenAt = companyLinks
+    .map(item => String(item.last_seen_at || item.last_login_at || '').trim())
+    .filter(Boolean)
+    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] || ''
   const members = companyLinks
     .map(link => {
       const user = store.users.find(u => String(u.id) === String(link.user_id)) || {}
@@ -137,6 +141,7 @@ function materializeCompany(store, company){
     seats_limit: company.seats_limit === undefined ? plan.seats_limit : company.seats_limit,
     seats_used: activeMembershipCount(store, company.id),
     last_login_at: lastLoginAt,
+    last_seen_at: lastSeenAt,
     next_charge_at: company.next_charge_at || '',
     last_payment_at: company.last_payment_at || '',
     courtesy_until: company.courtesy_until || '',
