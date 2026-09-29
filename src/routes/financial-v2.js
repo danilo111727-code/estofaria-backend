@@ -58,6 +58,19 @@ router.post('/financial/entries',async(req,res,next)=>{
   }
 })
 
+router.post('/financial/order-receivable/:quoteId',async(req,res,next)=>{
+  try{
+    const row=await db.upsertOrderReceivable(req.financialV2CompanyId,req.params.quoteId,req.body || {})
+    audit(req,'financial.order_receivable.upsert',`Conta a receber sincronizada para pedido ${req.params.quoteId}`)
+    return res.json(row)
+  }catch(err){
+    if(err?.code==='invalid_quote_id'){
+      return res.status(400).json({error:'invalid_quote_id',message:err.message})
+    }
+    next(err)
+  }
+})
+
 router.patch('/financial/entries/:id',async(req,res,next)=>{
   try{
     const row=await db.updateEntry(req.financialV2CompanyId,req.params.id,req.body || {})
