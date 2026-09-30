@@ -674,6 +674,21 @@ async function createBlockOrder(companyId,blockId,input={}){
       await client.query('ROLLBACK')
       return { notFound:true }
     }
+
+    const sourceQuoteId = text(input?.source_quote_id)
+    if(sourceQuoteId){
+      const existingRes = await client.query(`
+        SELECT * FROM app_agenda_orders_v2
+        WHERE company_id=$1 AND source_quote_id=$2
+        ORDER BY created_at ASC
+        LIMIT 1
+      `,[text(companyId),sourceQuoteId])
+      if(existingRes.rows[0]){
+        await client.query('ROLLBACK')
+        return { existing:true, row:orderFromRow(existingRes.rows[0]), bloco }
+      }
+    }
+
     const occupiedRes = await client.query(`
       SELECT COUNT(*)::int AS count
       FROM app_agenda_orders_v2
