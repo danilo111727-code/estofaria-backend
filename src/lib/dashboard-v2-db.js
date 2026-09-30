@@ -92,7 +92,8 @@ async function listDashboardOrders(companyId){
       company_id:row.company_id,
       cliente:row.cliente || payload.cliente || agenda?.cliente || '',
       descricao:agenda?.descricao || payload.descricao || 'Pedido do Vendedor',
-      status:agenda?.status || 'pendente',
+      // O estado da venda vem do pedido, não da ocupação da Agenda.
+      status:row.status || 'pedido',
       total_cents:Number(row.total_cents || payload.total_cents || 0),
       source_quote_id:row.id,
       financial_order:true,
