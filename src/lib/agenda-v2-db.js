@@ -680,6 +680,7 @@ async function createBlockOrder(companyId,blockId,input={}){
       const existingRes = await client.query(`
         SELECT * FROM app_agenda_orders_v2
         WHERE company_id=$1 AND source_quote_id=$2
+          AND COALESCE(status,'') NOT IN ('cancelado','indisponivel')
         ORDER BY created_at ASC
         LIMIT 1
       `,[text(companyId),sourceQuoteId])
