@@ -234,6 +234,58 @@ async function createEntry(companyId,input={}){
   return entryFromRow(result.rows[0])
 }
 
+async function upsertOrderReceivable(companyId,quoteId,input={}){
+  const qid=text(quoteId)
+  if(!qid){
+    const err=new Error('quote_id obrigatório.')
+    err.code='invalid_quote_id'
+    err.statusCode=400
+    throw err
+  }
+
+  const pool=getPool()
+  const id='order-receivable:' + qid
+  const saldo=Math.max(0,num(input?.valor ?? input?.saldo_restante,0))
+
+  if(saldo <= 0){
+    await pool.query(
+      'DELETE FROM app_financial_entries_v2 WHERE company_id=$1 AND id=$2',
+      [text(companyId),id]
+    )
+    return {id,quote_id:qid,removed:true,valor:0}
+  }
+
+  const payload={
+    ...cleanJson(input),
+    quote_id:qid,
+    financial_source:'order'
+  }
+  const result=await pool.query(`
+    INSERT INTO app_financial_entries_v2 (
+      company_id,id,tipo,descricao,cliente,fornecedor,valor,data_vencimento,status,
+      forma_pagamento,categoria,payload,created_at,updated_at
+    ) VALUES ($1,$2,'receber',$3,$4,'',$5,$6,'pendente',$7,'Pedido',$8::jsonb,NOW(),NOW())
+    ON CONFLICT (company_id,id) DO UPDATE SET
+      descricao=EXCLUDED.descricao,
+      cliente=EXCLUDED.cliente,
+      valor=EXCLUDED.valor,
+      data_vencimento=EXCLUDED.data_vencimento,
+      forma_pagamento=EXCLUDED.forma_pagamento,
+      categoria='Pedido',
+      payload=EXCLUDED.payload,
+      updated_at=NOW()
+    RETURNING *
+  `,[
+    text(companyId),id,
+    text(input?.descricao, input?.cliente ? ('Saldo do pedido de ' + text(input.cliente)) : 'Saldo do pedido'),
+    text(input?.cliente,'Cliente') || 'Cliente',
+    saldo,isoDate(input?.dataVencimento || input?.data_entrega),
+    text(input?.formaPagamento || input?.forma_pagamento || 'Outro'),
+    JSON.stringify(payload)
+  ])
+  return entryFromRow(result.rows[0])
+}
+
 async function updateEntry(companyId,id,patch={}){
   const current=await getEntry(companyId,id)
   if(!current) return null
@@ -291,6 +343,7 @@ module.exports={
   listEntries,
   getEntry,
   createEntry,
+  upsertOrderReceivable,
   updateEntry,
   deleteEntry,
   auditEvent
