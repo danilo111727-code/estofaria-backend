@@ -137,10 +137,15 @@ function normalizeSpecificVariations(value) {
         sort_order: materialIndex
       }
     }) : []
+    const measureLabel = text(variation?.measure_label ?? variation?.measureLabel ?? variation?.medida ?? variation?.name ?? variation?.nome ?? '').trim().slice(0, 120)
     return {
       id: text(variation?.id || `variation-${index + 1}`).trim().slice(0, 100),
-      name: text(variation?.name ?? variation?.nome ?? '').trim().slice(0, 120),
-      measure_meters: Math.max(0, number(variation?.measure_meters ?? variation?.measureMeters ?? variation?.medida ?? 0)),
+      name: measureLabel,
+      measure_label: measureLabel,
+      measure_meters: Math.max(0, number(variation?.measure_meters ?? variation?.measureMeters ?? 0)),
+      fabric_quantity: Math.max(0, number(variation?.fabric_quantity ?? variation?.fabricQuantity ?? variation?.tecido_utilizado ?? 0)),
+      target_profit_cents: Math.max(0, Math.round(number(variation?.target_profit_cents ?? variation?.targetProfitCents ?? variation?.lucro_desejado_cents ?? 0))),
+      sale_price_cents: Math.max(0, Math.round(number(variation?.sale_price_cents ?? variation?.salePriceCents ?? variation?.valor_venda_cents ?? 0))),
       price_addition_cents: Math.max(0, Math.round(number(variation?.price_addition_cents ?? variation?.priceAdditionCents ?? variation?.acrescimo_cents ?? 0))),
       materials
     }
