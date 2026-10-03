@@ -91,6 +91,12 @@ async function ensureSchema() {
 
     CREATE INDEX IF NOT EXISTS idx_app_model_images_v2_company_model
       ON app_model_images_v2 (company_id, model_id, status);
+
+    ALTER TABLE app_models_v2
+      ADD COLUMN IF NOT EXISTS variation_mode TEXT NOT NULL DEFAULT 'automatic';
+
+    ALTER TABLE app_models_v2
+      ADD COLUMN IF NOT EXISTS specific_variations JSONB NOT NULL DEFAULT '[]'::jsonb;
   `)
 }
 
@@ -109,6 +115,38 @@ function normalizeIncludedItems(value) {
   return Array.from(new Set(source.map(item => text(item).trim()).filter(Boolean))).slice(0, 200)
 }
 
+function normalizeVariationMode(value) {
+  const mode = text(value || 'automatic').trim().toLowerCase()
+  return ['automatic','none','specific'].includes(mode) ? mode : 'automatic'
+}
+
+function normalizeSpecificVariations(value) {
+  const source = Array.isArray(value) ? value : []
+  return source.slice(0, 50).map((variation, index) => {
+    const materials = Array.isArray(variation?.materials) ? variation.materials.slice(0, 200).map((material, materialIndex) => {
+      const quantity = Math.max(0, number(material?.quantity ?? material?.quantidade ?? 0))
+      const unitPriceCents = Math.max(0, Math.round(number(material?.unit_price_cents ?? material?.unitPriceCents ?? 0)))
+      return {
+        material_id: text(material?.material_id ?? material?.materialId ?? '').trim() || null,
+        material_name: text(material?.material_name ?? material?.materialName ?? '').trim().slice(0, 180),
+        unit: text(material?.unit ?? '').trim().slice(0, 80),
+        quantity,
+        unit_price_cents: unitPriceCents,
+        total_cents: Math.max(0, Math.round(number(material?.total_cents ?? material?.totalCents ?? (quantity * unitPriceCents)))),
+        is_custo_livre: Boolean(material?.is_custo_livre ?? material?.is_free_cost ?? material?.isCustoLivre),
+        sort_order: materialIndex
+      }
+    }) : []
+    return {
+      id: text(variation?.id || `variation-${index + 1}`).trim().slice(0, 100),
+      name: text(variation?.name ?? variation?.nome ?? '').trim().slice(0, 120),
+      measure_meters: Math.max(0, number(variation?.measure_meters ?? variation?.measureMeters ?? variation?.medida ?? 0)),
+      price_addition_cents: Math.max(0, Math.round(number(variation?.price_addition_cents ?? variation?.priceAdditionCents ?? variation?.acrescimo_cents ?? 0))),
+      materials
+    }
+  }).filter(variation => variation.name)
+}
+
 function normalizeModelInput(input = {}) {
   return {
     name: text(input.name || input.nome || input.modelo).trim().slice(0, 180),
@@ -120,7 +158,9 @@ function normalizeModelInput(input = {}) {
     salePriceCents: Math.max(0, Math.round(number(input.sale_price_cents ?? input.salePriceCents ?? input.price_cents ?? 0))),
     valuePerSpacingCents: Math.max(0, Math.round(number(input.value_per_spacing_cents ?? input.valor_por_espacamento_cents ?? input.valorPorEspacamentoCents ?? 0))),
     includedItems: normalizeIncludedItems(input.itens_incluidos ?? input.included_items ?? input.itensIncluidos),
-    materials: Array.isArray(input.materials) ? input.materials : []
+    materials: Array.isArray(input.materials) ? input.materials : [],
+    variationMode: normalizeVariationMode(input.variation_mode ?? input.variationMode),
+    specificVariations: normalizeSpecificVariations(input.specific_variations ?? input.specificVariations)
   }
 }
 
@@ -181,6 +221,8 @@ function rowToModel(row) {
     valor_por_espacamento_cents: number(row.value_per_spacing_cents),
     itens_incluidos: normalizeIncludedItems(row.included_items),
     included_items: normalizeIncludedItems(row.included_items),
+    variation_mode: normalizeVariationMode(row.variation_mode),
+    specific_variations: normalizeSpecificVariations(row.specific_variations),
     active: row.active !== false,
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -291,8 +333,8 @@ async function createModel(companyId, input = {}) {
       INSERT INTO app_models_v2 (
         id, company_id, name, description, base_meters, spacing_cm,
         total_cost_cents, target_profit_cents, sale_price_cents,
-        value_per_spacing_cents, included_items, active, created_at, updated_at
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,TRUE,NOW(),NOW())
+        value_per_spacing_cents, included_items, variation_mode, specific_variations, active, created_at, updated_at
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13::jsonb,TRUE,NOW(),NOW())
     `, [
       id,
       companyId,
@@ -304,7 +346,9 @@ async function createModel(companyId, input = {}) {
       normalized.targetProfitCents,
       normalized.salePriceCents,
       normalized.valuePerSpacingCents,
-      JSON.stringify(normalized.includedItems)
+      JSON.stringify(normalized.includedItems),
+      normalized.variationMode,
+      JSON.stringify(normalized.specificVariations)
     ])
     await replaceMaterials(client, companyId, id, normalized.materials)
     await client.query('COMMIT')
@@ -342,6 +386,8 @@ async function updateModel(companyId, modelId, input = {}) {
           sale_price_cents = $9,
           value_per_spacing_cents = $10,
           included_items = $11::jsonb,
+          variation_mode = $12,
+          specific_variations = $13::jsonb,
           updated_at = NOW()
       WHERE company_id = $1 AND id = $2
       RETURNING id
@@ -356,7 +402,9 @@ async function updateModel(companyId, modelId, input = {}) {
       merged.targetProfitCents,
       merged.salePriceCents,
       merged.valuePerSpacingCents,
-      JSON.stringify(merged.includedItems)
+      JSON.stringify(merged.includedItems),
+      merged.variationMode,
+      JSON.stringify(merged.specificVariations)
     ])
     if (!result.rows.length) {
       await client.query('ROLLBACK')
@@ -403,8 +451,8 @@ async function upsertMigratedModel(companyId, legacyId, input = {}) {
       INSERT INTO app_models_v2 (
         id, company_id, legacy_id, name, description, base_meters, spacing_cm,
         total_cost_cents, target_profit_cents, sale_price_cents,
-        value_per_spacing_cents, included_items, active, created_at, updated_at
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,TRUE,$13,$14)
+        value_per_spacing_cents, included_items, variation_mode, specific_variations, active, created_at, updated_at
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,$14::jsonb,TRUE,$15,$16)
       ON CONFLICT (id) DO UPDATE SET
         name = EXCLUDED.name,
         description = EXCLUDED.description,
@@ -415,6 +463,8 @@ async function upsertMigratedModel(companyId, legacyId, input = {}) {
         sale_price_cents = EXCLUDED.sale_price_cents,
         value_per_spacing_cents = EXCLUDED.value_per_spacing_cents,
         included_items = EXCLUDED.included_items,
+        variation_mode = EXCLUDED.variation_mode,
+        specific_variations = EXCLUDED.specific_variations,
         active = TRUE,
         updated_at = EXCLUDED.updated_at
     `, [
@@ -430,6 +480,8 @@ async function upsertMigratedModel(companyId, legacyId, input = {}) {
       normalized.salePriceCents,
       normalized.valuePerSpacingCents,
       JSON.stringify(normalized.includedItems),
+      normalized.variationMode,
+      JSON.stringify(normalized.specificVariations),
       input.created_at || input.createdAt || new Date().toISOString(),
       input.updated_at || input.updatedAt || new Date().toISOString()
     ])
