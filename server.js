@@ -59,6 +59,7 @@ const disposableTestOrigins = new Set([
   'https://incluidos-tecidos.estofaria-frontend.pages.dev',
   'https://estofaria-frontend.pages.dev',
   'https://teste-oficial.estofaria-frontend.pages.dev',
+  'https://layout-test.estofaria-frontend.pages.dev',
   'https://inclusos-fix.estofaria-frontend.pages.dev',
   'https://vendedor-clean.estofaria-frontend.pages.dev',
   'https://fix-cartao-layout-from-produ.estofaria-frontend.pages.dev',
