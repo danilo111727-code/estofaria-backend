@@ -36,9 +36,21 @@ function shiftMonth(year,month,delta){
 }
 
 function revenueDate(order){
-  return safeDate(
-    order?.prod_date || order?.production_date || order?.data_producao ||
-    order?.created_at || order?.inserted_at || order?.updated_at ||
+  const productionDate = safeDate(
+    order?.prod_date || order?.production_date || order?.data_producao
+  )
+  const creationDate = safeDate(
+    order?.created_at || order?.inserted_at || order?.updated_at
+  )
+
+  // Mantém o faturamento retroativo, mas nunca empurra uma venda
+  // para um mês futuro por causa da data de produção/agendamento.
+  // A competência é a data mais antiga entre produção e criação.
+  if(productionDate && creationDate){
+    return productionDate.getTime() < creationDate.getTime() ? productionDate : creationDate
+  }
+
+  return productionDate || creationDate || safeDate(
     order?.ent_date || order?.delivery_date || order?.data_entrega
   )
 }
