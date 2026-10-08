@@ -145,6 +145,7 @@ function materializeCompany(store, company){
     next_charge_at: company.next_charge_at || '',
     last_payment_at: company.last_payment_at || '',
     courtesy_until: company.courtesy_until || '',
+    professional_courtesy_enabled: company.professional_courtesy_enabled === true,
     manual_grace_until: company.manual_grace_until || '',
     trial_ends_at: company.trial_ends_at || '',
     notes: company.notes || '',
