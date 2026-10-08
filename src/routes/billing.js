@@ -44,6 +44,7 @@ function expireCourtesyIfNeeded(store, company){
   company.billing_mode = 'stripe'
   company.financial_status = 'pending_payment'
   company.access_status = 'pending_payment'
+  company.professional_courtesy_enabled = false
   company.courtesy_expired_at = nowIso()
   company.updated_at = nowIso()
 
@@ -61,6 +62,22 @@ function expireCourtesyIfNeeded(store, company){
   })
   writeStore(store)
   return true
+}
+
+function professionalCourtesyActive(company){
+  if(!company || company.professional_courtesy_enabled !== true) return false
+  if(String(company.billing_mode || '') !== 'courtesy' || String(company.access_status || '') !== 'courtesy_active') return false
+  const until = String(company.courtesy_until || '').trim()
+  if(!until) return true
+  const end = Date.parse(until)
+  return Number.isFinite(end) && end > Date.now()
+}
+
+function professionalSubscriptionActive(company){
+  return !!(company && String(company.billing_mode || '') === 'stripe'
+    && company.stripe_subscription_id
+    && String(company.access_status || '') === 'active'
+    && ['active','trialing'].includes(String(company.financial_status || '').toLowerCase()))
 }
 
 function buildSubscriptionPayload(company, store, req){
@@ -86,6 +103,8 @@ function buildSubscriptionPayload(company, store, req){
       status: company.financial_status || 'inactive',
       financial_status: company.financial_status || 'inactive',
       access_status: company.access_status || 'inactive',
+      professional_courtesy_enabled: professionalCourtesyActive(company),
+      professional_available: professionalSubscriptionActive(company) || professionalCourtesyActive(company),
       payment_provider: cfg.payment_provider || company.billing_mode || 'stripe',
       next_charge_at: company.next_charge_at || '',
       grace_until: company.manual_grace_until || '',
