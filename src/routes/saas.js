@@ -16,14 +16,17 @@ function applyCompanyAction(company, action, payload){
       company.access_status = 'courtesy_active'
       company.financial_status = 'active'
       company.courtesy_until = payload.courtesy_until || payload.until || ''
+      company.professional_courtesy_enabled = payload.professional_courtesy_enabled === true
       break
     case 'endCourtesy':
       company.billing_mode = 'stripe'
       company.access_status = 'active'
       company.courtesy_until = ''
+      company.professional_courtesy_enabled = false
       break
     case 'toPaid':
       company.billing_mode = 'stripe'
+      company.professional_courtesy_enabled = false
       company.financial_status = 'active'
       company.access_status = 'active'
       break
@@ -35,6 +38,7 @@ function applyCompanyAction(company, action, payload){
       break
     case 'grantGrace':
       company.billing_mode = 'manual'
+      company.professional_courtesy_enabled = false
       company.access_status = 'manual_grace'
       company.manual_grace_until = payload.manual_grace_until || payload.until || ''
       break
@@ -50,6 +54,7 @@ function applyCompanyAction(company, action, payload){
       break
     case 'grantFreeAccess':
       company.billing_mode = 'manual'
+      company.professional_courtesy_enabled = false
       company.access_status = 'active'
       company.financial_status = 'active'
       break
