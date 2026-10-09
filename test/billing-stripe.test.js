@@ -28,13 +28,20 @@ async function fixture(t, extra = {}, options = {}) {
   }
   if(options.atomic){
     store.updateStore = mutator => { const next = mutator(store.readStore()); if(next) store.writeStore(next) }
-    store._pg = {pool:{connect:async()=>({
-      query:async(sql,params=[])=>{
+    store._pg = {pool:{connect:async()=>{
+      let staged
+      return {query:async(sql,params=[])=>{
         if(sql.startsWith('SELECT value')) return {rows:[{value:structuredClone(state)}]}
-        if(sql.includes('INSERT INTO kv_store')) state=JSON.parse(params[0])
+        if(sql.includes('INSERT INTO kv_store')) staged=JSON.parse(params[0])
+        if(sql === 'COMMIT'){
+          if(options.failCommitOnce){options.failCommitOnce=false;throw Error('simulated DB commit failure')}
+          if(staged) state=staged
+          staged=undefined
+        }
+        if(sql === 'ROLLBACK') staged=undefined
         return {rows:[]}
-      },release(){}
-    })},flushNow:async()=>{}}
+      },release(){}}
+    }},flushNow:async()=>{}}
     delete require.cache[require.resolve('../src/lib/atomic-store')]
     const atomic = require('../src/lib/atomic-store')
     atomic.install(store)
@@ -47,7 +54,7 @@ async function fixture(t, extra = {}, options = {}) {
   delete require.cache[require.resolve('../src/middleware/auth')]
   delete require.cache[require.resolve('../src/routes/billing')]
   const load = Module._load
-  Module._load = function(name,...args){ return name==='stripe' ? ()=>fake : load.call(this,name,...args) }
+  Module._load = function(name,...args){ return name==='stripe' ? (key,config)=>{calls.sdkOptions=config;return fake} : load.call(this,name,...args) }
   let router
   try { router=require('../src/routes/billing') } finally { Module._load=load }
   const { requireAuth } = require('../src/middleware/auth')
@@ -59,9 +66,9 @@ async function fixture(t, extra = {}, options = {}) {
   const server=app.listen(0,'127.0.0.1')
   await new Promise(r=>server.once('listening',r))
   t.after(()=>{server.close(); if(oldStore)require.cache[storePath]=oldStore; else delete require.cache[storePath]})
-  const token=issueToken(state.users[0])
+  let token=issueToken(state.users[0])
   async function request(path,body, signed=true){ const raw=JSON.stringify(body); const headers={ 'content-type':'application/json',authorization:'Bearer '+token }; if(path.endsWith('webhooks/stripe')) headers['stripe-signature']=signed?Stripe.webhooks.generateTestHeaderString({payload:raw,secret:process.env.STRIPE_WEBHOOK_SECRET}):'invalid'; const res=await fetch('http://127.0.0.1:'+server.address().port+path,{method:body?'POST':'GET',headers,body:body?raw:undefined}); return {status:res.status,body:await res.json()} }
-  return { calls,subscriptions,sessions,invoices,flush:async()=>options.atomic&&store._pg.flushNow(),get persisted(){return state},get state(){return options.atomic?store.readStore():state},get company(){return (options.atomic?store.readStore():state).companies[0]}, request, checkout:()=>request('/api/billing/stripe/create-checkout',{}), webhook:(type,obj,id='evt_'+Math.random())=>request('/api/billing/webhooks/stripe',{id,type,data:{object:obj}}), complete:(id,sub)=>{sessions.set(id,{id,mode:'subscription',status:'complete',payment_status:'paid',metadata:{company_id:'co_test'},customer:sub.customer,subscription:sub.id})} }
+  return { calls,subscriptions,sessions,invoices,refreshSession:()=>{token=issueToken(state.users[0])},flush:async()=>options.atomic&&store._pg.flushNow(),get persisted(){return state},get state(){return options.atomic?store.readStore():state},get company(){return (options.atomic?store.readStore():state).companies[0]}, request, checkout:()=>request('/api/billing/stripe/create-checkout',{}), webhook:(type,obj,id='evt_'+Math.random())=>request('/api/billing/webhooks/stripe',{id,type,data:{object:obj}}), complete:(id,sub)=>{sessions.set(id,{id,mode:'subscription',status:'complete',payment_status:'paid',metadata:{company_id:'co_test'},customer:sub.customer,subscription:sub.id})} }
 }
 function sub(extra={}) { return {id:'sub_current',object:'subscription',customer:'cus_fixture',status:'active',metadata:{company_id:'co_test'},current_period_end:Math.floor(Date.now()/1000)+30*86400,...extra} }
 const checkoutPath='/api/billing/stripe/confirm-checkout'
@@ -126,4 +133,66 @@ test('lost Stripe create response recovers session without a second subscription
   assert.equal(retry.status,200)
   assert.equal(retry.body.session_id,'cs_fixture_1')
   assert.equal(f.calls.sessions.length,1)
+})
+
+test('checkout success must persist Stripe identifiers before returning HTTP 200',async t=>{
+  const f=await fixture(t,{}, {atomic:true})
+  const response=await f.checkout()
+  assert.equal(response.status,200)
+  assert.equal(f.persisted.companies[0].stripe_customer_id,'cus_fixture')
+  assert.equal(f.persisted.companies[0].stripe_checkout_session_id,response.body.session_id)
+})
+
+test('database commit failure cannot acknowledge successful checkout',async t=>{
+  const f=await fixture(t,{}, {atomic:true,failCommitOnce:true})
+  const first=await f.checkout()
+  assert.equal(first.status,503)
+  assert.equal(f.persisted.companies[0].stripe_customer_id,undefined)
+  const retry=await f.checkout()
+  assert.equal(retry.status,200)
+  assert.equal(f.calls.sessions.length,1)
+  assert.equal(f.persisted.companies[0].stripe_checkout_session_id,retry.body.session_id)
+})
+test('database commit failure cannot acknowledge successful webhook',async t=>{
+  const f=await fixture(t,{stripe_customer_id:'cus_fixture',stripe_subscription_id:'sub_current',billing_mode:'stripe',access_status:'blocked'}, {atomic:true,failCommitOnce:true})
+  f.subscriptions.set('sub_current',sub())
+  const event={subscription:'sub_current',customer:'cus_fixture'}
+  assert.equal((await f.webhook('invoice.paid',event,'evt_commit_retry')).status,503)
+  assert.equal(f.persisted.webhookEvents.length,0)
+  assert.equal(f.persisted.companies[0].access_status,'blocked')
+  assert.equal((await f.webhook('invoice.paid',event,'evt_commit_retry')).status,200)
+  assert.equal(f.persisted.webhookEvents.length,1)
+})
+test('Stripe calls have bounded timeout with explicit application retry',async t=>{
+  const f=await fixture(t)
+  assert.equal(f.calls.sdkOptions.timeout,5000)
+  assert.equal(f.calls.sdkOptions.maxNetworkRetries,0)
+})
+test('simulated 60-day trial progresses to first paid invoice without losing access',async t=>{
+  const f=await fixture(t,{stripe_customer_id:'cus_fixture'})
+  const originalNow=Date.now
+  t.after(()=>{Date.now=originalNow})
+  const end=Math.ceil(Date.parse(f.company.courtesy_until)/1000)
+  const trial=sub({status:'trialing',trial_end:end,current_period_end:end})
+  f.subscriptions.set(trial.id,trial)
+  await f.webhook('customer.subscription.created',trial,'evt_trial_created')
+  assert.equal(f.company.access_status,'courtesy_active')
+  assert.equal(f.company.next_charge_at,new Date(end*1000).toISOString())
+  Date.now=()=>end*1000+1000
+  f.refreshSession() // A 60-day-old JWT is expected to expire; simulate signing in again.
+  f.subscriptions.set(trial.id,sub({status:'active',trial_end:end,current_period_end:end+30*86400}))
+  assert.equal((await f.webhook('invoice.paid',{id:'in_first_paid',object:'invoice',customer:'cus_fixture',parent:{subscription_details:{subscription:trial.id}},amount_paid:14900},'evt_first_paid')).status,200)
+  assert.equal(f.company.access_status,'active')
+  assert.equal(f.company.billing_mode,'stripe')
+  assert.equal(f.company.financial_status,'active')
+  assert.equal((await f.request('/api/protected')).status,200)
+  assert.equal((await f.checkout()).status,409)
+})
+
+test('frontend subscription status endpoint returns the same billing payload',async t=>{
+  const f=await fixture(t,{stripe_customer_id:'cus_fixture'})
+  const current=await f.request('/api/billing/subscription')
+  const status=await f.request('/api/billing/status')
+  assert.equal(status.status,200)
+  assert.deepEqual(status.body,current.body)
 })

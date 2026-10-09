@@ -240,7 +240,9 @@ function shouldWrap(req){
     if(isAgendaV2Mutation(method,path) || isFinancialV2Mutation(method,path)) return false
     if(path.startsWith('/api/v2/')) return false
     if(path.includes('/companies/') && method === 'DELETE') return false
-    if(path.endsWith('/stripe/create-checkout') || path.endsWith('/customer-portal')) return false
+    // Checkout now writes customer/session IDs. Commit them before acknowledging
+    // success, under the same PostgreSQL row lock as webhook reconciliation.
+    if(path.endsWith('/customer-portal')) return false
     return path.startsWith('/api/')
   }
 

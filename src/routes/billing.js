@@ -5,7 +5,7 @@ const { requireAuth, optionalAuth, requireMaster, requirePermission } = require(
 const { hasMasterAccess } = require('../lib/policies')
 
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY
-const stripe = stripeSecretKey ? require('stripe')(stripeSecretKey) : null
+const stripe = stripeSecretKey ? require('stripe')(stripeSecretKey, { timeout:5000, maxNetworkRetries:0 }) : null
 
 const router = express.Router()
 
@@ -315,7 +315,7 @@ router.get('/', requireAuth, (req, res) => {
   res.json(buildSubscriptionPayload(company, store, req))
 })
 
-router.get('/subscription', requireAuth, (req, res) => {
+router.get(['/subscription','/status'], requireAuth, (req, res) => {
   const store = readStore()
   const company = getCompanyFromSession(store, req)
   expireCourtesyIfNeeded(store, company)

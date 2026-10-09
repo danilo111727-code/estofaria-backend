@@ -38,6 +38,9 @@ test('real server starts, registers 60-day courtesy and serves authenticated bil
   assert.equal(subscription.status,200)
   assert.equal((await subscription.json()).subscription.access_status,'courtesy_active')
   for(const alias of ['billing','subscription']){
+    const status=await fetch(base+`/api/${alias}/status`,{headers:{authorization:'Bearer '+registered.token}})
+    assert.equal(status.status,200)
+    assert.equal((await status.json()).subscription.access_status,'courtesy_active')
     const webhook=await fetch(base+`/api/${alias}/webhooks/stripe`,{method:'POST',headers:{'content-type':'application/json'},body:'{"id":"evt_unsigned"}'})
     assert.equal(webhook.status,503)
   }
