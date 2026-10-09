@@ -42,8 +42,9 @@ function expireCourtesyIfNeeded(store, company){
 
   const before = JSON.parse(JSON.stringify(company))
   company.billing_mode = 'stripe'
-  company.financial_status = 'pending_payment'
-  company.access_status = 'pending_payment'
+  const linkedAndValid = Boolean(company.stripe_subscription_id && ['active', 'trialing'].includes(String(company.financial_status || '').toLowerCase()))
+  company.financial_status = linkedAndValid ? company.financial_status : 'pending_payment'
+  company.access_status = linkedAndValid ? 'active' : 'pending_payment'
   company.professional_courtesy_enabled = false
   company.courtesy_expired_at = nowIso()
   company.updated_at = nowIso()
@@ -278,6 +279,10 @@ router.post('/stripe/create-checkout', requireAuth, async (req, res) => {
   const store = readStore()
   const company = getCompanyFromSession(store, req)
   if(!company) return res.status(404).json({ error:'company_not_found', message:'Empresa não encontrada.' })
+  // Não abrir outro checkout quando a empresa já possui assinatura vinculada.
+  if(company.stripe_subscription_id){
+    return res.status(409).json({ error:'subscription_already_linked', message:'Esta empresa já possui assinatura Stripe vinculada. Consulte a assinatura existente.' })
+  }
   // Resolve o Price ID por plano: env var específica > env var genérica > billingConfig map > billingConfig single
   const planCode = (company.plan_code || store.billingConfig?.default_plan_code || 'gestao').toLowerCase()
   const priceId = process.env[`STRIPE_PRICE_ID_${planCode.toUpperCase()}`]
@@ -287,20 +292,27 @@ router.post('/stripe/create-checkout', requireAuth, async (req, res) => {
   if(!priceId) return res.status(503).json({ error:'price_not_configured', message:'Plano não configurado.' })
   const frontendUrl = process.env.FRONTEND_URL || 'https://estofaria-digital.pages.dev'
   try {
-    const trialDays = Number(store.billingConfig?.trial_days || 60)
+    const existingCustomerId = String(company.stripe_customer_id || '').trim()
+    if(existingCustomerId){
+      const existing = await stripe.subscriptions.list({ customer: existingCustomerId, status: 'all', limit: 100 })
+      if(existing.data.some(sub => ['active','trialing','past_due','unpaid','incomplete'].includes(sub.status))){
+        return res.status(409).json({ error:'existing_stripe_subscription', message:'Já existe assinatura neste cadastro Stripe. Contate o suporte para vinculá-la antes de contratar novamente.' })
+      }
+    }
+    const courtesyEnd = Date.parse(String(company.courtesy_until || ''))
+    const courtesyRemainingSeconds = Number.isFinite(courtesyEnd) ? Math.max(0, Math.ceil((courtesyEnd - Date.now()) / 1000)) : 0
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       payment_method_types: ['card'],
       payment_method_collection: 'always',
       line_items: [{ price: priceId, quantity: 1 }],
-      subscription_data: {
-        trial_period_days: trialDays,
-        trial_settings: {
-          end_behavior: { missing_payment_method: 'cancel' }
-        }
-      },
+      ...(courtesyRemainingSeconds >= 172800 ? { subscription_data: {
+        trial_end: Math.floor(Date.now() / 1000) + courtesyRemainingSeconds,
+        metadata: { company_id: String(company.id) },
+        trial_settings: { end_behavior: { missing_payment_method: 'cancel' } }
+      }} : { subscription_data: { metadata: { company_id: String(company.id) } } }),
       metadata: { company_id: String(company.id) },
-      customer_email: company.owner_email || req.user?.email || undefined,
+      ...(existingCustomerId ? { customer: existingCustomerId } : { customer_email: company.owner_email || req.user?.email || undefined }),
       success_url: `${frontendUrl}/stripe-retorno/?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${frontendUrl}/stripe-retorno/?cancelado=1`,
       locale: 'pt-BR'
@@ -344,8 +356,10 @@ router.post('/stripe/confirm-checkout', requireAuth, async (req, res) => {
     if(customerId) company.stripe_customer_id = customerId
     company.stripe_subscription_id = subscriptionId
     company.financial_status = subscriptionStatus
-    company.access_status = 'active'
-    company.billing_mode = 'stripe'
+    if(!professionalCourtesyActive(company)){
+      company.access_status = 'active'
+      company.billing_mode = 'stripe'
+    }
     if(subscription?.trial_end) company.trial_ends_at = new Date(Number(subscription.trial_end) * 1000).toISOString()
     if(subscription?.current_period_end) company.next_charge_at = new Date(Number(subscription.current_period_end) * 1000).toISOString()
     else if(subscription?.trial_end) company.next_charge_at = new Date(Number(subscription.trial_end) * 1000).toISOString()
@@ -406,9 +420,16 @@ router.post('/webhooks/stripe', express.raw({ type: 'application/json' }), (req,
   store.webhookEvents.push(record)
 
   const obj = event.data?.object || {}
+  const stripeSubscriptionId = String(typeof obj.subscription === 'string' ? obj.subscription : (obj.subscription?.id || (obj.object === 'subscription' ? obj.id : '')) || '')
+  const stripeCustomerId = String(typeof obj.customer === 'string' ? obj.customer : (obj.customer?.id || ''))
   const companyId = obj.metadata?.company_id || event.company_id || ''
-  const company = companyId ? findCompanyById(store, companyId) : null
-  if(company){
+  const bySubscription = stripeSubscriptionId ? (store.companies || []).find(c => String(c.stripe_subscription_id || '') === stripeSubscriptionId) : null
+  const byCustomer = !bySubscription && stripeCustomerId ? (store.companies || []).find(c => String(c.stripe_customer_id || '') === stripeCustomerId) : null
+  const company = bySubscription || byCustomer || (companyId ? findCompanyById(store, companyId) : null)
+  // Eventos de outra assinatura, inclusive antigas/canceladas, não podem alterar a empresa.
+  const matchingSubscription = !company?.stripe_subscription_id || stripeSubscriptionId === String(company.stripe_subscription_id)
+  const safeCompany = matchingSubscription ? company : null
+  if(safeCompany){
     const type = record.type
     if(type === 'checkout.session.completed'){
       const stripeCustomerId = obj.customer || ''
@@ -416,28 +437,28 @@ router.post('/webhooks/stripe', express.raw({ type: 'application/json' }), (req,
       if(stripeCustomerId) company.stripe_customer_id = stripeCustomerId
       if(stripeSubId) company.stripe_subscription_id = stripeSubId
       company.financial_status = 'trialing'
-      company.access_status = 'active'
+      if(!professionalCourtesyActive(company)) company.access_status = 'active'
     }
     if(type === 'invoice.paid'){
       company.financial_status = 'active'
-      company.access_status = 'active'
+      if(!professionalCourtesyActive(company)) company.access_status = 'active'
       company.last_payment_at = nowIso()
       company.manual_grace_until = ''
     }
     if(type === 'invoice.payment_failed'){
       company.financial_status = 'past_due'
-      company.access_status = company.manual_grace_until ? 'manual_grace' : 'active'
+      if(!professionalCourtesyActive(company)) company.access_status = company.manual_grace_until ? 'manual_grace' : 'active'
     }
     if(type === 'customer.subscription.deleted'){
       company.financial_status = 'canceled'
-      company.access_status = 'blocked'
+      if(!professionalCourtesyActive(company)) company.access_status = 'blocked'
     }
     if(type === 'customer.subscription.updated'){
       const status = String(event.data?.object?.status || '').toLowerCase()
       if(status) company.financial_status = status
-      if(['active','trialing'].includes(status)) company.access_status = 'active'
-      if(['past_due'].includes(status)) company.access_status = company.manual_grace_until ? 'manual_grace' : 'active'
-      if(['unpaid','canceled','incomplete_expired'].includes(status)) company.access_status = 'blocked'
+      if(!professionalCourtesyActive(company) && ['active','trialing'].includes(status)) company.access_status = 'active'
+      if(!professionalCourtesyActive(company) && ['past_due'].includes(status)) company.access_status = company.manual_grace_until ? 'manual_grace' : 'active'
+      if(!professionalCourtesyActive(company) && ['unpaid','canceled','incomplete_expired'].includes(status)) company.access_status = 'blocked'
     }
     company.updated_at = nowIso()
     upsertAudit(store, {
