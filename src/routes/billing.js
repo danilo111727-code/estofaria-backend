@@ -9,6 +9,65 @@ const stripe = stripeSecretKey ? require('stripe')(stripeSecretKey) : null
 
 const router = express.Router()
 
+// Serialize operations for one company in this process. Stripe idempotency keys
+// also protect retries after a timeout/restart; this store remains single-writer.
+const billingQueues = new Map()
+async function withCompanyLock(id, operation){
+  const previous = billingQueues.get(id) || Promise.resolve()
+  const current = previous.catch(() => {}).then(operation)
+  billingQueues.set(id, current)
+  try { return await current } finally {
+    if(billingQueues.get(id) === current) billingQueues.delete(id)
+  }
+}
+function stripeId(value){ return typeof value === 'string' ? value : String(value?.id || '') }
+function subscriptionId(obj){
+  return stripeId(obj.subscription || obj.parent?.subscription_details?.subscription
+    || (obj.object === 'subscription' ? obj.id : ''))
+}
+function courtesyActive(company){
+  if(!company || company.billing_mode !== 'courtesy' || company.access_status !== 'courtesy_active') return false
+  return !company.courtesy_until || Date.parse(company.courtesy_until) > Date.now()
+}
+function updateSubscription(company, subscription){
+  company.stripe_customer_id = stripeId(subscription.customer)
+  company.stripe_subscription_id = subscription.id
+  company.financial_status = subscription.status
+  if(!courtesyActive(company)){
+    company.billing_mode = 'stripe'
+    const status = subscription.status
+    if(['active','trialing'].includes(status)) company.access_status = 'active'
+    else if(status === 'past_due') company.access_status = Date.parse(company.manual_grace_until) > Date.now() ? 'manual_grace' : 'active'
+    else company.access_status = 'blocked'
+  }
+  const periodEnd = subscription.current_period_end || subscription.items?.data?.[0]?.current_period_end
+  const next = subscription.status === 'trialing' ? subscription.trial_end : periodEnd
+  company.next_charge_at = next ? new Date(Number(next) * 1000).toISOString() : ''
+  company.trial_ends_at = subscription.trial_end ? new Date(Number(subscription.trial_end) * 1000).toISOString() : ''
+  company.updated_at = nowIso()
+}
+async function listAll(method, params){
+  const result = []
+  let after
+  do {
+    const page = await method({ ...params, limit:100, ...(after ? {starting_after:after} : {}) })
+    result.push(...page.data)
+    if(!page.has_more) break
+    if(!page.data.length) throw new Error('Stripe pagination returned an empty page')
+    after = page.data[page.data.length - 1].id
+  } while(true)
+  return result
+}
+function saveCompanyFields(id, fields){
+  // Never write a snapshot obtained before awaiting a Stripe API request.
+  const latest = readStore()
+  const company = findCompanyById(latest, id)
+  if(!company) throw new Error('Company no longer exists')
+  Object.assign(company, fields)
+  writeStore(latest)
+  return company
+}
+
 function normalizeText(value, max = 160){
   return String(value || '').replace(/\s+/g, ' ').trim().slice(0, max)
 }
@@ -191,7 +250,7 @@ function handleCheckout(req, res){
     company.plan_name = payload.plan_name || plan.name
     company.monthly_price_cents = plan.monthly_price_cents
     company.seats_limit = plan.seats_limit
-    company.billing_mode = 'stripe'
+    if(!courtesyActive(company)) company.billing_mode = 'stripe'
     // access_status e financial_status só são atualizados pelo webhook Stripe,
     // nunca pelo simples preenchimento do formulário de checkout.
 
@@ -276,50 +335,82 @@ router.post('/customer-portal', requireAuth, (req, res) => {
 
 router.post('/stripe/create-checkout', requireAuth, async (req, res) => {
   if(!stripe) return res.status(503).json({ error:'stripe_not_configured', message:'Stripe não configurado.' })
-  const store = readStore()
-  const company = getCompanyFromSession(store, req)
-  if(!company) return res.status(404).json({ error:'company_not_found', message:'Empresa não encontrada.' })
-  // Não abrir outro checkout quando a empresa já possui assinatura vinculada.
-  if(company.stripe_subscription_id){
-    return res.status(409).json({ error:'subscription_already_linked', message:'Esta empresa já possui assinatura Stripe vinculada. Consulte a assinatura existente.' })
-  }
-  // Resolve o Price ID por plano: env var específica > env var genérica > billingConfig map > billingConfig single
-  const planCode = (company.plan_code || store.billingConfig?.default_plan_code || 'gestao').toLowerCase()
-  const priceId = process.env[`STRIPE_PRICE_ID_${planCode.toUpperCase()}`]
-    || process.env.STRIPE_PRICE_ID
-    || (store.billingConfig?.stripe_prices || {})[planCode]
-    || store.billingConfig?.stripe_price_id
-  if(!priceId) return res.status(503).json({ error:'price_not_configured', message:'Plano não configurado.' })
-  const frontendUrl = process.env.FRONTEND_URL || 'https://estofaria-digital.pages.dev'
+  const initial = getCompanyFromSession(readStore(), req)
+  if(!initial) return res.status(404).json({ error:'company_not_found', message:'Empresa não encontrada.' })
   try {
-    const existingCustomerId = String(company.stripe_customer_id || '').trim()
-    if(existingCustomerId){
-      const existing = await stripe.subscriptions.list({ customer: existingCustomerId, status: 'all', limit: 100 })
-      if(existing.data.some(sub => ['active','trialing','past_due','unpaid','incomplete'].includes(sub.status))){
-        return res.status(409).json({ error:'existing_stripe_subscription', message:'Já existe assinatura neste cadastro Stripe. Contate o suporte para vinculá-la antes de contratar novamente.' })
+    return await withCompanyLock(String(initial.id), async () => {
+      const store = readStore()
+      let company = findCompanyById(store, initial.id)
+      if(!company) return res.status(404).json({ error:'company_not_found' })
+      if(company.stripe_subscription_id){
+        return res.status(409).json({ error:'subscription_already_linked', message:'Consulte a assinatura existente antes de contratar novamente.' })
       }
-    }
-    const courtesyEnd = Date.parse(String(company.courtesy_until || ''))
-    const courtesyRemainingSeconds = Number.isFinite(courtesyEnd) ? Math.max(0, Math.ceil((courtesyEnd - Date.now()) / 1000)) : 0
-    const session = await stripe.checkout.sessions.create({
-      mode: 'subscription',
-      payment_method_types: ['card'],
-      payment_method_collection: 'always',
-      line_items: [{ price: priceId, quantity: 1 }],
-      ...(courtesyRemainingSeconds >= 172800 ? { subscription_data: {
-        trial_end: Math.floor(Date.now() / 1000) + courtesyRemainingSeconds,
-        metadata: { company_id: String(company.id) },
-        trial_settings: { end_behavior: { missing_payment_method: 'cancel' } }
-      }} : { subscription_data: { metadata: { company_id: String(company.id) } } }),
-      metadata: { company_id: String(company.id) },
-      ...(existingCustomerId ? { customer: existingCustomerId } : { customer_email: company.owner_email || req.user?.email || undefined }),
-      success_url: `${frontendUrl}/stripe-retorno/?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${frontendUrl}/stripe-retorno/?cancelado=1`,
-      locale: 'pt-BR'
+      const planCode = (company.plan_code || store.billingConfig?.default_plan_code || 'gestao').toLowerCase()
+      const priceId = process.env[`STRIPE_PRICE_ID_${planCode.toUpperCase()}`] || process.env.STRIPE_PRICE_ID
+        || (store.billingConfig?.stripe_prices || {})[planCode] || store.billingConfig?.stripe_price_id
+      if(!priceId) return res.status(503).json({ error:'price_not_configured' })
+      const courtesyEnd = Date.parse(String(company.courtesy_until || ''))
+      const trialEnd = Number.isFinite(courtesyEnd) && courtesyEnd > Date.now() ? Math.ceil(courtesyEnd / 1000) : null
+      // Checkout requires at least 48 hours. Never discard the remaining courtesy
+      // or extend the agreed date to work around that Stripe restriction.
+      if(trialEnd && trialEnd - Date.now()/1000 < 172860){
+        return res.status(409).json({ error:'courtesy_ending', retry_at:company.courtesy_until,
+          message:'Sua cortesia continua ativa. Contrate ao encerrar o período para evitar cobrança antecipada.' })
+      }
+      let customerId = stripeId(company.stripe_customer_id)
+      if(!customerId && company.owner_email){
+        // Email is only a lookup hint, never proof of company ownership.
+        const candidates = await listAll(p => stripe.customers.list(p), {email:company.owner_email})
+        const owned = candidates.filter(c => String(c.metadata?.company_id || '') === String(company.id))
+        if(owned.length === 1){
+          customerId = owned[0].id
+          company = saveCompanyFields(company.id, {stripe_customer_id:customerId})
+        } else if(candidates.length){
+          return res.status(409).json({error:'customer_link_required',message:'Cadastro Stripe anterior encontrado. O suporte deve verificar o vínculo antes de uma nova contratação.'})
+        }
+      }
+      if(!customerId){
+        const customer = await stripe.customers.create({ email:company.owner_email || undefined,
+          metadata:{company_id:String(company.id)} }, {idempotencyKey:`company-customer-v1:${company.id}`})
+        customerId = customer.id
+        company = saveCompanyFields(company.id, {stripe_customer_id:customerId})
+      }
+      const subscriptions = await listAll(p => stripe.subscriptions.list(p), {customer:customerId,status:'all'})
+      if(subscriptions.some(sub => !['canceled','incomplete_expired'].includes(sub.status))){
+        return res.status(409).json({ error:'existing_stripe_subscription', message:'Já existe assinatura neste cadastro Stripe. Contate o suporte para vinculá-la.' })
+      }
+      let previousSession
+      if(company.stripe_checkout_session_id){
+        previousSession = await stripe.checkout.sessions.retrieve(company.stripe_checkout_session_id)
+        if(previousSession.status === 'complete') return res.status(409).json({error:'checkout_already_completed'})
+        if(previousSession.status === 'open') return res.json({url:previousSession.url,session_id:previousSession.id})
+      }
+      const openSessions = await listAll(p => stripe.checkout.sessions.list(p), {customer:customerId,status:'open'})
+      const open = openSessions.find(s => s.mode === 'subscription' && String(s.metadata?.company_id || '') === String(company.id))
+      if(open){
+        saveCompanyFields(company.id, {stripe_checkout_session_id:open.id})
+        return res.json({url:open.url,session_id:open.id})
+      }
+      const frontendUrl = process.env.FRONTEND_URL || 'https://estofaria-digital.pages.dev'
+      const params = {
+        mode:'subscription', payment_method_collection:'always',
+        customer:customerId, line_items:[{price:priceId,quantity:1}],
+        subscription_data:{metadata:{company_id:String(company.id)}, ...(trialEnd ? {
+          trial_end:trialEnd, trial_settings:{end_behavior:{missing_payment_method:'cancel'}}
+        } : {})},
+        metadata:{company_id:String(company.id)},
+        success_url:`${frontendUrl}/stripe-retorno/?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url:`${frontendUrl}/stripe-retorno/?cancelado=1`, locale:'pt-BR'
+      }
+      const generation = previousSession?.id || 'initial'
+      const session = await stripe.checkout.sessions.create(params, {
+        idempotencyKey:`company-checkout-v2:${company.id}:${generation}:${priceId}:${trialEnd || 'no-trial'}`
+      })
+      saveCompanyFields(company.id, {stripe_checkout_session_id:session.id})
+      return res.json({url:session.url,session_id:session.id})
     })
-    res.json({ url: session.url, session_id: session.id })
   } catch(err) {
-    res.status(500).json({ error:'stripe_error', message: err.message })
+    return res.status(500).json({error:'stripe_error',message:err.message})
   }
 })
 
@@ -344,28 +435,31 @@ router.post('/stripe/confirm-checkout', requireAuth, async (req, res) => {
       return res.status(409).json({ error:'checkout_not_complete', message:'O checkout ainda não foi concluído na Stripe.' })
     }
 
-    let subscription = session.subscription || null
-    if(typeof subscription === 'string') subscription = await stripe.subscriptions.retrieve(subscription)
+    const subscription = session.subscription ? await stripe.subscriptions.retrieve(stripeId(session.subscription)) : null
     const subscriptionId = String(subscription?.id || session.subscription || '')
     const subscriptionStatus = String(subscription?.status || '').toLowerCase()
     if(!subscriptionId || !['trialing','active'].includes(subscriptionStatus)){
       return res.status(409).json({ error:'subscription_not_active', message:'A assinatura ainda não está ativa ou em período grátis na Stripe.' })
     }
 
-    const customerId = String(session.customer || '')
-    if(customerId) company.stripe_customer_id = customerId
-    company.stripe_subscription_id = subscriptionId
-    company.financial_status = subscriptionStatus
-    if(!professionalCourtesyActive(company)){
-      company.access_status = 'active'
-      company.billing_mode = 'stripe'
+    if(subscriptionStatus === 'active' && session.payment_status !== 'paid'){
+      return res.status(409).json({error:'checkout_payment_pending',message:'Aguarde a confirmação do pagamento pela Stripe.'})
     }
-    if(subscription?.trial_end) company.trial_ends_at = new Date(Number(subscription.trial_end) * 1000).toISOString()
-    if(subscription?.current_period_end) company.next_charge_at = new Date(Number(subscription.current_period_end) * 1000).toISOString()
-    else if(subscription?.trial_end) company.next_charge_at = new Date(Number(subscription.trial_end) * 1000).toISOString()
-    company.updated_at = nowIso()
+    const customerId = stripeId(session.customer)
+    const latestStore = readStore()
+    const latestCompany = findCompanyById(latestStore, company.id)
+    if(!latestCompany) return res.status(404).json({error:'company_not_found'})
+    if(latestCompany.stripe_subscription_id && latestCompany.stripe_subscription_id !== subscriptionId){
+      return res.status(409).json({error:'subscription_mismatch'})
+    }
+    if(!customerId || customerId !== stripeId(subscription.customer)
+      || (latestCompany.stripe_customer_id && latestCompany.stripe_customer_id !== customerId)
+      || (subscription.metadata?.company_id && String(subscription.metadata.company_id) !== String(company.id))){
+      return res.status(403).json({error:'customer_company_mismatch'})
+    }
+    updateSubscription(latestCompany, subscription)
 
-    upsertAudit(store, {
+    upsertAudit(latestStore, {
       company_id: company.id,
       action: 'checkout_confirmed',
       message: `Checkout Stripe ${session.id} confirmado por retorno seguro.`,
@@ -375,17 +469,17 @@ router.post('/stripe/confirm-checkout', requireAuth, async (req, res) => {
       actor_role: req.user?.role || 'owner',
       reason: 'stripe_checkout_return',
       request_json: { session_id: session.id },
-      after_json: JSON.parse(JSON.stringify(company)),
+      after_json: JSON.parse(JSON.stringify(latestCompany)),
       source: 'stripe-return',
       ip_address: req.ip,
       user_agent: req.headers['user-agent'] || ''
     })
 
-    writeStore(store)
+    writeStore(latestStore)
     return res.json({
       ok: true,
       confirmed: true,
-      subscription: buildSubscriptionPayload(company, store, req).subscription
+      subscription: buildSubscriptionPayload(latestCompany, latestStore, req).subscription
     })
   } catch(err) {
     const code = err.code || 'stripe_confirm_error'
@@ -393,90 +487,76 @@ router.post('/stripe/confirm-checkout', requireAuth, async (req, res) => {
   }
 })
 
-router.post('/webhooks/stripe', express.raw({ type: 'application/json' }), (req, res) => {
-  const store = readStore()
-  let event
+router.post('/webhooks/stripe', express.raw({ type:'application/json' }), async (req, res) => {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
-  if(stripe && webhookSecret){
-    try {
-      event = stripe.webhooks.constructEvent(req.body, req.headers['stripe-signature'], webhookSecret)
-    } catch(err) {
-      return res.status(400).json({ error:'invalid_signature', message: err.message })
+  if(!stripe || !webhookSecret) return res.status(503).json({error:'stripe_webhook_not_configured'})
+  let event
+  try { event = stripe.webhooks.constructEvent(req.body, req.headers['stripe-signature'], webhookSecret) }
+  catch(err){ return res.status(400).json({error:'invalid_signature',message:err.message}) }
+  if(!event.id) return res.status(400).json({error:'invalid_event'})
+  try {
+    const obj = event.data?.object || {}
+    const subId = subscriptionId(obj)
+    const customerId = stripeId(obj.customer)
+    const companyId = String(obj.metadata?.company_id || '')
+    const supported = ['checkout.session.completed','checkout.session.async_payment_succeeded',
+      'invoice.paid','invoice.payment_failed','customer.subscription.created',
+      'customer.subscription.updated','customer.subscription.deleted']
+    const initialStore = readStore()
+    if(initialStore.webhookEvents.some(e => e.id === event.id)) return res.json({ok:true,duplicate:true})
+    const bySub = initialStore.companies.filter(c => subId && c.stripe_subscription_id === subId)
+    const byMetadata = companyId ? findCompanyById(initialStore, companyId) : null
+    const company = bySub.length === 1 ? bySub[0] : (bySub.length === 0 ? byMetadata : null)
+    let processed = false
+    const unpaidCheckout = event.type.startsWith('checkout.session.')
+      && obj.payment_status !== 'paid' && obj.payment_status !== 'no_payment_required'
+    if(company && subId && supported.includes(event.type) && !unpaidCheckout){
+      await withCompanyLock(String(company.id), async () => {
+        let latest = readStore()
+        let target = findCompanyById(latest, company.id)
+        if(!target || (target.stripe_subscription_id && target.stripe_subscription_id !== subId)) return
+        if(companyId && companyId !== String(target.id)) return
+        if(customerId && target.stripe_customer_id && customerId !== target.stripe_customer_id) return
+        if(latest.webhookEvents.some(e => e.id === event.id)) return
+        // Retrieve live state: Stripe does not guarantee event delivery order.
+        const subscription = await stripe.subscriptions.retrieve(subId)
+        const actualCustomer = stripeId(subscription.customer)
+        if(!actualCustomer || (customerId && customerId !== actualCustomer)
+          || (target.stripe_customer_id && target.stripe_customer_id !== actualCustomer)
+          || (subscription.metadata?.company_id && String(subscription.metadata.company_id) !== String(target.id))) return
+        if(!target.stripe_subscription_id){
+          // Never bind an old canceled subscription using just a customer ID.
+          if(!['active','trialing'].includes(subscription.status)
+            || String(subscription.metadata?.company_id || '') !== String(target.id)
+            || target.stripe_customer_id !== actualCustomer) return
+        }
+        latest = readStore()
+        target = findCompanyById(latest, company.id)
+        if(!target || (target.stripe_subscription_id && target.stripe_subscription_id !== subId)) return
+        updateSubscription(target, subscription)
+        if(event.type === 'invoice.paid'){
+          target.last_payment_at = nowIso()
+          target.manual_grace_until = ''
+        }
+        upsertAudit(latest, {company_id:target.id,action:'billing_webhook',
+          message:`Webhook ${event.type} reconciliado com a assinatura Stripe atual.`,
+          actor_name:'stripe-webhook',actor_role:'system',reason:event.type,
+          request_json:event,after_json:JSON.parse(JSON.stringify(target)),source:'billing-webhook'})
+        // Record success together with the mutation. API failures remain retryable.
+        latest.webhookEvents.push({id:event.id,type:event.type,created_at:nowIso(),payload:event,status:'processed'})
+        writeStore(latest)
+        processed = true
+      })
     }
-  } else {
-    event = req.body || {}
-  }
-  const eventId = String(event.id || '')
-  if(!eventId) return res.status(400).json({ error:'invalid_event', message:'Evento sem id.' })
-  if(store.webhookEvents.some(item => String(item.id) === eventId)) return res.json({ ok:true, duplicate:true })
-
-  const record = {
-    id: eventId,
-    type: String(event.type || 'unknown'),
-    created_at: nowIso(),
-    payload: event,
-    status: 'processed'
-  }
-  store.webhookEvents.push(record)
-
-  const obj = event.data?.object || {}
-  const stripeSubscriptionId = String(typeof obj.subscription === 'string' ? obj.subscription : (obj.subscription?.id || (obj.object === 'subscription' ? obj.id : '')) || '')
-  const stripeCustomerId = String(typeof obj.customer === 'string' ? obj.customer : (obj.customer?.id || ''))
-  const companyId = obj.metadata?.company_id || event.company_id || ''
-  const bySubscription = stripeSubscriptionId ? (store.companies || []).find(c => String(c.stripe_subscription_id || '') === stripeSubscriptionId) : null
-  const byCustomer = !bySubscription && stripeCustomerId ? (store.companies || []).find(c => String(c.stripe_customer_id || '') === stripeCustomerId) : null
-  const company = bySubscription || byCustomer || (companyId ? findCompanyById(store, companyId) : null)
-  // Eventos de outra assinatura, inclusive antigas/canceladas, não podem alterar a empresa.
-  const matchingSubscription = !company?.stripe_subscription_id || stripeSubscriptionId === String(company.stripe_subscription_id)
-  const safeCompany = matchingSubscription ? company : null
-  if(safeCompany){
-    const type = record.type
-    if(type === 'checkout.session.completed'){
-      const stripeCustomerId = obj.customer || ''
-      const stripeSubId = obj.subscription || ''
-      if(stripeCustomerId) company.stripe_customer_id = stripeCustomerId
-      if(stripeSubId) company.stripe_subscription_id = stripeSubId
-      company.financial_status = 'trialing'
-      if(!professionalCourtesyActive(company)) company.access_status = 'active'
+    if(!processed){
+      const latest = readStore()
+      if(!latest.webhookEvents.some(e => e.id === event.id)){
+        latest.webhookEvents.push({id:event.id,type:event.type,created_at:nowIso(),payload:event,status:'ignored'})
+        writeStore(latest)
+      }
     }
-    if(type === 'invoice.paid'){
-      company.financial_status = 'active'
-      if(!professionalCourtesyActive(company)) company.access_status = 'active'
-      company.last_payment_at = nowIso()
-      company.manual_grace_until = ''
-    }
-    if(type === 'invoice.payment_failed'){
-      company.financial_status = 'past_due'
-      if(!professionalCourtesyActive(company)) company.access_status = company.manual_grace_until ? 'manual_grace' : 'active'
-    }
-    if(type === 'customer.subscription.deleted'){
-      company.financial_status = 'canceled'
-      if(!professionalCourtesyActive(company)) company.access_status = 'blocked'
-    }
-    if(type === 'customer.subscription.updated'){
-      const status = String(event.data?.object?.status || '').toLowerCase()
-      if(status) company.financial_status = status
-      if(!professionalCourtesyActive(company) && ['active','trialing'].includes(status)) company.access_status = 'active'
-      if(!professionalCourtesyActive(company) && ['past_due'].includes(status)) company.access_status = company.manual_grace_until ? 'manual_grace' : 'active'
-      if(!professionalCourtesyActive(company) && ['unpaid','canceled','incomplete_expired'].includes(status)) company.access_status = 'blocked'
-    }
-    company.updated_at = nowIso()
-    upsertAudit(store, {
-      company_id: company.id,
-      action: 'billing_webhook',
-      message: `Webhook ${record.type} processado no servidor.`,
-      actor_name: 'stripe-webhook',
-      actor_email: 'stripe@webhook',
-      actor_role: 'system',
-      reason: record.type,
-      request_json: event,
-      after_json: JSON.parse(JSON.stringify(company)),
-      source: 'billing-webhook'
-    })
-  }
-
-  writeStore(store)
-  res.json({ ok:true })
+    return res.json({ok:true})
+  } catch(err){ return res.status(500).json({error:'stripe_webhook_retry',message:err.message}) }
 })
 
 module.exports = router
