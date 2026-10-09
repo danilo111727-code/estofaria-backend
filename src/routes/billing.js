@@ -1,11 +1,13 @@
 const express = require('express')
 const { v4: uuidv4 } = require('uuid')
-const { readStore, writeStore, findCompanyById, upsertAudit, nowIso, planPreset } = require('../lib/store')
+const storeLib = require('../lib/store')
+const { readStore, writeStore, findCompanyById, upsertAudit, nowIso, planPreset } = storeLib
 const { requireAuth, optionalAuth, requireMaster, requirePermission } = require('../middleware/auth')
 const { hasMasterAccess } = require('../lib/policies')
 
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY
 const stripe = stripeSecretKey ? require('stripe')(stripeSecretKey, { timeout:5000, maxNetworkRetries:0 }) : null
+const COURTESY_DAYS = 60
 
 const router = express.Router()
 
@@ -58,13 +60,22 @@ async function listAll(method, params){
   } while(true)
   return result
 }
-function saveCompanyFields(id, fields){
+async function flushStore(code = 'store_persistence_error'){
+  try {
+    if(storeLib._pg && typeof storeLib._pg.flushNow === 'function') await storeLib._pg.flushNow()
+  } catch(error) {
+    error.code = error.code || code
+    throw error
+  }
+}
+async function saveCompanyFields(id, fields){
   // Never write a snapshot obtained before awaiting a Stripe API request.
   const latest = readStore()
   const company = findCompanyById(latest, id)
   if(!company) throw new Error('Company no longer exists')
   Object.assign(company, fields)
   writeStore(latest)
+  await flushStore('checkout_persistence_error')
   return company
 }
 
@@ -147,7 +158,7 @@ function buildSubscriptionPayload(company, store, req){
       subscription: {
         status: cfg.enabled === false ? 'inactive' : 'trialing',
         payment_provider: cfg.payment_provider || 'stripe',
-        trial_days: Number(cfg.trial_days || 30),
+        trial_days: COURTESY_DAYS,
         checkout_url: cfg.payment_link || '',
         payment_link: cfg.payment_link || '',
         customer_portal_available: false,
@@ -170,7 +181,7 @@ function buildSubscriptionPayload(company, store, req){
       grace_until: company.manual_grace_until || '',
       courtesy_started_at: company.courtesy_started_at || '',
       courtesy_until: company.courtesy_until || '',
-      trial_days: Number(cfg.trial_days || 30),
+      trial_days: COURTESY_DAYS,
       checkout_url: cfg.payment_link || `${appBaseUrl(req)}/checkout-simulado?company=${encodeURIComponent(company.id)}`,
       payment_link: cfg.payment_link || `${appBaseUrl(req)}/checkout-simulado?company=${encodeURIComponent(company.id)}`,
       customer_portal_available: Boolean(company.stripe_customer_id || company.stripe_subscription_id || company.billing_mode === 'stripe'),
@@ -196,7 +207,7 @@ function buildLeadPayload(lead, checkoutUrl, company, cfg){
     lead,
     subscription: {
       status: company?.financial_status || 'trialing',
-      trial_days: Number(cfg.trial_days || 30),
+      trial_days: COURTESY_DAYS,
       payment_provider: cfg.payment_provider || 'stripe',
       checkout_url: checkoutUrl,
       payment_link: checkoutUrl,
@@ -278,7 +289,7 @@ function handleCheckout(req, res){
 
 router.get('/public', (req, res) => {
   const store = readStore()
-  res.json(store.billingConfig)
+  res.json({ ...(store.billingConfig || {}), trial_days:COURTESY_DAYS })
 })
 
 router.get('/config', requireAuth, requireMaster, requirePermission('billing.read'), (req, res) => {
@@ -364,7 +375,7 @@ router.post('/stripe/create-checkout', requireAuth, async (req, res) => {
         const owned = candidates.filter(c => String(c.metadata?.company_id || '') === String(company.id))
         if(owned.length === 1){
           customerId = owned[0].id
-          company = saveCompanyFields(company.id, {stripe_customer_id:customerId})
+          company = await saveCompanyFields(company.id, {stripe_customer_id:customerId})
         } else if(candidates.length){
           return res.status(409).json({error:'customer_link_required',message:'Cadastro Stripe anterior encontrado. O suporte deve verificar o vínculo antes de uma nova contratação.'})
         }
@@ -373,7 +384,7 @@ router.post('/stripe/create-checkout', requireAuth, async (req, res) => {
         const customer = await stripe.customers.create({ email:company.owner_email || undefined,
           metadata:{company_id:String(company.id)} }, {idempotencyKey:`company-customer-v1:${company.id}`})
         customerId = customer.id
-        company = saveCompanyFields(company.id, {stripe_customer_id:customerId})
+        company = await saveCompanyFields(company.id, {stripe_customer_id:customerId})
       }
       const subscriptions = await listAll(p => stripe.subscriptions.list(p), {customer:customerId,status:'all'})
       if(subscriptions.some(sub => !['canceled','incomplete_expired'].includes(sub.status))){
@@ -388,7 +399,7 @@ router.post('/stripe/create-checkout', requireAuth, async (req, res) => {
       const openSessions = await listAll(p => stripe.checkout.sessions.list(p), {customer:customerId,status:'open'})
       const open = openSessions.find(s => s.mode === 'subscription' && String(s.metadata?.company_id || '') === String(company.id))
       if(open){
-        saveCompanyFields(company.id, {stripe_checkout_session_id:open.id})
+        await saveCompanyFields(company.id, {stripe_checkout_session_id:open.id})
         return res.json({url:open.url,session_id:open.id})
       }
       const frontendUrl = process.env.FRONTEND_URL || 'https://estofaria-digital.pages.dev'
@@ -406,11 +417,11 @@ router.post('/stripe/create-checkout', requireAuth, async (req, res) => {
       const session = await stripe.checkout.sessions.create(params, {
         idempotencyKey:`company-checkout-v2:${company.id}:${generation}:${priceId}:${trialEnd || 'no-trial'}`
       })
-      saveCompanyFields(company.id, {stripe_checkout_session_id:session.id})
+      await saveCompanyFields(company.id, {stripe_checkout_session_id:session.id})
       return res.json({url:session.url,session_id:session.id})
     })
   } catch(err) {
-    return res.status(500).json({error:'stripe_error',message:err.message})
+    return res.status(err.code === 'checkout_persistence_error' ? 503 : 500).json({error:err.code || 'stripe_error',message:err.message})
   }
 })
 
@@ -476,6 +487,7 @@ router.post('/stripe/confirm-checkout', requireAuth, async (req, res) => {
     })
 
     writeStore(latestStore)
+    await flushStore('checkout_persistence_error')
     return res.json({
       ok: true,
       confirmed: true,
@@ -483,7 +495,7 @@ router.post('/stripe/confirm-checkout', requireAuth, async (req, res) => {
     })
   } catch(err) {
     const code = err.code || 'stripe_confirm_error'
-    return res.status(500).json({ error: code, message: err.message })
+    return res.status(code === 'checkout_persistence_error' ? 503 : 500).json({ error: code, message: err.message })
   }
 })
 
@@ -503,7 +515,12 @@ router.post('/webhooks/stripe', express.raw({ type:'application/json' }), async 
       'invoice.paid','invoice.payment_failed','customer.subscription.created',
       'customer.subscription.updated','customer.subscription.deleted']
     const initialStore = readStore()
-    if(initialStore.webhookEvents.some(e => e.id === event.id)) return res.json({ok:true,duplicate:true})
+    if(initialStore.webhookEvents.some(e => e.id === event.id)){
+      // A previous attempt may have updated the in-memory snapshot but failed
+      // its database commit. Flush before acknowledging a duplicate delivery.
+      await flushStore('webhook_persistence_error')
+      return res.json({ok:true,duplicate:true})
+    }
     const bySub = initialStore.companies.filter(c => subId && c.stripe_subscription_id === subId)
     const byMetadata = companyId ? findCompanyById(initialStore, companyId) : null
     const company = bySub.length === 1 ? bySub[0] : (bySub.length === 0 ? byMetadata : null)
@@ -545,6 +562,7 @@ router.post('/webhooks/stripe', express.raw({ type:'application/json' }), async 
         // Record success together with the mutation. API failures remain retryable.
         latest.webhookEvents.push({id:event.id,type:event.type,created_at:nowIso(),payload:event,status:'processed'})
         writeStore(latest)
+        await flushStore('webhook_persistence_error')
         processed = true
       })
     }
@@ -553,10 +571,11 @@ router.post('/webhooks/stripe', express.raw({ type:'application/json' }), async 
       if(!latest.webhookEvents.some(e => e.id === event.id)){
         latest.webhookEvents.push({id:event.id,type:event.type,created_at:nowIso(),payload:event,status:'ignored'})
         writeStore(latest)
+        await flushStore('webhook_persistence_error')
       }
     }
     return res.json({ok:true})
-  } catch(err){ return res.status(500).json({error:'stripe_webhook_retry',message:err.message}) }
+  } catch(err){ return res.status(err.code === 'webhook_persistence_error' ? 503 : 500).json({error:'stripe_webhook_retry',message:err.message}) }
 })
 
 module.exports = router

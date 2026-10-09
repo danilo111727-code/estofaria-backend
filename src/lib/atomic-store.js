@@ -240,9 +240,10 @@ function shouldWrap(req){
     if(isAgendaV2Mutation(method,path) || isFinancialV2Mutation(method,path)) return false
     if(path.startsWith('/api/v2/')) return false
     if(path.includes('/companies/') && method === 'DELETE') return false
-    // Checkout now writes customer/session IDs. Commit them before acknowledging
-    // success, under the same PostgreSQL row lock as webhook reconciliation.
-    if(path.endsWith('/customer-portal')) return false
+    // Stripe network calls must not hold the global store transaction. These
+    // routes explicitly flush their final mutations before acknowledging them.
+    if(path.endsWith('/stripe/create-checkout') || path.endsWith('/stripe/confirm-checkout')
+      || path.endsWith('/webhooks/stripe') || path.endsWith('/customer-portal')) return false
     return path.startsWith('/api/')
   }
 

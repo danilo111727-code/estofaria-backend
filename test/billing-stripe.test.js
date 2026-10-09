@@ -13,17 +13,18 @@ const { issueToken } = require('../src/lib/auth')
 const day = 86400000
 function company(extra = {}) { return { id:'co_test', name:'Fictícia', owner_email:'fixture@example.invalid', plan_code:'gestao', billing_mode:'courtesy', access_status:'courtesy_active', financial_status:'active', courtesy_until:new Date(Date.now()+60*day).toISOString(), ...extra } }
 async function fixture(t, extra = {}, options = {}) {
-  let state = { companies:[company(extra)], users:[{id:'u_test',company_id:'co_test',email:'fixture@example.invalid',is_active:true}], companyUsers:[], billingConfig:{}, billingLeads:[], webhookEvents:[], auditLogs:[] }
+  let state = { companies:[company(extra)], users:[{id:'u_test',company_id:'co_test',email:'fixture@example.invalid',is_active:true}], companyUsers:[], billingConfig:options.billingConfig || {}, billingLeads:[], webhookEvents:[], auditLogs:[] }
   const calls = { sessions:[], customers:[], lists:[] }
+  const stripeDelay = () => options.stripeDelayMs ? new Promise(r=>setTimeout(r,options.stripeDelayMs)) : Promise.resolve()
   const subscriptions = new Map()
   const sessions = new Map()
   const invoices = new Map()
   const store = { readStore:()=>structuredClone(state), writeStore:v=>{ state=structuredClone(v) }, findCompanyById:(s,id)=>s.companies.find(c=>c.id===id), upsertAudit:(s,v)=>s.auditLogs.push(v), nowIso:()=>new Date().toISOString(), planPreset:()=>({code:'gestao',name:'Gestão',monthly_price_cents:14900,seats_limit:2}) }
   const fake = {
-    customers:{ list:async()=>({data:options.customers || [],has_more:false}), create:async(p,o)=>{ calls.customers.push({p,o}); return {id:'cus_fixture'} } },
-    subscriptions:{ list:async p=>{ calls.lists.push(p); return options.list ? options.list(p) : {data:[...subscriptions.values()].filter(s=>s.customer===p.customer),has_more:false} }, retrieve:async id=>{ if(options.retrieveError) throw Error('simulated timeout'); if(!subscriptions.has(id)) throw Error('missing fixture subscription '+id); return structuredClone(subscriptions.get(id)) } },
+    customers:{ list:async()=>{await stripeDelay();return {data:options.customers || [],has_more:false}}, create:async(p,o)=>{ await stripeDelay(); calls.customers.push({p,o}); return {id:'cus_fixture'} } },
+    subscriptions:{ list:async p=>{ await stripeDelay(); calls.lists.push(p); return options.list ? options.list(p) : {data:[...subscriptions.values()].filter(s=>s.customer===p.customer),has_more:false} }, retrieve:async id=>{ await stripeDelay(); if(options.retrieveError) throw Error('simulated timeout'); if(!subscriptions.has(id)) throw Error('missing fixture subscription '+id); return structuredClone(subscriptions.get(id)) } },
     invoices:{retrieve:async id=>structuredClone(invoices.get(id))},
-    checkout:{ sessions:{ create:async(p,o)=>{ calls.sessions.push({p,o}); await new Promise(r=>setImmediate(r)); const s={id:'cs_fixture_'+calls.sessions.length,url:'https://checkout.example.invalid/'+calls.sessions.length,status:'open',mode:'subscription',customer:p.customer,metadata:p.metadata,expires_at:Math.floor(Date.now()/1000)+86400}; sessions.set(s.id,s); if(options.checkoutTimeoutOnce){options.checkoutTimeoutOnce=false;throw Error('simulated lost Stripe response')} return structuredClone(s) }, retrieve:async id=>{ if(!sessions.has(id)) throw Error('missing fixture session '+id); return structuredClone(sessions.get(id)) },list:async p=>({data:[...sessions.values()].filter(s=>s.customer===p.customer&&s.status==='open'),has_more:false}) } },
+    checkout:{ sessions:{ create:async(p,o)=>{ await stripeDelay(); calls.sessions.push({p,o}); await new Promise(r=>setImmediate(r)); const s={id:'cs_fixture_'+calls.sessions.length,url:'https://checkout.example.invalid/'+calls.sessions.length,status:'open',mode:'subscription',customer:p.customer,metadata:p.metadata,expires_at:Math.floor(Date.now()/1000)+86400}; sessions.set(s.id,s); if(options.checkoutTimeoutOnce){options.checkoutTimeoutOnce=false;throw Error('simulated lost Stripe response')} return structuredClone(s) }, retrieve:async id=>{ await stripeDelay(); if(!sessions.has(id)) throw Error('missing fixture session '+id); return structuredClone(sessions.get(id)) },list:async p=>{await stripeDelay();return {data:[...sessions.values()].filter(s=>s.customer===p.customer&&s.status==='open'),has_more:false}} } },
     webhooks:{constructEvent:(...args)=>Stripe.webhooks.constructEvent(...args)}
   }
   if(options.atomic){
@@ -62,6 +63,9 @@ async function fixture(t, extra = {}, options = {}) {
   app.use((req,res,next)=>req.path.endsWith('/webhooks/stripe')?next():express.json()(req,res,next))
   if(options.atomic) app.use(store.atomicMiddleware)
   app.use('/api/billing',router)
+  app.post('/api/test-mutation',(req,res)=>{
+    const latest=store.readStore();latest.latency_probe=Number(latest.latency_probe||0)+1;store.writeStore(latest);res.json({ok:true})
+  })
   app.get('/api/protected',requireAuth,(req,res)=>res.json({ok:true}))
   const server=app.listen(0,'127.0.0.1')
   await new Promise(r=>server.once('listening',r))
@@ -72,6 +76,7 @@ async function fixture(t, extra = {}, options = {}) {
 }
 function sub(extra={}) { return {id:'sub_current',object:'subscription',customer:'cus_fixture',status:'active',metadata:{company_id:'co_test'},current_period_end:Math.floor(Date.now()/1000)+30*86400,...extra} }
 const checkoutPath='/api/billing/stripe/confirm-checkout'
+test('public billing reports the effective 60-day courtesy even with legacy 30-day config',async t=>{const f=await fixture(t,{}, {billingConfig:{trial_days:30}});const r=await f.request('/api/billing/public');assert.equal(r.status,200);assert.equal(r.body.trial_days,60)})
 test('repeated checkout reuses one open session',async t=>{const f=await fixture(t);const a=await f.checkout(),b=await f.checkout();assert.equal(a.status,200);assert.equal(b.body.session_id,a.body.session_id);assert.equal(f.calls.sessions.length,1)})
 test('concurrent checkout creates only one session',async t=>{const f=await fixture(t);const r=await Promise.all(Array.from({length:8},()=>f.checkout()));assert.equal(new Set(r.map(x=>x.body.session_id)).size,1);assert.equal(f.calls.sessions.length,1)})
 test('creates and persists an explicit Stripe customer',async t=>{const f=await fixture(t);await f.checkout();assert.equal(f.company.stripe_customer_id,'cus_fixture');assert.equal(f.calls.sessions[0].p.customer,'cus_fixture');assert.ok(f.calls.customers[0].o.idempotencyKey)})
@@ -195,4 +200,60 @@ test('frontend subscription status endpoint returns the same billing payload',as
   const status=await f.request('/api/billing/status')
   assert.equal(status.status,200)
   assert.deepEqual(status.body,current.body)
+})
+
+test('slow Stripe checkout does not hold the global PostgreSQL mutation queue',async t=>{
+  const f=await fixture(t,{}, {atomic:true,stripeDelayMs:80})
+  const started=Date.now()
+  const checkout=f.checkout()
+  await new Promise(r=>setTimeout(r,20))
+  const mutationStarted=Date.now()
+  const mutation=await f.request('/api/test-mutation',{})
+  const mutationMs=Date.now()-mutationStarted
+  const checkoutResult=await checkout
+  const checkoutMs=Date.now()-started
+  assert.equal(mutation.status,200)
+  assert.equal(checkoutResult.status,200)
+  assert.ok(mutationMs < 200, `mutation waited ${mutationMs}ms`)
+  assert.ok(checkoutMs >= 300, `checkout finished too quickly for fixture: ${checkoutMs}ms`)
+  t.diagnostic(`checkout=${checkoutMs}ms concurrent_mutation=${mutationMs}ms`)
+})
+
+test('slow Stripe confirmation does not hold the global PostgreSQL mutation queue',async t=>{
+  const f=await fixture(t,{stripe_customer_id:'cus_fixture'}, {atomic:true,stripeDelayMs:100})
+  const subscription=sub({status:'trialing',trial_end:Math.floor(Date.now()/1000)+60*86400})
+  f.subscriptions.set(subscription.id,subscription)
+  f.complete('cs_confirm_slow',subscription)
+  const started=Date.now()
+  const confirmation=f.request(checkoutPath,{session_id:'cs_confirm_slow'})
+  await new Promise(r=>setTimeout(r,20))
+  const mutationStarted=Date.now()
+  const mutation=await f.request('/api/test-mutation',{})
+  const mutationMs=Date.now()-mutationStarted
+  const confirmationResult=await confirmation
+  const confirmationMs=Date.now()-started
+  assert.equal(mutation.status,200)
+  assert.equal(confirmationResult.status,200)
+  assert.ok(mutationMs < 200, `mutation waited ${mutationMs}ms`)
+  assert.ok(confirmationMs >= 180, `confirmation finished too quickly for fixture: ${confirmationMs}ms`)
+  t.diagnostic(`confirmation=${confirmationMs}ms concurrent_mutation=${mutationMs}ms`)
+})
+
+test('slow Stripe webhook does not hold the global PostgreSQL mutation queue',async t=>{
+  const subscription=sub({status:'active'})
+  const f=await fixture(t,{stripe_customer_id:'cus_fixture',stripe_subscription_id:subscription.id}, {atomic:true,stripeDelayMs:200})
+  f.subscriptions.set(subscription.id,subscription)
+  const started=Date.now()
+  const webhook=f.webhook('customer.subscription.updated',subscription,'evt_slow_webhook')
+  await new Promise(r=>setTimeout(r,20))
+  const mutationStarted=Date.now()
+  const mutation=await f.request('/api/test-mutation',{})
+  const mutationMs=Date.now()-mutationStarted
+  const webhookResult=await webhook
+  const webhookMs=Date.now()-started
+  assert.equal(mutation.status,200)
+  assert.equal(webhookResult.status,200)
+  assert.ok(mutationMs < 200, `mutation waited ${mutationMs}ms`)
+  assert.ok(webhookMs >= 180, `webhook finished too quickly for fixture: ${webhookMs}ms`)
+  t.diagnostic(`webhook=${webhookMs}ms concurrent_mutation=${mutationMs}ms`)
 })

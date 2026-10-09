@@ -42,7 +42,7 @@ function baseHtml(title, bodyContent) {
 function buildWelcomeHtml(name, empresa) {
   const body = `
     <h1 style="margin:0 0 8px;font-size:24px;font-weight:700;color:#0f172a;">Bem-vindo, ${name}! 🎉</h1>
-    <p style="margin:0 0 24px;color:#64748b;font-size:15px;line-height:1.6;">Sua conta na <strong>${APP_NAME}</strong> foi criada com sucesso para a empresa <strong>${empresa}</strong>. Você tem <strong>30 dias gratuitos</strong> para explorar tudo!</p>
+    <p style="margin:0 0 24px;color:#64748b;font-size:15px;line-height:1.6;">Sua conta na <strong>${APP_NAME}</strong> foi criada com sucesso para a empresa <strong>${empresa}</strong>. Você tem <strong>60 dias gratuitos</strong> para explorar tudo!</p>
 
     <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
       <tr>

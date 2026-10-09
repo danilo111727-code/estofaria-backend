@@ -59,7 +59,7 @@ const DEFAULT_STORE = {
     payment_link: '',
     support_contact: 'Atendimento comercial',
     trial_days: 60,
-    notes: 'Primeiro mês grátis'
+    notes: '60 dias de cortesia'
   },
   billingLeads: [],
   webhookEvents: []
