@@ -48,10 +48,12 @@ const pdfConfigRoutes = require('./src/routes/pdf-config')
 const pdfConfigDb = require('./src/lib/pdf-config-db')
 
 function parseAllowedOrigins() {
-  return String(process.env.CORS_ALLOWED_ORIGINS || '')
+  const configured = String(process.env.CORS_ALLOWED_ORIGINS || '')
     .split(',')
     .map(item => item.trim())
     .filter(Boolean)
+  // Preview isolado: autorizar somente esta origem adicional, preservando a lista existente.
+  return [...new Set([...configured, 'https://experimental-agenda-cards-20.estofaria-frontend.pages.dev'])]
 }
 
 const allowedOrigins = parseAllowedOrigins()
