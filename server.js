@@ -53,7 +53,7 @@ function parseAllowedOrigins() {
     .map(item => item.trim())
     .filter(Boolean)
   // Preview isolado: autorizar somente esta origem adicional, preservando a lista existente.
-  return [...new Set([...configured, 'https://experimental-agenda-cards-20.estofaria-frontend.pages.dev'])]
+  return [...new Set([...configured, 'https://estofaria-frontend.pages.dev', 'https://experimental-agenda-cards-20.estofaria-frontend.pages.dev'])]
 }
 
 const allowedOrigins = parseAllowedOrigins()
