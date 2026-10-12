@@ -130,6 +130,7 @@ function materializeCompany(store, company){
   return {
     id: company.id,
     name: company.name,
+    modalidade: company.modalidade === 'cortinas' ? 'cortinas' : 'estofaria',
     owner_name: company.owner_name || 'Responsável não informado',
     owner_email: company.owner_email || '-',
     owner_phone: company.owner_phone || '',
