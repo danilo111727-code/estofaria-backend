@@ -177,7 +177,7 @@ router.post('/login', (req, res) => {
     membership.last_login_at = accessAt
     membership.last_seen_at = accessAt
   }
-  const token = issueToken(user)
+  const token = issueToken(enrichUserForResponse(store, user))
   user.updated_at = nowIso()
   writeStore(store)
   res.json({ token, user: sanitizeUser(enrichUserForResponse(store, user)) })
@@ -319,7 +319,7 @@ router.post('/register', async (req, res) => {
   }
 
   sendEmail({ to: email, ...welcomeEmail(nome, empresa) }).catch(() => {})
-  res.status(201).json({ token: issueToken(user), user: sanitizeUser(enrichUserForResponse(store, user)) })
+  res.status(201).json({ token: issueToken(enrichUserForResponse(store, user)), user: sanitizeUser(enrichUserForResponse(store, user)) })
 })
 
 function handleForgotPassword(req, res){
@@ -539,7 +539,8 @@ router.post('/activity', requireAuth, (req, res) => {
 })
 
 router.get('/me', requireAuth, (req, res) => {
-  res.json({ user: req.user })
+  const store = readStore()
+  res.json({ user: sanitizeUser(enrichUserForResponse(store, req.user)) })
 })
 
 router.get('/team', requireAuth, (req, res) => {
