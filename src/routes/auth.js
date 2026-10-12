@@ -110,6 +110,7 @@ function enrichUserForResponse(store, user){
     empresa: user.empresa || company.name || '',
     company_name: user.company_name || company.name || '',
     business_name: user.business_name || company.name || '',
+    modalidade: company.modalidade === 'cortinas' ? 'cortinas' : 'estofaria',
     company: typeof user.company === 'object'
       ? { ...(user.company || {}), id: company.id, name: user.company?.name || company.name || '' }
       : { id: company.id, name: company.name || '' }
@@ -184,12 +185,14 @@ router.post('/login', (req, res) => {
 
 router.post('/register', async (req, res) => {
   const empresa = normalizeText(req.body?.empresa, 120)
+  const modalidade = String(req.body?.modalidade || 'estofaria').trim().toLowerCase()
   const nome = normalizeText(req.body?.nome, 120)
   const password = String(req.body?.password || '')
   const email = normalizeEmail(req.body?.email)
   if(!takeRateLimit(`register:${req.ip}`, 10, 60 * 60 * 1000)){
     return res.status(429).json({ error:'rate_limited', message:'Muitas tentativas de cadastro. Aguarde um pouco para continuar.' })
   }
+  if(!['estofaria', 'cortinas'].includes(modalidade)) return res.status(400).json({ error:'invalid_modalidade', message:'Selecione Estofaria ou Cortinas.' })
   if(!empresa || !nome || !email || !password) return res.status(400).json({ error:'invalid_request', message:'Campos obrigatórios ausentes.' })
   if(!looksLikeEmail(email)) return res.status(400).json({ error:'invalid_request', message:'Informe um e-mail válido.' })
   if(String(password).length < 6) return res.status(400).json({ error:'invalid_request', message:'A senha deve ter pelo menos 6 caracteres.' })
@@ -223,6 +226,7 @@ router.post('/register', async (req, res) => {
   store.companies.push({
     id: companyId,
     name: empresa,
+    modalidade,
     owner_name: nome,
     owner_email: email,
     owner_phone: '',
