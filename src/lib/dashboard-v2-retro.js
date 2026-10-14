@@ -36,6 +36,8 @@ function shiftMonth(year,month,delta){
 }
 
 function revenueDate(order){
+  // Pedido do Vendedor: competencia pela data do fechamento.
+  if(order?.financial_order === true) return safeDate(order?.created_at)
   const productionDate = safeDate(
     order?.prod_date || order?.production_date || order?.data_producao
   )
