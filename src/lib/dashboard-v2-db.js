@@ -59,11 +59,11 @@ function reconcileHistoricalAgenda(manualOrders, vendorOrders){
   // Conciliacao somente em memoria; preserva os registros originais.
   // Ambiguidade (mais de um candidato de qualquer lado) nunca e conciliada.
   const normalizeName = value => text(value).normalize('NFD')
-    .replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\\s+/g,' ').trim()
+    .replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim()
   const dateOnly = value => {
     if(!value) return null
     const raw = String(value)
-    const match = raw.match(/^(\\d{4})-(\\d{2})-(\\d{2})/)
+    const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})/)
     if(!match) return null
     const time = Date.UTC(Number(match[1]),Number(match[2])-1,Number(match[3]))
     return Number.isFinite(time) ? time : null
