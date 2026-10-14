@@ -57,14 +57,50 @@ function rowToOrder(row){
 
 async function listDashboardOrders(companyId){
   const pool = getPool()
-  const result = await pool.query(`
-    SELECT company_id,id,bloco_id,cliente,descricao,prod_date,ent_date,status,tecido,qtd,
-           source_quote_id,payload,created_at,updated_at
-    FROM app_agenda_orders_v2
-    WHERE company_id=$1
-    ORDER BY created_at ASC,id ASC
-  `,[text(companyId)])
-  return result.rows.map(rowToOrder)
+  const [agendaResult, quoteResult] = await Promise.all([
+    pool.query(`
+      SELECT company_id,id,bloco_id,cliente,descricao,prod_date,ent_date,status,tecido,qtd,
+             source_quote_id,payload,created_at,updated_at
+      FROM app_agenda_orders_v2
+      WHERE company_id=$1
+      ORDER BY created_at ASC,id ASC
+    `,[text(companyId)]),
+    pool.query(`
+      SELECT id,company_id,cliente,status,total_cents,payload_meta,created_at,updated_at
+      FROM app_quotes_v2
+      WHERE company_id=$1 AND active=TRUE AND LOWER(COALESCE(status,''))='pedido'
+      ORDER BY created_at ASC,id ASC
+    `,[text(companyId)])
+  ])
+  const agendaOrders = agendaResult.rows.map(rowToOrder)
+  const agendaByQuote = new Map()
+  for(const order of agendaOrders){
+    const ref = extractQuoteRef(order)
+    if(ref) agendaByQuote.set(ref,order)
+  }
+  const quoteOrders = quoteResult.rows.map(row => {
+    const payload = row?.payload_meta && typeof row.payload_meta === 'object' && !Array.isArray(row.payload_meta)
+      ? row.payload_meta : {}
+    const agenda = agendaByQuote.get(text(row.id))
+    return {
+      ...payload,
+      ...(agenda || {}),
+      id:agenda?.id || ('quote:' + row.id),
+      company_id:row.company_id,
+      cliente:row.cliente || payload.cliente || agenda?.cliente || '',
+      descricao:agenda?.descricao || payload.descricao || 'Pedido do Vendedor',
+      status:agenda?.status || 'pendente',
+      total_cents:Number(row.total_cents || payload.total_cents || 0),
+      source_quote_id:row.id,
+      financial_order:true,
+      agenda_status:payload.agenda_status || (agenda ? 'agendado' : 'pendente'),
+      created_at:payload.data_pedido || row.created_at,
+      updated_at:row.updated_at || row.created_at
+    }
+  })
+  // Registros ligados a orçamento excluído não representam vendas manuais.
+  const manualAgendaOrders = agendaOrders.filter(order => !extractQuoteRef(order))
+  return [...manualAgendaOrders,...quoteOrders]
 }
 
 function isIgnoredPlaceholder(order){
@@ -108,6 +144,7 @@ function extractQuoteRef(order){
 }
 
 function isVendorHistoryOrder(order){
+  if(order?.financial_order === true) return false
   // Pedidos vinculados a um bloco são pedidos reais da Agenda, mesmo quando
   // foram originados por um orçamento no Vendedor.
   if(text(order?.bloco_id || order?.blocoId)) return false
@@ -132,13 +169,13 @@ function buildOrderKey(order,index){
   return composite || `row:${index}`
 }
 
-function onlyAgendaOrders(orders){
-  return (Array.isArray(orders) ? orders : []).filter(order => !isVendorHistoryOrder(order))
+function onlyAgendaOrders(orders, includeFinancial = false){
+  return (Array.isArray(orders) ? orders : []).filter(order => (includeFinancial || order?.financial_order !== true) && !isVendorHistoryOrder(order))
 }
 
-function uniqueFiltered(orders,predicate){
+function uniqueFiltered(orders,predicate,includeFinancial = false){
   const seen = new Set()
-  return onlyAgendaOrders(orders).filter((order,index) => {
+  return onlyAgendaOrders(orders,includeFinancial).filter((order,index) => {
     if(!predicate(order)) return false
     const key = buildOrderKey(order,index)
     if(seen.has(key)) return false
@@ -166,7 +203,7 @@ function billableOrders(orders){
     const cliente = normalize(order?.cliente)
     const descricao = normalize(order?.descricao)
     return Boolean(cliente || descricao)
-  })
+  },true)
 }
 
 function revenueCents(order){
