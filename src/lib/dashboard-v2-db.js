@@ -55,6 +55,51 @@ function rowToOrder(row){
   }
 }
 
+function reconcileHistoricalAgenda(manualOrders, vendorOrders){
+  // Conciliacao somente em memoria; preserva os registros originais.
+  // Ambiguidade (mais de um candidato de qualquer lado) nunca e conciliada.
+  const normalizeName = value => text(value).normalize('NFD')
+    .replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim()
+  const dateOnly = value => {
+    if(!value) return null
+    // O pg retorna TIMESTAMPTZ como Date; compare dias no fuso do painel.
+    const date = value instanceof Date ? value : safeDate(value)
+    if(!date || !Number.isFinite(date.getTime())) return null
+    const parts = dateParts(date)
+    return Date.UTC(parts.year,parts.month,parts.day)
+  }
+  const candidates = []
+  for(let ai=0;ai<manualOrders.length;ai++){
+    const agenda = manualOrders[ai]
+    const name = normalizeName(agenda.cliente)
+    const amount = revenueCents(agenda)
+    const agendaDate = dateOnly(agenda.created_at)
+    if(!name || amount <= 0 || agendaDate === null) continue
+    for(let vi=0;vi<vendorOrders.length;vi++){
+      const vendor = vendorOrders[vi]
+      if(normalizeName(vendor.cliente) !== name || revenueCents(vendor) !== amount) continue
+      const vendorDate = dateOnly(vendor.reconciliation_created_at || vendor.created_at)
+      if(vendorDate === null) continue
+      const days = Math.round((agendaDate-vendorDate)/86400000)
+      if(days >= 0 && days <= 14) candidates.push({ai,vi})
+    }
+  }
+  const agendaCounts = new Map(), vendorCounts = new Map()
+  for(const pair of candidates){
+    agendaCounts.set(pair.ai,(agendaCounts.get(pair.ai)||0)+1)
+    vendorCounts.set(pair.vi,(vendorCounts.get(pair.vi)||0)+1)
+  }
+  const matched = new Map()
+  for(const {ai,vi} of candidates){
+    if(agendaCounts.get(ai) === 1 && vendorCounts.get(vi) === 1){
+      matched.set(ai,vendorOrders[vi].source_quote_id)
+    }
+  }
+  return manualOrders.map((order,index) => matched.has(index)
+    ? {...order, historical_reconciliation_quote_id:matched.get(index), exclude_from_revenue:true}
+    : order)
+}
+
 async function listDashboardOrders(companyId){
   const pool = getPool()
   const result = await pool.query(`
@@ -64,7 +109,37 @@ async function listDashboardOrders(companyId){
     WHERE company_id=$1
     ORDER BY created_at ASC,id ASC
   `,[text(companyId)])
-  return result.rows.map(rowToOrder)
+  const orders = result.rows.map(rowToOrder)
+  // Concilia somente registros que a regra atual já inclui no faturamento.
+  // A consulta ao Vendedor fornece identificação e criação; não acrescenta vendas.
+  const billable = billableOrders(orders)
+  const linkedOrders = billable.filter(order => extractQuoteRef(order))
+  const manualOrders = billable.filter(order => !extractQuoteRef(order))
+  if(!linkedOrders.length || !manualOrders.length) return orders
+  const quoteIds = [...new Set(linkedOrders.map(extractQuoteRef))]
+  const quotes = await pool.query(`
+    SELECT id,cliente,total_cents,created_at
+    FROM app_quotes_v2
+    WHERE company_id=$1 AND id=ANY($2::text[])
+      AND active=TRUE AND LOWER(COALESCE(status,''))='pedido'
+  `,[text(companyId),quoteIds])
+  const quotesById = new Map(quotes.rows.map(row => [text(row.id),row]))
+  const vendorOrders = []
+  for(const order of linkedOrders){
+    const ref = extractQuoteRef(order)
+    const quote = quotesById.get(ref)
+    // Valores divergentes não devem esconder uma venda legítima.
+    if(!quote || Number(quote.total_cents) !== revenueCents(order)) continue
+    vendorOrders.push({
+      ...order,
+      cliente:quote.cliente || order.cliente,
+      source_quote_id:ref,
+      reconciliation_created_at:quote.created_at
+    })
+  }
+  const reconciled = reconcileHistoricalAgenda(manualOrders,vendorOrders)
+  const byOrder = new Map(manualOrders.map((order,index) => [order,reconciled[index]]))
+  return orders.map(order => byOrder.get(order) || order)
 }
 
 function isIgnoredPlaceholder(order){
@@ -160,6 +235,7 @@ function activeOrders(orders){
 
 function billableOrders(orders){
   return uniqueFiltered(orders,order => {
+    if(order?.exclude_from_revenue === true) return false
     const status = normalize(order?.status)
     if(['cancelado','indisponivel'].includes(status)) return false
     if(isIgnoredPlaceholder(order)) return false
