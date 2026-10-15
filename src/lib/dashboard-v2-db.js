@@ -405,4 +405,5 @@ async function getSummary(companyId){
   }
 }
 
-module.exports = { getSummary, listDashboardOrders, activeOrders, billableOrders, revenueCents }
+module.exports = { getSummary, listDashboardOrders, activeOrders, billableOrders, revenueCents,
+  rowToOrder,extractQuoteRef,reconcileHistoricalAgenda }

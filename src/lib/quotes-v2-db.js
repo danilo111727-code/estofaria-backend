@@ -3,6 +3,8 @@
 const crypto = require('crypto')
 const storeLib = require('./store')
 const orderLifecycle = require('./quote-order-lifecycle')
+const agendaReconciliation = require('./quote-agenda-reconciliation')
+const dashboardDb = require('./dashboard-v2-db')
 
 const IMAGE_KEYS = new Set([
   'image_data_url','imageDataUrl','foto_data_url','fotoDataUrl',
@@ -356,6 +358,10 @@ async function markReadyDelivery(companyId,id,input={}){
   return result ? getQuote(companyId,id) : null
 }
 
+async function reconcileAgenda(companyId){
+  return agendaReconciliation.reconcileCompanyAgenda(getPool(),companyId,dashboardDb)
+}
+
 async function migrateLegacyQuotes(store){
   const quotes=Array.isArray(store?.quotes) ? store.quotes : []
   const pool=getPool()
@@ -386,6 +392,7 @@ module.exports={
   updateQuote,
   deleteQuote,
   markReadyDelivery,
+  reconcileAgenda,
   migrateLegacyQuotes,
   sanitize
 }
