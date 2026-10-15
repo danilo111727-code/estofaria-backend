@@ -62,11 +62,11 @@ function reconcileHistoricalAgenda(manualOrders, vendorOrders){
     .replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim()
   const dateOnly = value => {
     if(!value) return null
-    const raw = String(value)
-    const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})/)
-    if(!match) return null
-    const time = Date.UTC(Number(match[1]),Number(match[2])-1,Number(match[3]))
-    return Number.isFinite(time) ? time : null
+    // O pg retorna TIMESTAMPTZ como Date; compare dias no fuso do painel.
+    const date = value instanceof Date ? value : safeDate(value)
+    if(!date || !Number.isFinite(date.getTime())) return null
+    const parts = dateParts(date)
+    return Date.UTC(parts.year,parts.month,parts.day)
   }
   const candidates = []
   for(let ai=0;ai<manualOrders.length;ai++){
@@ -134,7 +134,8 @@ async function listDashboardOrders(companyId){
       company_id:row.company_id,
       cliente:row.cliente || payload.cliente || agenda?.cliente || '',
       descricao:agenda?.descricao || payload.descricao || 'Pedido do Vendedor',
-      status:agenda?.status || 'pendente',
+      // Cancelar apenas o agendamento não cancela o pedido ativo do Vendedor.
+      status:normalize(agenda?.status) === 'cancelado' ? 'pendente' : (agenda?.status || 'pendente'),
       total_cents:Number(row.total_cents || payload.total_cents || 0),
       source_quote_id:row.id,
       financial_order:true,
@@ -402,3 +403,4 @@ async function getSummary(companyId){
 }
 
 module.exports = { getSummary, listDashboardOrders, activeOrders, billableOrders, revenueCents }
+
