@@ -67,6 +67,15 @@ router.patch('/financial/entries/:id',async(req,res,next)=>{
   }catch(err){ next(err) }
 })
 
+router.delete('/financial/entries/:id/history',async(req,res,next)=>{
+  try{
+    const ok=await db.removeEntryFromHistory(req.financialV2CompanyId,req.params.id)
+    if(!ok) return res.status(404).json({error:'not_found',message:'Lançamento não encontrado no histórico.'})
+    audit(req,'financial.history.remove',`Lançamento removido do histórico: ${req.params.id}`)
+    return res.json({ok:true})
+  }catch(err){next(err)}
+})
+
 router.delete('/financial/entries/:id',async(req,res,next)=>{
   try{
     const ok=await db.deleteEntry(req.financialV2CompanyId,req.params.id)
@@ -77,3 +86,4 @@ router.delete('/financial/entries/:id',async(req,res,next)=>{
 })
 
 module.exports=router
+
