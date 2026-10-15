@@ -92,6 +92,15 @@ router.patch('/agenda/orders/:id',async(req,res,next)=>{
   }catch(err){ next(err) }
 })
 
+router.delete('/agenda/orders/:id/history',async(req,res,next)=>{
+  try{
+    const ok = await db.removeOrderFromHistory(req.agendaV2CompanyId,req.params.id)
+    if(!ok) return res.status(404).json({error:'not_found',message:'Registro não encontrado no histórico.'})
+    audit(req,'agenda.history.remove',`Registro removido do histórico: ${req.params.id}`)
+    return res.json({ok:true})
+  }catch(err){next(err)}
+})
+
 router.delete('/agenda/orders/:id',async(req,res,next)=>{
   try{
     const ok = await db.deleteOrder(req.agendaV2CompanyId,req.params.id)
@@ -173,3 +182,4 @@ router.post('/agenda/blocos/:id/pedido',async(req,res,next)=>{
 })
 
 module.exports = router
+
