@@ -78,7 +78,7 @@ function reconcileHistoricalAgenda(manualOrders, vendorOrders){
     for(let vi=0;vi<vendorOrders.length;vi++){
       const vendor = vendorOrders[vi]
       if(normalizeName(vendor.cliente) !== name || revenueCents(vendor) !== amount) continue
-      const vendorDate = dateOnly(vendor.created_at)
+      const vendorDate = dateOnly(vendor.reconciliation_created_at || vendor.created_at)
       if(vendorDate === null) continue
       const days = Math.round((agendaDate-vendorDate)/86400000)
       if(days >= 0 && days <= 14) candidates.push({ai,vi})
@@ -138,6 +138,7 @@ async function listDashboardOrders(companyId){
       total_cents:Number(row.total_cents || payload.total_cents || 0),
       source_quote_id:row.id,
       financial_order:true,
+      reconciliation_created_at:row.created_at,
       agenda_status:payload.agenda_status || (agenda ? 'agendado' : 'pendente'),
       created_at:payload.data_pedido || row.created_at,
       updated_at:row.updated_at || row.created_at
