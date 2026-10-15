@@ -2,6 +2,9 @@
 
 const crypto = require('crypto')
 const storeLib = require('./store')
+const orderLifecycle = require('./quote-order-lifecycle')
+const agendaReconciliation = require('./quote-agenda-reconciliation')
+const dashboardDb = require('./dashboard-v2-db')
 
 const IMAGE_KEYS = new Set([
   'image_data_url','imageDataUrl','foto_data_url','fotoDataUrl',
@@ -345,9 +348,18 @@ async function updateQuote(companyId,id,patch={}){
 }
 
 async function deleteQuote(companyId,id){
-  const pool=getPool()
-  const res=await pool.query('DELETE FROM app_quotes_v2 WHERE company_id=$1 AND id=$2 RETURNING id',[companyId,id])
-  return res.rows.length>0
+  return orderLifecycle.deleteQuoteWithAgenda(getPool(),companyId,id)
+}
+
+async function markReadyDelivery(companyId,id,input={}){
+  const result = await orderLifecycle.markReadyDelivery(getPool(),companyId,id,{
+    ...input,payload:sanitize(input.payload || {})
+  })
+  return result ? getQuote(companyId,id) : null
+}
+
+async function reconcileAgenda(companyId){
+  return agendaReconciliation.reconcileCompanyAgenda(getPool(),companyId,dashboardDb)
 }
 
 async function migrateLegacyQuotes(store){
@@ -379,6 +391,8 @@ module.exports={
   createQuote,
   updateQuote,
   deleteQuote,
+  markReadyDelivery,
+  reconcileAgenda,
   migrateLegacyQuotes,
   sanitize
 }

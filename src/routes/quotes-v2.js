@@ -61,6 +61,17 @@ function quoteImageKeys(row){
 
 router.use(requireQuotes,requireCompany)
 
+router.post('/quotes/reconcile-agenda',async(req,res,next)=>{
+  try{
+    const result=await db.reconcileAgenda(req.quotesV2CompanyId)
+    if(result.linked || result.scheduled || result.unscheduled){
+      auditQuote(req,req.quotesV2CompanyId,'quote.agenda.reconcile',
+        `Conciliação da Agenda: ${result.linked} vínculo(s), ${result.scheduled + result.unscheduled} status atualizado(s)`)
+    }
+    return res.json(result)
+  }catch(err){next(err)}
+})
+
 router.get('/quotes',async(req,res,next)=>{
   try{
     const rows=await db.listQuotes(req.quotesV2CompanyId,{
@@ -117,6 +128,18 @@ router.delete('/quotes/:id',async(req,res,next)=>{
 
     return res.json({ok:true})
   }catch(err){ next(err) }
+})
+
+router.post('/quotes/:id/ready-delivery',async(req,res,next)=>{
+  try{
+    const row=await db.markReadyDelivery(req.quotesV2CompanyId,req.params.id,req.body || {})
+    if(!row) return res.status(404).json({error:'not_found',message:'Pedido não encontrado.'})
+    auditQuote(req,req.quotesV2CompanyId,'quote.ready_delivery',`Pedido vendido à pronta entrega: ${row.id}`)
+    return res.json(row)
+  }catch(err){
+    if(err?.code === 'ready_delivery_conflict') return res.status(409).json({error:err.code,message:err.message})
+    next(err)
+  }
 })
 
 router.post('/quotes/:id/convert-to-order',async(req,res,next)=>{
