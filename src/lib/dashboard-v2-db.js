@@ -135,7 +135,8 @@ async function listDashboardOrders(companyId){
       cliente:row.cliente || payload.cliente || agenda?.cliente || '',
       descricao:agenda?.descricao || payload.descricao || 'Pedido do Vendedor',
       // Cancelar apenas o agendamento não cancela o pedido ativo do Vendedor.
-      status:normalize(agenda?.status) === 'cancelado' ? 'pendente' : (agenda?.status || 'pendente'),
+      status:normalize(agenda?.status) === 'cancelado' ? 'pendente' :
+        (agenda?.status || (payload.vendido_pronta_entrega === true && payload.agenda_status === 'pronta_entrega' ? 'entregue' : 'pendente')),
       total_cents:Number(row.total_cents || payload.total_cents || 0),
       source_quote_id:row.id,
       financial_order:true,
@@ -405,4 +406,3 @@ async function getSummary(companyId){
 }
 
 module.exports = { getSummary, listDashboardOrders, activeOrders, billableOrders, revenueCents }
-

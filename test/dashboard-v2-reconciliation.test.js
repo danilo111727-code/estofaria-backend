@@ -218,3 +218,26 @@ test('Pedido conciliado usa o mês do fechamento, mesmo com produção em outro 
   assert.equal(summary.pedidos,1)
   assert.equal(db.billableOrders(orders).length,1)
 })
+
+test('Pronta entrega permanece faturada e fora dos ativos, mesmo sem registro na Agenda',async()=>{
+  const rows = fixtures()
+  rows.agenda=[]
+  rows.quotes[0].payload_meta.agenda_status='pronta_entrega'
+  rows.quotes[0].payload_meta.vendido_pronta_entrega=true
+  await check(rows,{count:1,cents:105000,active:0})
+})
+
+test('Pronta entrega vinculada é uma venda entregue e nunca dois pedidos',async()=>{
+  const rows = fixtures({linked:true,status:'entregue'})
+  rows.agenda[0].bloco_id=null
+  rows.agenda[0].payload.vendido_pronta_entrega=true
+  rows.quotes[0].payload_meta.agenda_status='pronta_entrega'
+  rows.quotes[0].payload_meta.vendido_pronta_entrega=true
+  await check(rows,{count:1,cents:105000,active:0})
+})
+
+test('Pedido excluído do Vendedor não deixa o espelho da Agenda faturado',async()=>{
+  const rows = fixtures({linked:true})
+  rows.quotes=[]
+  await check(rows,{count:0,cents:0,active:0})
+})
