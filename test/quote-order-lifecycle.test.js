@@ -2,6 +2,10 @@
 
 const {test} = require('node:test')
 const assert = require('node:assert/strict')
+const fs=require('node:fs'),vm=require('node:vm'),path=require('node:path')
+const helperContext={module:{exports:{}},Date,Intl,require:()=>({})}
+vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../src/lib/dashboard-v2-db.js'),'utf8'),helperContext)
+const helpers=helperContext.module.exports
 const {deleteQuoteWithAgenda,markReadyDelivery} = require('../src/lib/quote-order-lifecycle')
 
 function fixture(overrides={}){
@@ -34,11 +38,11 @@ function database(initial,failPattern){
       else assert.match(sql,/company_id=\$1/,'Todas as operações devem estar isoladas por empresa')
       if(sql.startsWith('SELECT') && sql.includes('FROM app_quotes_v2')){
         assert.match(sql,/FOR UPDATE/,'Bloquear o pedido evita duas entregas concorrentes')
-        return {rows:structuredClone(state.quotes.filter(q=>q.company_id===args[0] && q.id===args[1] && (!sql.includes('active=TRUE') || q.active)))}
+        return {rows:structuredClone(state.quotes.filter(q=>q.company_id===args[0] && (args[1] === undefined || q.id===args[1]) && (!sql.includes('active=TRUE') || (q.active && (args[1] !== undefined || q.status==='pedido')))))}
       }
       if(sql.startsWith('SELECT') && sql.includes('FROM app_agenda_orders_v2')){
         assert.match(sql,/FOR UPDATE/)
-        return {rows:structuredClone(state.agenda.filter(a=>a.company_id===args[0] && args[1].includes(reference(a))))}
+        return {rows:structuredClone(state.agenda.filter(a=>a.company_id===args[0] && (args[1] === undefined || args[1].includes(reference(a)))))}
       }
       if(sql.startsWith('DELETE FROM app_agenda_orders_v2')){
         assert.match(sql,/ANY\(\$2::text\[\]\)/)
@@ -57,11 +61,15 @@ function database(initial,failPattern){
       }
       if(sql.startsWith('UPDATE app_agenda_orders_v2')){
         const a=state.agenda.find(a=>a.company_id===args[0] && a.id===args[1])
+        if(sql.includes('source_quote_id=$3')){
+          a.source_quote_id=args[2];a.payload={...a.payload,source_quote_id:args[2]};return {rows:[]}
+        }
         Object.assign(a,{bloco_id:null,cliente:args[2],descricao:args[3],prod_date:'',ent_date:args[4],status:'entregue',source_quote_id:args[5],payload:JSON.parse(args[6])})
         return {rows:[]}
       }
       if(sql.startsWith('UPDATE app_quotes_v2')){
         const q=state.quotes.find(q=>q.company_id===args[0] && q.id===args[1])
+        if(sql.includes('payload_meta=$3::jsonb')){q.payload_meta=JSON.parse(args[2]);return {rows:[]}}
         Object.assign(q,{status:'pedido',total_cents:args[2],payload_meta:JSON.parse(args[3])})
         return {rows:[]}
       }
@@ -82,7 +90,7 @@ test('Exclusão remove somente o pedido e os vínculos exatos da mesma empresa',
     {id:'other-company',company_id:'c2',source_quote_id:'q1'}
   ]})
   const db=database(state)
-  assert.equal(await deleteQuoteWithAgenda(db.pool,'c1','q1'),true)
+  assert.equal(await deleteQuoteWithAgenda(db.pool,'c1','q1',helpers),true)
   assert.deepEqual(db.state.agenda.map(a=>a.id),['manual','other-quote','other-company'])
   assert.equal(db.state.quotes.length,0)
   assert.equal(db.calls.at(-1).sql,'COMMIT')
@@ -92,7 +100,7 @@ test('Exclusão remove somente o pedido e os vínculos exatos da mesma empresa',
 test('Falha ao excluir a Agenda preserva integralmente pedido e agenda',async()=>{
   const state=fixture({agenda:[{id:'a1',company_id:'c1',source_quote_id:'q1'}]})
   const db=database(state,/DELETE FROM app_agenda_orders_v2/)
-  await assert.rejects(deleteQuoteWithAgenda(db.pool,'c1','q1'),/simulated/)
+  await assert.rejects(deleteQuoteWithAgenda(db.pool,'c1','q1',helpers),/simulated/)
   assert.deepEqual(db.state,state)
   assert.equal(db.calls.at(-1).sql,'ROLLBACK')
   assert.equal(db.released,1)
@@ -101,14 +109,14 @@ test('Falha ao excluir a Agenda preserva integralmente pedido e agenda',async()=
 test('Falha ao excluir o pedido desfaz a remoção dos vínculos da Agenda',async()=>{
   const state=fixture({agenda:[{id:'a1',company_id:'c1',source_quote_id:'q1'}]})
   const db=database(state,/DELETE FROM app_quotes_v2/)
-  await assert.rejects(deleteQuoteWithAgenda(db.pool,'c1','q1'),/simulated/)
+  await assert.rejects(deleteQuoteWithAgenda(db.pool,'c1','q1',helpers),/simulated/)
   assert.deepEqual(db.state,state)
 })
 
 test('Exclusão de pedido inexistente ou de outra empresa não remove agenda',async()=>{
   const state=fixture({agenda:[{id:'a1',company_id:'c1',source_quote_id:'q1'}]})
   const db=database(state)
-  assert.equal(await deleteQuoteWithAgenda(db.pool,'c2','q1'),false)
+  assert.equal(await deleteQuoteWithAgenda(db.pool,'c2','q1',helpers),false)
   assert.deepEqual(db.state,state)
 })
 
@@ -190,4 +198,57 @@ test('Recusa data inválida sem gravar pronta entrega',async()=>{
   const state=fixture(),db=database(state)
   await assert.rejects(markReadyDelivery(db.pool,'c1','q1',{delivery_date:'2026-02-31'}),/Data.*inválida/)
   assert.deepEqual(db.state,state)
+})
+
+function manualPending(){
+ const state=fixture({agenda:[{id:'manual-talita',company_id:'c1',cliente:'Talita Tavares',bloco_id:'b1',
+   status:'pendente',created_at:new Date('2026-10-15T10:01:00Z'),payload:{valor:5000}}]})
+ Object.assign(state.quotes[0],{cliente:'Talita Tavares',created_at:new Date('2026-10-15T10:00:00Z')})
+ return state
+}
+
+test('Excluir antes de abrir Histórico confirma conciliação e remove manual na mesma transação',async()=>{
+ const db=database(manualPending())
+ await deleteQuoteWithAgenda(db.pool,'c1','q1',helpers)
+ assert.equal(db.state.agenda.length,0);assert.equal(db.state.quotes.length,0)
+ assert.equal(db.calls.filter(c=>c.sql==='BEGIN').length,1)
+ assert.equal(db.calls.filter(c=>c.sql==='COMMIT').length,1)
+})
+
+test('Exclusão não escolhe manual quando existem dois candidatos de qualquer lado',async()=>{
+ for(const side of ['agenda','quotes']){
+  const state=manualPending();state[side].push({...state[side][0],id:'second'})
+  const db=database(state)
+  await deleteQuoteWithAgenda(db.pool,'c1','q1',helpers)
+  assert.deepEqual(db.state.agenda,state.agenda)
+ }
+})
+
+test('Exclusão preserva manuais com valor, nome, data ou empresa incompatíveis',async()=>{
+ for(const mode of ['value','name','date','company']){
+  const state=manualPending()
+  if(mode==='value')state.agenda[0].payload.valor=5000.01
+  if(mode==='name')state.agenda[0].cliente='Outra cliente'
+  if(mode==='date')state.agenda[0].created_at=new Date('2026-10-30T10:00:00Z')
+  if(mode==='company')state.agenda[0].company_id='c2'
+  const db=database(state)
+  await deleteQuoteWithAgenda(db.pool,'c1','q1',helpers)
+  assert.deepEqual(db.state.agenda,state.agenda)
+ }
+})
+
+test('Falha após conciliar desfaz vínculo, status e ambas as exclusões',async()=>{
+ const state=manualPending(),db=database(state,/DELETE FROM app_quotes_v2/)
+ await assert.rejects(deleteQuoteWithAgenda(db.pool,'c1','q1',helpers),/simulated/)
+ assert.deepEqual(db.state,state)
+})
+
+test('Excluir alvo não modifica conciliação nem status dos outros pedidos',async()=>{
+ const state=manualPending()
+ state.quotes.push({...state.quotes[0],id:'other',cliente:'Outro cliente'})
+ state.agenda.push({...state.agenda[0],id:'other-agenda',cliente:'Outro cliente'})
+ const before=structuredClone(state),db=database(state)
+ await deleteQuoteWithAgenda(db.pool,'c1','q1',helpers)
+ assert.deepEqual(db.state.quotes,[before.quotes[1]])
+ assert.deepEqual(db.state.agenda,[before.agenda[1]])
 })

@@ -1,6 +1,7 @@
 'use strict'
 
 const {randomUUID} = require('crypto')
+const {reconcileCompanyAgendaInTransaction} = require('./quote-agenda-reconciliation')
 
 // A mesma precedência dos vínculos lidos pelo painel; nunca usa nome ou valor.
 const AGENDA_QUOTE_REF = `COALESCE(
@@ -16,10 +17,13 @@ function refs(quote){
   return [...new Set([quote.id,quote.legacy_id].filter(Boolean).map(String))]
 }
 
-async function deleteQuoteWithAgenda(pool,companyId,id){
+async function deleteQuoteWithAgenda(pool,companyId,id,reconciliationHelpers=require('./dashboard-v2-db')){
   const client = await pool.connect()
   try{
     await client.query('BEGIN')
+    // Confirma o vínculo antes de excluir, sem depender da última abertura do Histórico.
+    // Todos os candidatos participam da desambiguação; só o alvo pode ser atualizado.
+    await reconcileCompanyAgendaInTransaction(client,companyId,reconciliationHelpers,{quoteId:id})
     const found = await client.query(
       'SELECT id,legacy_id FROM app_quotes_v2 WHERE company_id=$1 AND id=$2 FOR UPDATE',
       [companyId,id]
