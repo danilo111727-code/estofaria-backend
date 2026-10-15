@@ -55,16 +55,99 @@ function rowToOrder(row){
   }
 }
 
+function reconcileHistoricalAgenda(manualOrders, vendorOrders){
+  // Conciliacao somente em memoria; preserva os registros originais.
+  // Ambiguidade (mais de um candidato de qualquer lado) nunca e conciliada.
+  const normalizeName = value => text(value).normalize('NFD')
+    .replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim()
+  const dateOnly = value => {
+    if(!value) return null
+    // O pg retorna TIMESTAMPTZ como Date; compare dias no fuso do painel.
+    const date = value instanceof Date ? value : safeDate(value)
+    if(!date || !Number.isFinite(date.getTime())) return null
+    const parts = dateParts(date)
+    return Date.UTC(parts.year,parts.month,parts.day)
+  }
+  const candidates = []
+  for(let ai=0;ai<manualOrders.length;ai++){
+    const agenda = manualOrders[ai]
+    const name = normalizeName(agenda.cliente)
+    const amount = revenueCents(agenda)
+    const agendaDate = dateOnly(agenda.created_at)
+    if(!name || amount <= 0 || agendaDate === null) continue
+    for(let vi=0;vi<vendorOrders.length;vi++){
+      const vendor = vendorOrders[vi]
+      if(normalizeName(vendor.cliente) !== name || revenueCents(vendor) !== amount) continue
+      const vendorDate = dateOnly(vendor.reconciliation_created_at || vendor.created_at)
+      if(vendorDate === null) continue
+      const days = Math.round((agendaDate-vendorDate)/86400000)
+      if(days >= 0 && days <= 14) candidates.push({ai,vi})
+    }
+  }
+  const agendaCounts = new Map(), vendorCounts = new Map()
+  for(const pair of candidates){
+    agendaCounts.set(pair.ai,(agendaCounts.get(pair.ai)||0)+1)
+    vendorCounts.set(pair.vi,(vendorCounts.get(pair.vi)||0)+1)
+  }
+  const matched = new Map()
+  for(const {ai,vi} of candidates){
+    if(agendaCounts.get(ai) === 1 && vendorCounts.get(vi) === 1){
+      matched.set(ai,vendorOrders[vi].source_quote_id)
+    }
+  }
+  return manualOrders.map((order,index) => matched.has(index)
+    ? {...order, historical_reconciliation_quote_id:matched.get(index), exclude_from_revenue:true}
+    : order)
+}
+
 async function listDashboardOrders(companyId){
   const pool = getPool()
-  const result = await pool.query(`
-    SELECT company_id,id,bloco_id,cliente,descricao,prod_date,ent_date,status,tecido,qtd,
-           source_quote_id,payload,created_at,updated_at
-    FROM app_agenda_orders_v2
-    WHERE company_id=$1
-    ORDER BY created_at ASC,id ASC
-  `,[text(companyId)])
-  return result.rows.map(rowToOrder)
+  const [agendaResult, quoteResult] = await Promise.all([
+    pool.query(`
+      SELECT company_id,id,bloco_id,cliente,descricao,prod_date,ent_date,status,tecido,qtd,
+             source_quote_id,payload,created_at,updated_at
+      FROM app_agenda_orders_v2
+      WHERE company_id=$1
+      ORDER BY created_at ASC,id ASC
+    `,[text(companyId)]),
+    pool.query(`
+      SELECT id,company_id,cliente,status,total_cents,payload_meta,created_at,updated_at
+      FROM app_quotes_v2
+      WHERE company_id=$1 AND active=TRUE AND LOWER(COALESCE(status,''))='pedido'
+      ORDER BY created_at ASC,id ASC
+    `,[text(companyId)])
+  ])
+  const agendaOrders = agendaResult.rows.map(rowToOrder)
+  const agendaByQuote = new Map()
+  for(const order of agendaOrders){
+    const ref = extractQuoteRef(order)
+    if(ref) agendaByQuote.set(ref,order)
+  }
+  const quoteOrders = quoteResult.rows.map(row => {
+    const payload = row?.payload_meta && typeof row.payload_meta === 'object' && !Array.isArray(row.payload_meta)
+      ? row.payload_meta : {}
+    const agenda = agendaByQuote.get(text(row.id))
+    return {
+      ...payload,
+      ...(agenda || {}),
+      id:agenda?.id || ('quote:' + row.id),
+      company_id:row.company_id,
+      cliente:row.cliente || payload.cliente || agenda?.cliente || '',
+      descricao:agenda?.descricao || payload.descricao || 'Pedido do Vendedor',
+      // Cancelar apenas o agendamento não cancela o pedido ativo do Vendedor.
+      status:normalize(agenda?.status) === 'cancelado' ? 'pendente' : (agenda?.status || 'pendente'),
+      total_cents:Number(row.total_cents || payload.total_cents || 0),
+      source_quote_id:row.id,
+      financial_order:true,
+      reconciliation_created_at:row.created_at,
+      agenda_status:payload.agenda_status || (agenda ? 'agendado' : 'pendente'),
+      created_at:payload.data_pedido || row.created_at,
+      updated_at:row.updated_at || row.created_at
+    }
+  })
+  // Registros ligados a orçamento excluído não representam vendas manuais.
+  const manualAgendaOrders = agendaOrders.filter(order => !extractQuoteRef(order))
+  return [...reconcileHistoricalAgenda(manualAgendaOrders,quoteOrders),...quoteOrders]
 }
 
 function isIgnoredPlaceholder(order){
@@ -108,6 +191,7 @@ function extractQuoteRef(order){
 }
 
 function isVendorHistoryOrder(order){
+  if(order?.financial_order === true) return false
   // Pedidos vinculados a um bloco são pedidos reais da Agenda, mesmo quando
   // foram originados por um orçamento no Vendedor.
   if(text(order?.bloco_id || order?.blocoId)) return false
@@ -132,13 +216,13 @@ function buildOrderKey(order,index){
   return composite || `row:${index}`
 }
 
-function onlyAgendaOrders(orders){
-  return (Array.isArray(orders) ? orders : []).filter(order => !isVendorHistoryOrder(order))
+function onlyAgendaOrders(orders, includeFinancial = false){
+  return (Array.isArray(orders) ? orders : []).filter(order => (includeFinancial || order?.financial_order !== true) && !isVendorHistoryOrder(order))
 }
 
-function uniqueFiltered(orders,predicate){
+function uniqueFiltered(orders,predicate,includeFinancial = false){
   const seen = new Set()
-  return onlyAgendaOrders(orders).filter((order,index) => {
+  return onlyAgendaOrders(orders,includeFinancial).filter((order,index) => {
     if(!predicate(order)) return false
     const key = buildOrderKey(order,index)
     if(seen.has(key)) return false
@@ -149,24 +233,27 @@ function uniqueFiltered(orders,predicate){
 
 function activeOrders(orders){
   return uniqueFiltered(orders,order => {
+    // A contagem usa a mesma conciliação financeira e inclui pedidos sem agenda.
+    if(order?.exclude_from_revenue === true) return false
     const status = normalize(order?.status)
     if(['entregue','cancelado','indisponivel'].includes(status)) return false
     if(isIgnoredPlaceholder(order)) return false
     const cliente = normalize(order?.cliente)
     const descricao = normalize(order?.descricao)
     return Boolean(cliente || descricao)
-  })
+  },true)
 }
 
 function billableOrders(orders){
   return uniqueFiltered(orders,order => {
+    if(order?.exclude_from_revenue === true) return false
     const status = normalize(order?.status)
     if(['cancelado','indisponivel'].includes(status)) return false
     if(isIgnoredPlaceholder(order)) return false
     const cliente = normalize(order?.cliente)
     const descricao = normalize(order?.descricao)
     return Boolean(cliente || descricao)
-  })
+  },true)
 }
 
 function revenueCents(order){
@@ -318,3 +405,4 @@ async function getSummary(companyId){
 }
 
 module.exports = { getSummary, listDashboardOrders, activeOrders, billableOrders, revenueCents }
+
