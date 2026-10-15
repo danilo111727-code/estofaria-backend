@@ -1,17 +1,13 @@
 'use strict'
 
-async function reconcileCompanyAgenda(pool,companyId,helpers){
+async function reconcileCompanyAgendaInTransaction(client,companyId,helpers,{quoteId}={}){
   const {rowToOrder,extractQuoteRef,reconcileHistoricalAgenda,billableOrders} = helpers
-  const client = await pool.connect()
-  try{
-    await client.query('BEGIN')
     // Usa todos os pedidos da empresa para preservar a proteção contra ambiguidade.
     // A ordem dos bloqueios é sempre Vendedor -> Agenda, como na exclusão/pronta entrega.
     const quotes = await client.query(`SELECT * FROM app_quotes_v2
       WHERE company_id=$1 AND active=TRUE AND LOWER(COALESCE(status,''))='pedido'
       ORDER BY id FOR UPDATE`,[companyId])
     if(!quotes.rows.length){
-      await client.query('COMMIT')
       return {linked:0,scheduled:0,unscheduled:0}
     }
     const agenda = await client.query(`SELECT * FROM app_agenda_orders_v2
@@ -28,6 +24,7 @@ async function reconcileCompanyAgenda(pool,companyId,helpers){
     const eligible = order => Boolean(order?.bloco_id) && billableOrders([order]).length === 1
     let linked=0,scheduled=0,unscheduled=0
     for(const quote of quotes.rows){
+      if(quoteId !== undefined && String(quote.id) !== String(quoteId)) continue
       const payload=quote.payload_meta || {}
       if(payload.vendido_pronta_entrega === true || payload.agenda_status === 'pronta_entrega') continue
       const references=new Set([quote.id,quote.legacy_id].filter(Boolean).map(String))
@@ -67,12 +64,20 @@ async function reconcileCompanyAgenda(pool,companyId,helpers){
         scheduled++
       }
     }
-    await client.query('COMMIT')
     return {linked,scheduled,unscheduled}
+}
+
+async function reconcileCompanyAgenda(pool,companyId,helpers){
+  const client = await pool.connect()
+  try{
+    await client.query('BEGIN')
+    const result=await reconcileCompanyAgendaInTransaction(client,companyId,helpers)
+    await client.query('COMMIT')
+    return result
   }catch(error){
     await client.query('ROLLBACK').catch(()=>{})
     throw error
   }finally{client.release()}
 }
 
-module.exports = {reconcileCompanyAgenda}
+module.exports = {reconcileCompanyAgenda,reconcileCompanyAgendaInTransaction}
