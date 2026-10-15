@@ -49,7 +49,7 @@ function load(rows){
   return {db,retro:retroContext.module.exports}
 }
 
-async function check(rows,{excluded=0,count=2,cents=210000}={}){
+async function check(rows,{excluded=0,count=2,cents=210000,active=count}={}){
   const before = structuredClone(rows)
   const {db,retro} = load(rows)
   const orders = await db.listDashboardOrders('test')
@@ -57,6 +57,8 @@ async function check(rows,{excluded=0,count=2,cents=210000}={}){
   assert.equal(db.billableOrders(orders).length,count)
   const summary = await retro.getSummary('test')
   assert.equal(summary.faturamento_ano_cents,cents)
+  assert.equal(summary.pedidos,active)
+  assert.equal(db.activeOrders(orders).length,active)
   assert.equal(summary.pedidos_ano,count)
   assert.equal(summary.charts.year_revenue_months[0].revenue_cents,cents)
   assert.deepEqual(rows,before,'Leituras não devem modificar os registros originais')
@@ -183,5 +185,36 @@ test('Pedido manual cancelado continua fora do faturamento',async()=>{
 })
 
 test('Venda já entregue continua faturada',async()=>{
-  await check(fixtures({linked:true,status:'entregue'}),{count:1,cents:105000})
+  await check(fixtures({linked:true,status:'entregue'}),{count:1,cents:105000,active:0})
+})
+
+test('Pedido do Vendedor aguardando agendamento entra na contagem e no faturamento',async()=>{
+  const rows = fixtures()
+  rows.agenda=[]
+  rows.quotes[0].payload_meta.agenda_status='aguardando_agendamento'
+  await check(rows,{count:1,cents:105000,active:1})
+})
+
+test('Duplicidade de R$ 5.000 representa um pedido e uma venda',async()=>{
+  const rows = fixtures()
+  rows.agenda[0].cliente='Danilo Santana Ferreira'
+  rows.agenda[0].payload.valor=5000
+  rows.quotes[0].cliente='Danilo Santana Ferreira'
+  rows.quotes[0].total_cents='500000'
+  await check(rows,{excluded:1,count:1,cents:500000,active:1})
+})
+
+test('Pedido conciliado usa o mês do fechamento, mesmo com produção em outro mês',async()=>{
+  const rows = fixtures({linked:true})
+  const year = new Date().getUTCFullYear()
+  rows.quotes[0].payload_meta.data_pedido=`${year}-02-02`
+  rows.agenda[0].prod_date=`${year}-01-02`
+  const {db,retro} = load(rows)
+  const orders = await db.listDashboardOrders('test')
+  const summary = await retro.getSummary('test')
+  assert.equal(summary.charts.year_revenue_months[0].revenue_cents,0)
+  assert.equal(summary.charts.year_revenue_months[1].revenue_cents,105000)
+  assert.equal(summary.faturamento_ano_cents,105000)
+  assert.equal(summary.pedidos,1)
+  assert.equal(db.billableOrders(orders).length,1)
 })

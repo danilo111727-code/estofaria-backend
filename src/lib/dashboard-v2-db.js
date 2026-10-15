@@ -233,13 +233,15 @@ function uniqueFiltered(orders,predicate,includeFinancial = false){
 
 function activeOrders(orders){
   return uniqueFiltered(orders,order => {
+    // A contagem usa a mesma conciliação financeira e inclui pedidos sem agenda.
+    if(order?.exclude_from_revenue === true) return false
     const status = normalize(order?.status)
     if(['entregue','cancelado','indisponivel'].includes(status)) return false
     if(isIgnoredPlaceholder(order)) return false
     const cliente = normalize(order?.cliente)
     const descricao = normalize(order?.descricao)
     return Boolean(cliente || descricao)
-  })
+  },true)
 }
 
 function billableOrders(orders){
