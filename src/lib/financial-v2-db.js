@@ -265,6 +265,19 @@ async function updateEntry(companyId,id,patch={}){
   return entryFromRow(result.rows[0])
 }
 
+// Remover do histórico preserva o lançamento concluído e seus valores.
+async function removeEntryFromHistory(companyId,id){
+  const result=await getPool().query(`
+    UPDATE app_financial_entries_v2
+    SET payload=jsonb_set(COALESCE(payload,'{}'::jsonb),'{history_removed_at}',
+      COALESCE(payload->'history_removed_at',to_jsonb(NOW())),true)
+    WHERE company_id=$1 AND id=$2
+      AND LOWER(COALESCE(status,'')) IN ('pago','recebido')
+    RETURNING id
+  `,[text(companyId),text(id)])
+  return result.rows.length > 0
+}
+
 async function deleteEntry(companyId,id){
   const pool=getPool()
   const result=await pool.query(
@@ -293,5 +306,7 @@ module.exports={
   createEntry,
   updateEntry,
   deleteEntry,
+  removeEntryFromHistory,
   auditEvent
 }
+
