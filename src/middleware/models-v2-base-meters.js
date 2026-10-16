@@ -8,7 +8,7 @@ function number(value, fallback = 0) {
 function normalizeBaseMeters(value) {
   const n = Math.max(0, number(value, 0))
   if (!(n > 0)) return 0
-  return n > 10 ? Number((n / 100).toFixed(2)) : Number(n.toFixed(2))
+  return Number(n.toFixed(2))
 }
 
 function normalizeModelsV2BaseMeters(req, _res, next) {
