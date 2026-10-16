@@ -83,7 +83,11 @@ function sanitizeAlbum(album = {}) {
     .slice(0, 500)
     .map(item => ({
       nome: text(item?.nome || item?.name).replace(/\s+/g, ' ').trim().slice(0, 180),
-      codigo: text(item?.codigo || item?.code).replace(/\s+/g, ' ').trim().slice(0, 120)
+      codigo: text(item?.codigo || item?.code).replace(/\s+/g, ' ').trim().slice(0, 120),
+      valor_cents: Math.max(0, Math.round(finiteNumber(
+        item?.valor_cents ?? item?.value_cents ?? item?.price_cents ??
+        (finiteNumber(item?.valor ?? item?.value ?? item?.price) * 100)
+      )))
     }))
     .filter(item => item.nome || item.codigo)
   return {
@@ -470,20 +474,92 @@ function conflictError(currentRevision) {
   return err
 }
 
+function catalogName(value) {
+  return text(value).replace(/\s+/g, ' ').trim().toLowerCase()
+}
+
+function catalogInputError(message) {
+  const error = new Error(message)
+  error.code = 'invalid_catalog'
+  return error
+}
+
+function validateCatalogNames(previous, next) {
+  for (const [field, nameField] of [['items', 'name'], ['albums', 'nome']]) {
+    const count = list => (list || []).reduce((map, row) => {
+      const key = catalogName(row[nameField])
+      map.set(key, (map.get(key) || 0) + 1)
+      return map
+    }, new Map())
+    const before = count(previous[field])
+    for (const [name, total] of count(next[field])) {
+      if (total > 1 && total > (before.get(name) || 0)) {
+        throw catalogInputError('Já existe um cadastro com este nome. Use um nome diferente.')
+      }
+    }
+  }
+}
+
+function renamedCatalogItems(previousItems, nextItems) {
+  const nextById = new Map(nextItems.map(item => [item.id, item]))
+  return (previousItems || []).flatMap(item => {
+    const next = nextById.get(item.id)
+    const from = catalogName(item.name)
+    const to = next && catalogName(next.name)
+    return to && from !== to ? [{from, to}] : []
+  })
+}
+
+function renameConsumptions(consumos, renames) {
+  const original = consumos && typeof consumos === 'object' ? consumos : {}
+  const applicable = renames.filter(({from}) => Object.prototype.hasOwnProperty.call(original, from))
+  const moving = new Set(applicable.map(({from}) => from))
+  const result = {...original}
+  for (const {to} of applicable) {
+    if (Object.prototype.hasOwnProperty.call(original, to) && !moving.has(to)) {
+      throw catalogInputError('Este nome já possui consumos cadastrados. Escolha outro nome para preservar os dados.')
+    }
+  }
+  for (const {from} of applicable) delete result[from]
+  for (const {from, to} of applicable) result[to] = original[from]
+  return {changed: applicable.length > 0, consumos: result}
+}
+
 async function saveCatalog(companyId, input = {}, expectedRevision = null) {
   const normalized = sanitizeCatalog(input)
   const pool = getPool()
   const client = await pool.connect()
+  const modelUpdates = []
   try {
     await client.query('BEGIN')
     const currentRes = await client.query(`
-      SELECT revision FROM app_personalization_catalog_v2
+      SELECT revision, items, albums FROM app_personalization_catalog_v2
       WHERE company_id = $1
       FOR UPDATE
     `, [companyId])
     const currentRevision = Number(currentRes.rows[0]?.revision || 0)
     if (expectedRevision !== null && Number(expectedRevision) !== currentRevision) {
       throw conflictError(currentRevision)
+    }
+    const previous = currentRes.rows[0] || {items: [], albums: []}
+    validateCatalogNames(previous, normalized)
+    const renames = renamedCatalogItems(previous.items, normalized.items)
+    if (renames.length) {
+      const configs = await client.query(`
+        SELECT model_id, consumos FROM app_model_personalization_v2
+        WHERE company_id = $1 FOR UPDATE
+      `, [companyId])
+      for (const config of configs.rows) {
+        const renamed = renameConsumptions(config.consumos, renames)
+        if (!renamed.changed) continue
+        const updated = await client.query(`
+          UPDATE app_model_personalization_v2
+          SET consumos=$3::jsonb, revision=revision+1, updated_at=NOW()
+          WHERE company_id=$1 AND model_id=$2
+          RETURNING revision
+        `, [companyId, config.model_id, JSON.stringify(renamed.consumos)])
+        modelUpdates.push({model_id: config.model_id, revision: Number(updated.rows[0].revision)})
+      }
     }
     const nextRevision = currentRevision + 1
     await client.query(`
@@ -510,7 +586,8 @@ async function saveCatalog(companyId, input = {}, expectedRevision = null) {
   } finally {
     client.release()
   }
-  return getCatalog(companyId)
+  const saved = await getCatalog(companyId)
+  return {...saved, model_config_updates: modelUpdates}
 }
 
 async function getModelConfig(companyId, modelId) {
@@ -682,3 +759,4 @@ module.exports = {
   saveModelConfig,
   migrateLegacyPersonalization
 }
+

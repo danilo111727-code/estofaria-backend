@@ -75,6 +75,9 @@ function expectedRevision(body) {
 }
 
 function handleWriteError(err, res, next) {
+  if (err?.code === 'invalid_catalog') {
+    return res.status(400).json({error: err.code, message: err.message})
+  }
   if (err?.code === 'revision_conflict') {
     return res.status(409).json({
       error: 'revision_conflict',
@@ -180,3 +183,4 @@ router.get('/models/:id/personalization-items', requireRead, requireCompany, req
 })
 
 module.exports = router
+
