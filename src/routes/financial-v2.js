@@ -35,6 +35,8 @@ function audit(req,action,detail){
   })
 }
 
+router.get('/financial/capabilities',(_req,res)=>res.json({fixed_recurrence_atomic:true}))
+
 router.get('/financial/entries',async(req,res,next)=>{
   try{
     const rows=await db.listEntries(req.financialV2CompanyId,{
@@ -51,8 +53,8 @@ router.post('/financial/entries',async(req,res,next)=>{
     audit(req,'financial.entry.create',`Lançamento criado: ${row.descricao} (${row.tipo})`)
     return res.status(201).json(row)
   }catch(err){
-    if(err?.code==='invalid_tipo'){
-      return res.status(400).json({error:'invalid_tipo',message:err.message})
+    if(err?.code==='invalid_tipo' || (err?.statusCode>=400 && err.statusCode<500)){
+      return res.status(400).json({error:err.code || 'invalid_input',message:err.message})
     }
     next(err)
   }
@@ -64,7 +66,10 @@ router.patch('/financial/entries/:id',async(req,res,next)=>{
     if(!row) return res.status(404).json({error:'not_found',message:'Lançamento não encontrado.'})
     audit(req,'financial.entry.update',`Lançamento atualizado: ${row.id}`)
     return res.json(row)
-  }catch(err){ next(err) }
+  }catch(err){
+    if(err?.statusCode>=400 && err.statusCode<500) return res.status(err.statusCode).json({error:err.code,message:err.message})
+    next(err)
+  }
 })
 
 router.delete('/financial/entries/:id/history',async(req,res,next)=>{
@@ -86,4 +91,5 @@ router.delete('/financial/entries/:id',async(req,res,next)=>{
 })
 
 module.exports=router
+
 

@@ -2,6 +2,7 @@
 
 const crypto = require('crypto')
 const storeLib = require('./store')
+const fixed = require('./financial-fixed-recurrence')
 
 function getPool(){
   const pool = storeLib && storeLib._pg && storeLib._pg.pool
@@ -217,6 +218,7 @@ async function createEntry(companyId,input={}){
     err.statusCode=400
     throw err
   }
+  if(fixed.fixedType(input)) return fixed.createFixedEntry(getPool(),text(companyId),{...input,tipo},entryFromRow)
   const pool=getPool()
   const id=crypto.randomUUID()
   const payload=cleanJson(input)
@@ -237,6 +239,7 @@ async function createEntry(companyId,input={}){
 async function updateEntry(companyId,id,patch={}){
   const current=await getEntry(companyId,id)
   if(!current) return null
+  if(fixed.fixedType(current)) return fixed.updateFixedEntry(getPool(),text(companyId),text(id),patch,current,entryFromRow)
 
   const payload={...(current || {}),...cleanJson(patch)}
   delete payload.id
@@ -309,4 +312,5 @@ module.exports={
   removeEntryFromHistory,
   auditEvent
 }
+
 
