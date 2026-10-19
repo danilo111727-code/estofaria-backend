@@ -42,6 +42,7 @@ function load(rows){
   vm.runInNewContext(source,context)
   const db = context.module.exports
   const retroContext = {module:{exports:{}},Date,Intl,require:name=>{
+    if(name === './revenue-adjustments-db')return {list:async()=>new Map()}
     assert.equal(name,'./dashboard-v2-db')
     return db
   }}
@@ -241,3 +242,4 @@ test('Pedido excluído do Vendedor não deixa o espelho da Agenda faturado',asyn
   rows.quotes=[]
   await check(rows,{count:0,cents:0,active:0})
 })
+
