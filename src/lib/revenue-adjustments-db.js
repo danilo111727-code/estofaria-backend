@@ -39,4 +39,14 @@ async function save(companyId,key,amount,removed,expectedVersion){
   const error=new Error('Este registro foi alterado em outra tela. Atualize e tente novamente.')
   error.status=409;throw error
 }
-module.exports={list,save,ensureSchema}
+async function deleteForCompany(client,companyId){
+  // Participa da transação de exclusão da empresa, inclusive antes do primeiro uso do histórico.
+  const exists=await client.query("SELECT to_regclass('app_revenue_adjustments_v1') AS table_name")
+  if(!exists.rows[0]?.table_name)return 0
+  const params=[String(companyId)]
+  const result=await client.query('DELETE FROM app_revenue_adjustments_v1 WHERE company_id=$1 RETURNING record_key',params)
+  const remaining=await client.query('SELECT COUNT(*)::int AS total FROM app_revenue_adjustments_v1 WHERE company_id=$1',params)
+  if(Number(remaining.rows[0]?.total || 0)!==0)throw new Error('company_delete_verify_revenue_adjustments')
+  return result.rows.length
+}
+module.exports={list,save,ensureSchema,deleteForCompany}

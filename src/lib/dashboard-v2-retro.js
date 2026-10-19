@@ -133,7 +133,15 @@ function adjustedCents(order,adjustments){
   if(adjustment?.removed)return 0
   return adjustment?.amount_cents != null ? Number(adjustment.amount_cents) : Math.max(0,dashboardDb.revenueCents(order))
 }
+function availableRevenueYears(){
+  const current=dateParts(new Date()).year
+  return [current,current-1]
+}
+function isAvailableRevenueYear(year){return Number.isInteger(year)&&availableRevenueYears().includes(year)}
 async function getRevenueHistory(companyId,year){
+  if(!isAvailableRevenueYear(year)){
+    const error=new Error('O histórico está disponível para o ano atual e o anterior.');error.status=400;throw error
+  }
   const [orders,adjustments]=await Promise.all([dashboardDb.listDashboardOrders(companyId),adjustmentsDb.list(companyId)])
   const months=Array.from({length:12},(_,month)=>({month,total_cents:0,count:0,records:[]}))
   for(const order of dashboardDb.billableOrders(orders)){
@@ -165,10 +173,12 @@ async function adjustRevenue(companyId,key,body,remove){
     const error=new Error('Informe um valor válido e atualize o registro.');error.status=400;throw error
   }
   const orders=await dashboardDb.listDashboardOrders(companyId)
-  if(!dashboardDb.billableOrders(orders).some(order=>recordKey(order)===key)){
+  const order=dashboardDb.billableOrders(orders).find(order=>recordKey(order)===key)
+  const parts=order&&dateParts(revenueDate(order))
+  if(!parts||!isAvailableRevenueYear(parts.year)){
     const error=new Error('Registro não encontrado.');error.status=404;throw error
   }
   return adjustmentsDb.save(companyId,key,remove?null:amount,remove,version)
 }
-module.exports = { getSummary,getRevenueHistory,adjustRevenue,revenueDate,recordKey,adjustedCents }
+module.exports = { getSummary,getRevenueHistory,adjustRevenue,revenueDate,recordKey,adjustedCents,availableRevenueYears,isAvailableRevenueYear }
 

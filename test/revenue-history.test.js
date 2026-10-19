@@ -9,7 +9,7 @@ const {PGlite}=require('@electric-sql/pglite')
 const root=path.join(__dirname,'../src')
 let pg,db,retro,storage,company
 const year=new Date().getUTCFullYear()
-function load(file,requires){const ctx={module:{exports:{}},require:name=>{if(name in requires)return requires[name];throw new Error(name)},Date,Intl,console};vm.runInNewContext(fs.readFileSync(path.join(root,file),'utf8'),ctx);return ctx.module.exports}
+function load(file,requires,clock=Date){const ctx={module:{exports:{}},require:name=>{if(name in requires)return requires[name];throw new Error(name)},Date:clock,Intl,console};vm.runInNewContext(fs.readFileSync(path.join(root,file),'utf8'),ctx);return ctx.module.exports}
 before(async()=>{
   pg=new PGlite()
   await pg.exec(`CREATE TABLE app_agenda_orders_v2(company_id text,id text,bloco_id text,cliente text,descricao text,prod_date text,ent_date text,status text,tecido text,qtd int,source_quote_id text,payload jsonb,created_at timestamptz,updated_at timestamptz);
@@ -75,7 +75,7 @@ test('rotas exigem autenticação, permissão e contexto de empresa',async()=>{
   const http=require('node:http')
   const calls=[]
   const auth={requireAuth:(req,res,next)=>{if(!req.headers['x-test-company'])return res.status(401).json({});req.user={company_id:req.headers['x-test-company'],permissions:(req.headers['x-test-permissions']||'').split(',')};next()},requirePermission:p=>(req,res,next)=>req.user.permissions.includes(p)?next():res.status(403).json({})}
-  const router=load('routes/dashboard-v2.js',{'express':express,'../lib/policies':{hasMasterAccess:()=>false},'../lib/dashboard-v2-retro':{getRevenueHistory:async(c,y)=>{calls.push([c,y]);return{year:y}},adjustRevenue:async(c,k)=>{calls.push([c,k]);return{version:1}}},'../middleware/auth':auth})
+  const router=load('routes/dashboard-v2.js',{'express':express,'../lib/policies':{hasMasterAccess:()=>false},'../lib/dashboard-v2-retro':{availableRevenueYears:retro.availableRevenueYears,isAvailableRevenueYear:retro.isAvailableRevenueYear,getRevenueHistory:async(c,y)=>{calls.push([c,y]);return{year:y}},adjustRevenue:async(c,k)=>{calls.push([c,k]);return{version:1}}},'../middleware/auth':auth})
   const app=express();app.use(express.json());app.use(router)
   const server=http.createServer(app);await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const url='http://127.0.0.1:'+server.address().port
   try{
@@ -87,4 +87,41 @@ test('rotas exigem autenticação, permissão e contexto de empresa',async()=>{
     assert.equal((await fetch(url+'/dashboard/revenue-history/agenda:a1',{method:'PATCH',headers:{'x-test-company':company,'x-test-permissions':'configuracao','Content-Type':'application/json'},body:'{}'})).status,200)
     assert.equal((await fetch(url+'/dashboard/revenue-history?year=2999',{headers:{'x-test-company':company,'x-test-permissions':'painel'}})).status,400)
   }finally{await new Promise(resolve=>server.close(resolve))}
+})
+
+test('dois anos completos, bloqueio de anos fora da janela e virada de ano sem alterar pedidos',async()=>{
+  const orders=[2028,2029,2030].map(year=>({id:'annual-'+year,cliente:'Cliente '+year,created_at:year+'-01-01T12:00:00-03:00',valor:100}))
+  const original=structuredClone(orders)
+  const clock=iso=>class extends Date{constructor(...args){super(...(args.length?args:[iso]))}static now(){return new Date(iso).getTime()}}
+  const requires={'./dashboard-v2-db':{listDashboardOrders:async()=>orders,billableOrders:x=>x,revenueCents:()=>10000},'./revenue-adjustments-db':{list:async()=>new Map()}}
+  const in2030=load('lib/dashboard-v2-retro.js',requires,clock('2030-12-31T23:59:00-03:00'))
+  assert.deepEqual(Array.from(in2030.availableRevenueYears()),[2030,2029])
+  assert.equal((await in2030.getRevenueHistory('annual',2029)).count,1)
+  assert.equal((await in2030.getRevenueHistory('annual',2030)).count,1)
+  for(const old of [2028,2031])await assert.rejects(in2030.getRevenueHistory('annual',old),e=>e.status===400)
+  await assert.rejects(in2030.adjustRevenue('annual','agenda:annual-2028',{amount_cents:1,version:0},false),e=>e.status===404)
+  const in2031=load('lib/dashboard-v2-retro.js',requires,clock('2031-01-01T00:00:00-03:00'))
+  assert.deepEqual(Array.from(in2031.availableRevenueYears()),[2031,2030])
+  assert.equal((await in2031.getRevenueHistory('annual',2030)).count,1)
+  await assert.rejects(in2031.getRevenueHistory('annual',2029),e=>e.status===400)
+  assert.deepEqual(orders,original)
+})
+test('limpeza dos ajustes é isolada por empresa e participa do rollback',async()=>{
+  await storage.save('cleanup-target','agenda:one',100,false,0)
+  await storage.save('cleanup-other','agenda:one',200,false,0)
+  await pg.exec('BEGIN')
+  assert.equal(await storage.deleteForCompany(pg,'cleanup-target'),1)
+  assert.equal((await storage.list('cleanup-target')).size,0)
+  assert.equal((await storage.list('cleanup-other')).size,1)
+  await pg.exec('ROLLBACK')
+  assert.equal((await storage.list('cleanup-target')).size,1)
+  await pg.exec('BEGIN')
+  assert.equal(await storage.deleteForCompany(pg,'cleanup-target'),1)
+  await pg.exec('COMMIT')
+  assert.equal((await storage.list('cleanup-target')).size,0)
+  assert.equal((await storage.list('cleanup-other')).size,1)
+})
+test('excluir empresa antes de usar o histórico não exige a tabela de ajustes',async()=>{
+  const empty=new PGlite()
+  try{assert.equal(await storage.deleteForCompany(empty,'unused'),0)}finally{await empty.close()}
 })

@@ -43,9 +43,8 @@ router.get('/dashboard/revenue-history',requireAuth,requirePermission('painel'),
   try{
     const companyId=companyIdFor(req)
     if(!companyId)return res.status(400).json({message:'Selecione uma empresa.'})
-    const currentYear=Number(new Intl.DateTimeFormat('en',{timeZone:'America/Bahia',year:'numeric'}).format(new Date()))
-    const year=req.query.year===undefined?currentYear:Number(req.query.year)
-    if(!Number.isInteger(year)||year<2000||year>currentYear)return res.status(400).json({message:'Ano inválido.'})
+    const year=req.query.year===undefined?db.availableRevenueYears()[0]:Number(req.query.year)
+    if(!db.isAvailableRevenueYear(year))return res.status(400).json({message:'O histórico está disponível para o ano atual e o anterior.'})
     res.json(await db.getRevenueHistory(companyId,year))
   }catch(error){next(error)}
 })
