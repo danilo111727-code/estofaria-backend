@@ -3,6 +3,7 @@
 const express = require('express')
 const { hasMasterAccess } = require('../lib/policies')
 const db = require('../lib/dashboard-v2-retro')
+const { requireAuth,requirePermission } = require('../middleware/auth')
 
 const router = express.Router()
 
@@ -38,4 +39,24 @@ router.get('/dashboard/summary',async(req,res,next)=>{
   }catch(err){ next(err) }
 })
 
+router.get('/dashboard/revenue-history',requireAuth,requirePermission('painel'),async(req,res,next)=>{
+  try{
+    const companyId=companyIdFor(req)
+    if(!companyId)return res.status(400).json({message:'Selecione uma empresa.'})
+    const year=req.query.year===undefined?db.availableRevenueYears()[0]:Number(req.query.year)
+    if(!db.isAvailableRevenueYear(year))return res.status(400).json({message:'O histórico está disponível para o ano atual e o anterior.'})
+    res.json(await db.getRevenueHistory(companyId,year))
+  }catch(error){next(error)}
+})
+for(const method of ['patch','delete'])router[method]('/dashboard/revenue-history/:key',requireAuth,requirePermission('configuracao'),async(req,res,next)=>{
+  try{
+    const companyId=companyIdFor(req)
+    if(!companyId)return res.status(400).json({message:'Selecione uma empresa.'})
+    res.json({ok:true,...await db.adjustRevenue(companyId,req.params.key,req.body || {},method==='delete')})
+  }catch(error){
+    if(error.status)return res.status(error.status).json({message:error.message})
+    next(error)
+  }
+})
 module.exports = router
+

@@ -4,6 +4,7 @@
 // Pedidos manuais pertencem ao mês do bloco de produção (prod_date),
 // e não ao mês em que foram cadastrados no banco (created_at).
 const dashboardDb = require('./dashboard-v2-db')
+const adjustmentsDb = require('./revenue-adjustments-db')
 
 function safeDate(value){
   if(!value) return null
@@ -62,6 +63,7 @@ async function getSummary(companyId){
   const orders = await dashboardDb.listDashboardOrders(companyId)
   const active = dashboardDb.activeOrders(orders)
   const billable = dashboardDb.billableOrders(orders)
+  const adjustments = await adjustmentsDb.list(companyId)
 
   const now = base?.current_month && Number.isFinite(Number(base.current_month.year))
     ? { year:Number(base.current_month.year), month:Number(base.current_month.month) }
@@ -83,7 +85,7 @@ async function getSummary(companyId){
   for(const order of billable){
     const p = dateParts(revenueDate(order))
     if(!p) continue
-    const rev = Math.max(0,dashboardDb.revenueCents(order))
+    const rev = adjustedCents(order,adjustments)
 
     const six = last6Months.find(item => item.year === p.year && item.month === p.month)
     if(six){
@@ -123,4 +125,60 @@ async function getSummary(companyId){
   }
 }
 
-module.exports = { getSummary }
+function recordKey(order){
+  return order.financial_order === true ? 'quote:'+order.source_quote_id : 'agenda:'+order.id
+}
+function adjustedCents(order,adjustments){
+  const adjustment=adjustments.get(recordKey(order))
+  if(adjustment?.removed)return 0
+  return adjustment?.amount_cents != null ? Number(adjustment.amount_cents) : Math.max(0,dashboardDb.revenueCents(order))
+}
+function availableRevenueYears(){
+  const current=dateParts(new Date()).year
+  return [current,current-1]
+}
+function isAvailableRevenueYear(year){return Number.isInteger(year)&&availableRevenueYears().includes(year)}
+async function getRevenueHistory(companyId,year){
+  if(!isAvailableRevenueYear(year)){
+    const error=new Error('O histórico está disponível para o ano atual e o anterior.');error.status=400;throw error
+  }
+  const [orders,adjustments]=await Promise.all([dashboardDb.listDashboardOrders(companyId),adjustmentsDb.list(companyId)])
+  const months=Array.from({length:12},(_,month)=>({month,total_cents:0,count:0,records:[]}))
+  for(const order of dashboardDb.billableOrders(orders)){
+    const date=revenueDate(order),parts=dateParts(date)
+    if(!parts || parts.year!==year)continue
+    const key=recordKey(order),adjustment=adjustments.get(key)
+    if(adjustment?.removed)continue
+    const amount=adjustedCents(order,adjustments)
+    const number=order.numero_pedido || order.pedido_numero || order.numero || order.order_number || order.source_quote_id || order.id
+    months[parts.month].records.push({
+      key,number:String(number),client:String(order.cliente || ''),description:String(order.descricao || ''),
+      status:String(order.status || ''),agenda_status:String(order.agenda_status || ''),
+      source:order.financial_order===true?'Vendas':'Agenda',date:date.toISOString(),
+      amount_cents:amount,original_amount_cents:Math.max(0,dashboardDb.revenueCents(order)),
+      version:Number(adjustment?.version || 0)
+    })
+    months[parts.month].total_cents+=amount
+    months[parts.month].count++
+  }
+  for(const month of months)month.records.sort((a,b)=>a.date.localeCompare(b.date)||a.key.localeCompare(b.key))
+  return {year,months,total_cents:months.reduce((s,m)=>s+m.total_cents,0),count:months.reduce((s,m)=>s+m.count,0),generated_at:new Date().toISOString()}
+}
+async function adjustRevenue(companyId,key,body,remove){
+  if(typeof key!=='string' || !/^(quote|agenda):.{1,180}$/.test(key)){
+    const error=new Error('Registro inválido.');error.status=400;throw error
+  }
+  const amount=body.amount_cents,version=body.version
+  if(!Number.isSafeInteger(version)||version<0 || (!remove && (!Number.isSafeInteger(amount)||amount<0||amount>999999999999))){
+    const error=new Error('Informe um valor válido e atualize o registro.');error.status=400;throw error
+  }
+  const orders=await dashboardDb.listDashboardOrders(companyId)
+  const order=dashboardDb.billableOrders(orders).find(order=>recordKey(order)===key)
+  const parts=order&&dateParts(revenueDate(order))
+  if(!parts||!isAvailableRevenueYear(parts.year)){
+    const error=new Error('Registro não encontrado.');error.status=404;throw error
+  }
+  return adjustmentsDb.save(companyId,key,remove?null:amount,remove,version)
+}
+module.exports = { getSummary,getRevenueHistory,adjustRevenue,revenueDate,recordKey,adjustedCents,availableRevenueYears,isAvailableRevenueYear }
+

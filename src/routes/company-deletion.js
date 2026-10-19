@@ -4,6 +4,7 @@ const crypto = require('crypto')
 const express = require('express')
 const storeLib = require('../lib/store')
 const auditV2Db = require('../lib/audit-v2-db')
+const revenueAdjustmentsDb = require('../lib/revenue-adjustments-db')
 const r2 = require('../lib/r2-storage')
 const { requireAuth, requireMaster, requirePermission } = require('../middleware/auth')
 
@@ -234,6 +235,7 @@ async function deletePgData(companyId, company, actor){
     )
     imageKeys = imageResult.rows.map(row => text(row.object_key)).filter(Boolean)
 
+    const revenueAdjustments = await revenueAdjustmentsDb.deleteForCompany(client,companyId)
     const personalizationModels = await client.query('DELETE FROM app_model_personalization_v2 WHERE company_id = $1', [companyId])
     const personalizationCatalog = await client.query('DELETE FROM app_personalization_catalog_v2 WHERE company_id = $1', [companyId])
     const quotes = await client.query('DELETE FROM app_quotes_v2 WHERE company_id = $1', [companyId])
@@ -247,6 +249,7 @@ async function deletePgData(companyId, company, actor){
     const auditLogs = auditV2Db.isEnabled()
       ? await client.query('DELETE FROM app_audit_logs_v2 WHERE company_id = $1', [companyId])
       : { rowCount:0 }
+    v2Counts.revenue_adjustments = revenueAdjustments
     v2Counts.personalization_models = personalizationModels.rowCount || 0
     v2Counts.personalization_catalog = personalizationCatalog.rowCount || 0
     v2Counts.quotes = quotes.rowCount || 0
@@ -388,3 +391,4 @@ module.exports = router
 module.exports.deleteCompanyCompletely = deleteCompanyCompletely
 module.exports.cleanLegacyStore = cleanLegacyStore
 module.exports.assertLegacyClean = assertLegacyClean
+
