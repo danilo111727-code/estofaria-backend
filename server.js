@@ -4,6 +4,7 @@ const express = require('express')
 const cors = require('cors')
 const storeLib = require('./src/lib/store')
 const atomicStore = require('./src/lib/atomic-store')
+const trashDb = require('./src/lib/trash-db')
 const perfDiagnostics = require('./src/lib/perf-diagnostics')
 const compactModelResponse = require('./src/middleware/compact-model-response')
 const normalizeModelsV2BaseMeters = require('./src/middleware/models-v2-base-meters')
@@ -143,6 +144,7 @@ app.use('/api/saas', companyNameRoutes)
 app.use('/api/saas', saasRoutes)
 app.use('/api/billing', billingRoutes)
 app.use('/api', legacyApiPermissions)
+app.use('/api', require('./src/routes/trash'))
 app.use('/api', dashboardV2Routes)
 app.use('/api', pdfConfigRoutes)
 app.use('/api', agendaV2Routes)
@@ -245,6 +247,8 @@ async function start() {
       ]
     })
     auditV2Db.enableWrites()
+    await trashDb.ensureSchema()
+    trashDb.startCleanup()
 
     console.log('[server] Models V2, Quotes V2, Personalização V2, Agenda V2, Financeiro V2, Auditoria V2 e Dashboard V2 prontos')
 
@@ -281,3 +285,4 @@ start().catch(err => {
   console.error('[server] Erro fatal na inicialização:', err)
   process.exit(1)
 })
+

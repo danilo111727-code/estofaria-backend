@@ -1,4 +1,5 @@
 'use strict'
+const trash = require('./trash-db')
 
 const crypto = require('crypto')
 const storeLib = require('./store')
@@ -431,6 +432,10 @@ async function updateOrder(companyId,id,patch={}){
       text(companyId),text(id),next.bloco_id || null,next.cliente,next.descricao,next.prod_date,next.ent_date,
       next.status,next.tecido,next.qtd,next.tecido_comprado,next.source_quote_id,JSON.stringify(next)
     ])
+    if((existing.bloco_id && patch.bloco_id === null) || (next.status==='cancelado' && existing.status!=='cancelado' && next.descricao.startsWith('[pedido excluído] '))){
+      const rawBefore={...result.rows[0],bloco_id:existing.bloco_id||null,cliente:existing.cliente,descricao:existing.descricao,prod_date:existing.prod_date,ent_date:existing.ent_date,status:existing.status,payload:existing}
+      await trash.archive(client,companyId,'agenda','agenda-unschedule',id,{row:rawBefore,expected_updated_at:result.rows[0].updated_at})
+    }
     await client.query('COMMIT')
     return orderFromRow(result.rows[0])
   }catch(err){
@@ -498,24 +503,10 @@ async function deliverOrderAndConsumeSlot(companyId,id){
 
 // Limpar o histórico não apaga a venda nem o registro usado pelo painel.
 async function removeOrderFromHistory(companyId,id){
-  const result = await getPool().query(`
-    UPDATE app_agenda_orders_v2
-    SET payload=jsonb_set(COALESCE(payload,'{}'::jsonb),'{history_removed_at}',
-      COALESCE(payload->'history_removed_at',to_jsonb(NOW())),true)
-    WHERE company_id=$1 AND id=$2
-      AND LOWER(COALESCE(status,'')) IN ('entregue','cancelado')
-    RETURNING id
-  `,[text(companyId),text(id)])
-  return result.rows.length > 0
+  return trash.hideHistory(getPool(),'app_agenda_orders_v2',companyId,id,'agenda','agenda-history',['entregue','cancelado'])
 }
-
 async function deleteOrder(companyId,id){
-  const pool = getPool()
-  const result = await pool.query(
-    'DELETE FROM app_agenda_orders_v2 WHERE company_id=$1 AND id=$2 RETURNING id',
-    [text(companyId),text(id)]
-  )
-  return result.rows.length > 0
+  return trash.deleteRow(getPool(),'app_agenda_orders_v2',companyId,id,'agenda','agenda')
 }
 
 async function listBlocks(companyId){
@@ -629,6 +620,9 @@ async function deleteBlock(companyId,id){
       await client.query('ROLLBACK')
       return false
     }
+    const rawBlock=(await client.query('SELECT * FROM app_agenda_blocos_v2 WHERE company_id=$1 AND id=$2 FOR UPDATE',[text(companyId),text(id)])).rows[0]
+    const orders=(await client.query('SELECT * FROM app_agenda_orders_v2 WHERE company_id=$1 AND bloco_id=$2 FOR UPDATE',[text(companyId),text(id)])).rows
+    await trash.archive(client,companyId,'agenda','block',id,{row:rawBlock,orders})
     await client.query('DELETE FROM app_agenda_orders_v2 WHERE company_id=$1 AND bloco_id=$2',[text(companyId),text(id)])
     await client.query('DELETE FROM app_agenda_blocos_v2 WHERE company_id=$1 AND id=$2',[text(companyId),text(id)])
     await client.query('COMMIT')
@@ -755,4 +749,5 @@ module.exports = {
   createBlockOrder,
   auditEvent
 }
+
 

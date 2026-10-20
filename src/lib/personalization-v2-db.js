@@ -1,4 +1,5 @@
 'use strict'
+const trash = require('./trash-db')
 
 const crypto = require('crypto')
 const storeLib = require('./store')
@@ -533,7 +534,7 @@ async function saveCatalog(companyId, input = {}, expectedRevision = null) {
   try {
     await client.query('BEGIN')
     const currentRes = await client.query(`
-      SELECT revision, items, albums FROM app_personalization_catalog_v2
+      SELECT revision, items, albums, groups FROM app_personalization_catalog_v2
       WHERE company_id = $1
       FOR UPDATE
     `, [companyId])
@@ -543,6 +544,7 @@ async function saveCatalog(companyId, input = {}, expectedRevision = null) {
     }
     const previous = currentRes.rows[0] || {items: [], albums: []}
     validateCatalogNames(previous, normalized)
+    await trash.captureCatalogDeletes(client,companyId,previous,normalized)
     const renames = renamedCatalogItems(previous.items, normalized.items)
     if (renames.length) {
       const configs = await client.query(`
@@ -759,4 +761,5 @@ module.exports = {
   saveModelConfig,
   migrateLegacyPersonalization
 }
+
 

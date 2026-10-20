@@ -1,4 +1,5 @@
 'use strict'
+const trash = require('./trash-db')
 
 const crypto = require('crypto')
 const storeLib = require('./store')
@@ -430,13 +431,14 @@ async function updateModel(companyId, modelId, input = {}) {
 
 async function deactivateModel(companyId, modelId) {
   const pool = getPool()
-  const result = await pool.query(`
-    UPDATE app_models_v2
-    SET active = FALSE, updated_at = NOW()
-    WHERE company_id = $1 AND id = $2 AND active = TRUE
-    RETURNING id
-  `, [companyId, modelId])
-  return result.rows.length > 0
+  return trash.transaction(pool,async client=>{
+    const row=(await client.query('SELECT * FROM app_models_v2 WHERE company_id=$1 AND id=$2 AND active=TRUE FOR UPDATE',[companyId,modelId])).rows[0]
+    if(!row)return false
+    const images=(await client.query('SELECT * FROM app_model_images_v2 WHERE company_id=$1 AND model_id=$2',[companyId,modelId])).rows
+    await trash.archive(client,companyId,'catalogo','model',modelId,{row,images})
+    await client.query('UPDATE app_models_v2 SET active=FALSE,updated_at=NOW() WHERE company_id=$1 AND id=$2',[companyId,modelId])
+    return true
+  })
 }
 
 function deterministicLegacyId(companyId, legacyId) {

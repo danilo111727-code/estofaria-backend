@@ -118,13 +118,7 @@ router.delete('/quotes/:id',async(req,res,next)=>{
 
     auditQuote(req,req.quotesV2CompanyId,'quote.delete',`Orçamento removido: ${req.params.id}`)
 
-    if(r2.isConfigured()){
-      await Promise.all(quoteImageKeys(row).map(key =>
-        quoteImageKeyAllowed(req.quotesV2CompanyId,key)
-          ? r2.deleteObject(key).catch(()=>null)
-          : null
-      ))
-    }
+    // As imagens serão removidas pela limpeza da lixeira após 30 dias.
 
     return res.json({ok:true})
   }catch(err){ next(err) }
@@ -153,3 +147,4 @@ router.post('/quotes/:id/convert-to-order',async(req,res,next)=>{
 })
 
 module.exports=router
+
