@@ -16,7 +16,7 @@ function safeDate(value){
 }
 
 const partsFormatter = new Intl.DateTimeFormat('en-US',{
-  timeZone:'America/Sao_Paulo',year:'numeric',month:'numeric',day:'numeric'
+  timeZone:'America/Bahia',year:'numeric',month:'numeric',day:'numeric'
 })
 
 function dateParts(value){
@@ -34,6 +34,27 @@ function dateParts(value){
 function shiftMonth(year,month,delta){
   const d = new Date(Date.UTC(year,month + delta,1,12,0,0))
   return {year:d.getUTCFullYear(),month:d.getUTCMonth()}
+}
+
+function dateOnly(value){
+  const parts=dateParts(value)
+  return parts ? parts.year+'-'+String(parts.month+1).padStart(2,'0')+'-'+String(parts.day).padStart(2,'0') : null
+}
+function revenueDateLimits(){
+  return {min_date:(availableRevenueYears()[1])+'-01-01',max_date:dateOnly(new Date())}
+}
+function validateRevenueDate(value){
+  const limits=revenueDateLimits()
+  if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value)||dateOnly(value)!==value){
+    const error=new Error('Informe uma data de faturamento válida.');error.status=400;throw error
+  }
+  if(value>limits.max_date){
+    const error=new Error('A data do faturamento não pode estar no futuro.');error.status=400;throw error
+  }
+  if(value<limits.min_date){
+    const error=new Error('Escolha uma data do ano atual ou do anterior.');error.status=400;throw error
+  }
+  return value
 }
 
 function revenueDate(order){
@@ -83,7 +104,7 @@ async function getSummary(companyId){
   let pedidosMes = 0
 
   for(const order of billable){
-    const p = dateParts(revenueDate(order))
+    const p = dateParts(adjustedRevenueDate(order,adjustments))
     if(!p) continue
     const rev = adjustedCents(order,adjustments)
 
@@ -128,6 +149,10 @@ async function getSummary(companyId){
 function recordKey(order){
   return order.financial_order === true ? 'quote:'+order.source_quote_id : 'agenda:'+order.id
 }
+function adjustedRevenueDate(order,adjustments){
+  const value=adjustments.get(recordKey(order))?.revenue_date
+  return value ? safeDate(value) : revenueDate(order)
+}
 function adjustedCents(order,adjustments){
   const adjustment=adjustments.get(recordKey(order))
   if(adjustment?.removed)return 0
@@ -145,7 +170,7 @@ async function getRevenueHistory(companyId,year){
   const [orders,adjustments]=await Promise.all([dashboardDb.listDashboardOrders(companyId),adjustmentsDb.list(companyId)])
   const months=Array.from({length:12},(_,month)=>({month,total_cents:0,count:0,records:[]}))
   for(const order of dashboardDb.billableOrders(orders)){
-    const date=revenueDate(order),parts=dateParts(date)
+    const date=adjustedRevenueDate(order,adjustments),parts=dateParts(date)
     if(!parts || parts.year!==year)continue
     const key=recordKey(order),adjustment=adjustments.get(key)
     if(adjustment?.removed)continue
@@ -154,7 +179,7 @@ async function getRevenueHistory(companyId,year){
     months[parts.month].records.push({
       key,number:String(number),client:String(order.cliente || ''),description:String(order.descricao || ''),
       status:String(order.status || ''),agenda_status:String(order.agenda_status || ''),
-      source:order.financial_order===true?'Vendas':'Agenda',date:date.toISOString(),
+      source:order.financial_order===true?'Vendas':'Agenda',date:date.toISOString(),revenue_date:dateOnly(date),
       amount_cents:amount,original_amount_cents:Math.max(0,dashboardDb.revenueCents(order)),
       version:Number(adjustment?.version || 0)
     })
@@ -162,7 +187,7 @@ async function getRevenueHistory(companyId,year){
     months[parts.month].count++
   }
   for(const month of months)month.records.sort((a,b)=>a.date.localeCompare(b.date)||a.key.localeCompare(b.key))
-  return {year,months,total_cents:months.reduce((s,m)=>s+m.total_cents,0),count:months.reduce((s,m)=>s+m.count,0),generated_at:new Date().toISOString()}
+  return {year,months,total_cents:months.reduce((s,m)=>s+m.total_cents,0),count:months.reduce((s,m)=>s+m.count,0),...revenueDateLimits(),generated_at:new Date().toISOString()}
 }
 async function adjustRevenue(companyId,key,body,remove){
   if(typeof key!=='string' || !/^(quote|agenda):.{1,180}$/.test(key)){
@@ -172,13 +197,14 @@ async function adjustRevenue(companyId,key,body,remove){
   if(!Number.isSafeInteger(version)||version<0 || (!remove && (!Number.isSafeInteger(amount)||amount<0||amount>999999999999))){
     const error=new Error('Informe um valor válido e atualize o registro.');error.status=400;throw error
   }
-  const orders=await dashboardDb.listDashboardOrders(companyId)
+  const revenueDateValue=!remove&&Object.prototype.hasOwnProperty.call(body,'revenue_date')?validateRevenueDate(body.revenue_date):undefined
+  const [orders,adjustments]=await Promise.all([dashboardDb.listDashboardOrders(companyId),adjustmentsDb.list(companyId)])
   const order=dashboardDb.billableOrders(orders).find(order=>recordKey(order)===key)
-  const parts=order&&dateParts(revenueDate(order))
+  const parts=order&&dateParts(adjustedRevenueDate(order,adjustments))
   if(!parts||!isAvailableRevenueYear(parts.year)){
     const error=new Error('Registro não encontrado.');error.status=404;throw error
   }
-  return adjustmentsDb.save(companyId,key,remove?null:amount,remove,version)
+  return adjustmentsDb.save(companyId,key,remove?null:amount,remove,version,revenueDateValue)
 }
 module.exports = { getSummary,getRevenueHistory,adjustRevenue,revenueDate,recordKey,adjustedCents,availableRevenueYears,isAvailableRevenueYear }
 
