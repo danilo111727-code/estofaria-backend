@@ -7,7 +7,7 @@ function load(file,requires){const m={exports:{}};vm.runInNewContext(fs.readFile
 before(async()=>{
  pg=new PGlite();pool={query:async(s,p=[])=>{if(fail&&s.startsWith('UPDATE app_financial_entries_v2'))throw Error('database unavailable');return p.length?pg.query(s,p):(await pg.exec(s)).at(-1)},connect:async()=>({...pool,release(){}})}
  trash=load('trash-db.js',{'./store':{_pg:{pool}}});await trash.ensureSchema(pool)
- db=load('financial-v2-db.js',{'./store':{_pg:{pool}},'./trash-db':trash});await db.ensureSchema()
+ db=load('financial-v2-db.js',{'./store':{_pg:{pool}},'./trash-db':trash,'./financial-fixed-recurrence':require('../src/lib/financial-fixed-recurrence')});await db.ensureSchema()
  await pg.exec("INSERT INTO app_financial_entries_v2(company_id,id,tipo,status,valor,payload) VALUES('a','record','pagar','pago',123,'{\"other\":123}'),('a','active','pagar','pendente',100,'{}'),('a','failure','pagar','pago',100,'{}')")
 })
 after(async()=>pg?.close())
@@ -28,3 +28,4 @@ test('Falha depois do arquivamento desfaz toda a alteração',async()=>{
  assert.equal((await pg.query("SELECT payload FROM app_financial_entries_v2 WHERE id='failure'")).rows[0].payload.history_removed_at,undefined)
  assert.equal((await pg.query("SELECT count(*)::int n FROM app_trash_v1 WHERE record_key='failure'")).rows[0].n,0)
 })
+
