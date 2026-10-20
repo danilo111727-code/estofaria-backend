@@ -219,6 +219,7 @@ async function deletePgData(companyId, company, actor){
 
   try{
     await client.query('BEGIN')
+    await require('../lib/trash-db').deleteCompany(client,companyId)
     const storeResult = await client.query("SELECT value FROM kv_store WHERE key = 'main' FOR UPDATE")
     const rawStore = storeResult.rows[0]?.value || storeLib.readStore()
     const persistedCompany = (rawStore.companies || []).find(item => text(item?.id) === text(companyId))
@@ -391,4 +392,5 @@ module.exports = router
 module.exports.deleteCompanyCompletely = deleteCompanyCompletely
 module.exports.cleanLegacyStore = cleanLegacyStore
 module.exports.assertLegacyClean = assertLegacyClean
+
 

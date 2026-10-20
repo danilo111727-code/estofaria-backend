@@ -57,6 +57,7 @@ function cleanupFixture(store, initialTables = {}) {
   }
   const client = {
     async query(sql, params = []) {
+      if (sql==='SELECT to_regclass($1) AS name')return {rows:[{name:state.tables[params[0]]?params[0]:null}]}
       if (sql.startsWith('BEGIN')) return { rows: [], rowCount: 0 }
       if (sql === 'COMMIT') {
         state.committed = true
@@ -124,7 +125,8 @@ test('purgeOrphanCompany confirma o backup antes de limpar KV e V2', async () =>
     companies: [{ id: 'active' }],
     materials: [{ id: 'm1', company_id: 'orphan' }, { id: 'm2', company_id: 'active' }]
   }, {
-    app_quotes_v2: [{ id: 'q1', company_id: 'orphan' }]
+    app_quotes_v2: [{ id: 'q1', company_id: 'orphan' }],
+    app_trash_v1: [{id:'trash-1',company_id:'orphan',snapshot:{name:'Archived'}}]
   })
 
   const result = await purgeOrphanCompany({
@@ -137,6 +139,8 @@ test('purgeOrphanCompany confirma o backup antes de limpar KV e V2', async () =>
   assert.equal(result.alreadyClean, false)
   assert.equal(result.kvCounts.materials, 1)
   assert.equal(result.pgCounts.app_quotes_v2, 1)
+  assert.equal(result.pgCounts.app_trash_v1,1)
+  assert.equal(fixture.getBackup().postgres.app_trash_v1[0].id,'trash-1')
   assert.equal(fixture.state.committed, true)
   assert.deepEqual(fixture.state.store.materials, [{ id: 'm2', company_id: 'active' }])
   assert.equal(fixture.getBackup().kv_store.materials[0].id, 'm1')
@@ -158,3 +162,4 @@ test('purgeOrphanCompany não cria backup nem limpa empresa ativa', async () => 
   assert.equal(fixture.state.rolledBack, true)
   assert.equal(fixture.hasBackup(), false)
 })
+

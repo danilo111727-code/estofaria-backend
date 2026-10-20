@@ -1079,11 +1079,7 @@ router.delete('/quotes/:id', async (req, res, next) => {
     if(store.quotes.length === before) return res.status(404).json({ error:'not_found', message:'Orçamento não encontrado.' })
     audit(store, req, company.id, 'quote.delete', `Orçamento removido: ${req.params.id}`)
     writeStore(store)
-    if(r2.isConfigured()){
-      await Promise.all(quoteImageKeys(removed).map(key =>
-        quoteImageKeyAllowed(company.id, key) ? r2.deleteObject(key).catch(() => null) : null
-      ))
-    }
+    // As fotos da exclusão ficam disponíveis durante os 30 dias da lixeira.
     return res.json({ ok:true })
   }catch(err){ next(err) }
 })
@@ -1302,3 +1298,4 @@ router.delete('/financial/entries/:id', (req, res) => {
 
 
 module.exports = router
+

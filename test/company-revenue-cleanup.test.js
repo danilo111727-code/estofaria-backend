@@ -31,20 +31,25 @@ async function scenario(fail){
   }}
   const pool={connect:async()=>client,query:(...args)=>pg.query(...args)}
   const store={readStore:()=>structuredClone(snapshot),writeStore:value=>{snapshot=structuredClone(value)},_pg:{pool,flushNow:async()=>{}}}
+  const trash=load('lib/trash-db.js',{'./store':store})
+  await trash.ensureSchema({query:sql=>pg.exec(sql)})
+  for(const companyId of ['remove','keep'])await trash.archive(client,companyId,'materiais','legacy:materials','material',{row:{id:'material',company_id:companyId,name:'Material'}})
   const adjustments=load('lib/revenue-adjustments-db.js',{'./store':store})
   await adjustments.save('remove','agenda:a',10000,false,0)
   await adjustments.save('keep','agenda:b',20000,false,0)
   const scopedAdjustments={deleteForCompany:async(...args)=>{assert.equal(transaction,true);return adjustments.deleteForCompany(...args)}}
   const next=(_req,_res,next)=>next()
-  const route=load('routes/company-deletion.js',{'../lib/store':store,'../lib/audit-v2-db':{isEnabled:()=>true},'../lib/revenue-adjustments-db':scopedAdjustments,'../lib/r2-storage':{isConfigured:()=>false},'../middleware/auth':{requireAuth:next,requireMaster:next,requirePermission:()=>next}})
+  const route=load('routes/company-deletion.js',{'../lib/store':store,'../lib/trash-db':trash,'../lib/audit-v2-db':{isEnabled:()=>true},'../lib/revenue-adjustments-db':scopedAdjustments,'../lib/r2-storage':{isConfigured:()=>false},'../middleware/auth':{requireAuth:next,requireMaster:next,requirePermission:()=>next}})
   if(fail){
    await assert.rejects(route.deleteCompanyCompletely('remove',{id:'master'}),/simulated_failure_after_adjustments/)
    assert.equal((await adjustments.list('remove')).size,1)
    assert.equal((await pg.query("SELECT id FROM app_quotes_v2 WHERE company_id='remove'")).rows.length,1)
    assert.equal(snapshot.companies.length,2)
+   assert.equal((await pg.query("SELECT count(*)::int n FROM app_trash_v1 WHERE company_id='remove'")).rows[0].n,1)
   }else{
    const result=await route.deleteCompanyCompletely('remove',{id:'master'})
    assert.equal(result.v2_deleted.revenue_adjustments,1)
+   assert.equal((await pg.query("SELECT count(*)::int n FROM app_trash_v1 WHERE company_id='remove'")).rows[0].n,0)
    assert.equal((await adjustments.list('remove')).size,0)
    assert.equal(snapshot.companies.length,1)
    assert.equal(snapshot.companies[0].id,'keep')
@@ -52,7 +57,9 @@ async function scenario(fail){
   assert.equal((await adjustments.list('keep')).size,1)
   for(const table of tables)assert.equal((await pg.query('SELECT id FROM '+table+" WHERE company_id='keep'")).rows.length,1)
   assert.equal(transaction,false)
+  assert.equal((await pg.query("SELECT count(*)::int n FROM app_trash_v1 WHERE company_id='keep'")).rows[0].n,1)
  }finally{await pg.close()}
 }
 test('exclusão completa da empresa remove ajustes e preserva outra empresa',()=>scenario(false))
 test('falha após limpar ajustes desfaz toda a exclusão da empresa',()=>scenario(true))
+

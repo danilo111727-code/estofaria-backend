@@ -1,4 +1,5 @@
 'use strict'
+const trash = require('./trash-db')
 
 const { AsyncLocalStorage } = require('async_hooks')
 const auditV2Db = require('./audit-v2-db')
@@ -86,6 +87,7 @@ async function persistOutsideChanges(){
         else delete merged[key]
       }
 
+      await trash.captureStoreDeletes(client,latest,merged)
       const pendingAudits = auditEntriesFromStore(snapshot)
       if(pendingAudits.length) await auditV2Db.insertMany(client,pendingAudits)
       if(auditV2Db.isEnabled()){
@@ -323,7 +325,8 @@ function middleware(req, res, next){
       await client.query('BEGIN')
       const result = await client.query("SELECT value FROM kv_store WHERE key = 'main' FOR UPDATE")
       const fresh = clone(result.rows[0]?.value || currentCommittedStore())
-      const ctx = { store:fresh, dirty:false }
+      const before = clone(fresh)
+      const ctx = { store:fresh, dirty:false, client, commit:false }
 
       await requestStore.run(ctx, async () => {
         next()
@@ -333,9 +336,10 @@ function middleware(req, res, next){
         ])
       })
 
-      if(ctx.dirty && res.statusCode < 400){
+      if((ctx.dirty || ctx.commit) && res.statusCode < 400){
         const pendingAudits = auditEntriesFromStore(ctx.store)
         const persistedStore = storeWithoutLegacyAudit(ctx.store)
+        await trash.captureStoreDeletes(client,before,persistedStore)
         if(pendingAudits.length) await auditV2Db.insertMany(client,pendingAudits)
         await client.query(
           `INSERT INTO kv_store (key, value, updated_at)
@@ -377,4 +381,5 @@ function middleware(req, res, next){
   })
 }
 
-module.exports = { install, middleware, persistOutsideChanges }
+module.exports = { install, middleware, persistOutsideChanges, getTransactionClient:()=>requestStore.getStore()?.client, markTransactionDirty:()=>{const ctx=requestStore.getStore();if(ctx)ctx.commit=true} }
+
