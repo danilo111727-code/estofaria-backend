@@ -35,7 +35,7 @@ function audit(req,action,detail){
   })
 }
 
-router.get('/financial/capabilities',(_req,res)=>res.json({fixed_recurrence_atomic:true}))
+router.get('/financial/capabilities',(_req,res)=>res.json({fixed_recurrence_atomic:true,installments_atomic:true}))
 
 router.get('/financial/entries',async(req,res,next)=>{
   try{
@@ -45,6 +45,17 @@ router.get('/financial/entries',async(req,res,next)=>{
     })
     return res.json({items:rows})
   }catch(err){ next(err) }
+})
+
+router.post('/financial/installments',async(req,res,next)=>{
+  try{
+    const result=await db.createInstallments(req.financialV2CompanyId,req.body || {})
+    if(!result.replayed) audit(req,'financial.installments.create',`Parcelamento criado: ${result.items.length} parcelas`)
+    return res.status(result.replayed?200:201).json(result)
+  }catch(err){
+    if(err?.statusCode>=400 && err.statusCode<500)return res.status(err.statusCode).json({error:err.code,message:err.message})
+    next(err)
+  }
 })
 
 router.post('/financial/entries',async(req,res,next)=>{
@@ -91,5 +102,6 @@ router.delete('/financial/entries/:id',async(req,res,next)=>{
 })
 
 module.exports=router
+
 
 

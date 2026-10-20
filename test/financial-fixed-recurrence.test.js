@@ -14,7 +14,7 @@ const adapter={query:(...args)=>pool.query(...args),connect:async()=>{
  const client=await pool.connect()
  return {release:()=>client.release(),query:async(sql,args)=>{if(fault&&fault(String(sql),args)){fault=null;throw Error('injected database failure')}return client.query(sql,args)}}
 }}
-const context={module:{exports:{}},require:name=>name==='./store'?{_pg:{pool:adapter}}:name==='./trash-db'?{}:name==='./financial-fixed-recurrence'?require('../src/lib/financial-fixed-recurrence'):require(name)}
+const context={module:{exports:{}},require:name=>name==='./financial-installments'?require('../src/lib/financial-installments'):name==='./store'?{_pg:{pool:adapter}}:name==='./trash-db'?{}:name==='./financial-fixed-recurrence'?require('../src/lib/financial-fixed-recurrence'):require(name)}
 vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../src/lib/financial-v2-db.js'),'utf8'),context)
 const db=context.module.exports
 const company='qa_fixed_company'
