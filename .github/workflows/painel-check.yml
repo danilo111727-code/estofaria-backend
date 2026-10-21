@@ -1,0 +1,19 @@
+name: Painel check
+on:
+  push:
+    branches: [fix/painel-producao-20261021, main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  painel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Panel reminders and reconciliation
+        env:
+          TZ: America/Bahia
+        run: node --test test/dashboard-v2-reconciliation.test.js test/painel-reminders.test.js

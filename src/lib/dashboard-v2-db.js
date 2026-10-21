@@ -117,6 +117,14 @@ async function listDashboardOrders(companyId){
       ORDER BY created_at ASC,id ASC
     `,[text(companyId)])
   ])
+  const modelsByQuote = new Map()
+  if(quoteResult.rows.length){
+    const models = await pool.query(`SELECT quote_id,model_name,extra FROM app_quote_models_v2 WHERE company_id=$1 AND quote_id=ANY($2::text[]) ORDER BY sort_order,id`,[text(companyId),quoteResult.rows.map(row=>text(row.id))])
+    for(const model of models.rows){
+      if(!modelsByQuote.has(text(model.quote_id)))modelsByQuote.set(text(model.quote_id),[])
+      modelsByQuote.get(text(model.quote_id)).push({...model.extra,modelo:model.model_name})
+    }
+  }
   const agendaOrders = agendaResult.rows.map(rowToOrder)
   const agendaByQuote = new Map()
   for(const order of agendaOrders){
@@ -138,8 +146,10 @@ async function listDashboardOrders(companyId){
       status:normalize(agenda?.status) === 'cancelado' ? 'pendente' :
         (agenda?.status || (payload.vendido_pronta_entrega === true && payload.agenda_status === 'pronta_entrega' ? 'entregue' : 'pendente')),
       total_cents:Number(row.total_cents || payload.total_cents || 0),
+      modelos:modelsByQuote.get(text(row.id)) || (Array.isArray(payload.modelos) ? payload.modelos : agenda?.modelos || []),
       source_quote_id:row.id,
       financial_order:true,
+      agenda_reminder:Boolean(agenda && !['entregue','cancelado','indisponivel'].includes(normalize(agenda.status)) && !isIgnoredPlaceholder(agenda)),
       reconciliation_created_at:row.created_at,
       agenda_status:payload.agenda_status || (agenda ? 'agendado' : 'pendente'),
       created_at:payload.data_pedido || row.created_at,
@@ -322,7 +332,7 @@ function shiftMonth(year,month,delta){
 
 function modelsRanking(orders){
   const counts = new Map()
-  for(const order of onlyAgendaOrders(orders)){
+  for(const order of billableOrders(orders)){
     const modelos = Array.isArray(order?.modelos) ? order.modelos : []
     for(const modelo of modelos){
       const nome = text(modelo?.name || modelo?.modelo || 'Modelo','Modelo') || 'Modelo'
@@ -405,5 +415,15 @@ async function getSummary(companyId){
   }
 }
 
-module.exports = { getSummary, listDashboardOrders, activeOrders, billableOrders, revenueCents,
+async function listReminderOrders(companyId){
+  const orders = await listDashboardOrders(companyId)
+  return orders.filter(order =>
+    !isIgnoredPlaceholder(order) &&
+    !(order.historical_reconciliation_quote_id && orders.some(candidate => candidate.financial_order === true && candidate.agenda_reminder === true && text(candidate.source_quote_id) === text(order.historical_reconciliation_quote_id))) &&
+    !['entregue','cancelado','indisponivel','disponivel'].includes(normalize(order.status)) &&
+    (order.financial_order !== true || order.agenda_reminder === true)
+  ).map(order => ({...order,dashboard_reminder:true}))
+}
+
+module.exports = { getSummary, listDashboardOrders, listReminderOrders, activeOrders, billableOrders, revenueCents,
   rowToOrder,extractQuoteRef,reconcileHistoricalAgenda }
