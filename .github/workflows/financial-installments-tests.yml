@@ -1,0 +1,34 @@
+name: Validar parcelamentos (PostgreSQL isolado)
+on:
+  push:
+    branches:
+      - prepare/financeiro-pacote3-producao-20261020
+  workflow_dispatch:
+jobs:
+  installments:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: financial_fixed_test
+          POSTGRES_USER: test_fixed
+          POSTGRES_PASSWORD: test_only_disposable
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      NODE_PATH: /tmp/financial-test-deps/node_modules
+      FINANCIAL_TEST_DATABASE_URL: postgres://test_fixed:test_only_disposable@127.0.0.1:5432/financial_fixed_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --prefix /tmp/financial-test-deps --no-audit --no-fund pg@8.13.3 @electric-sql/pglite@0.3.14
+      - run: node --test --test-concurrency=1 test/financial-installments.test.js test/financial-fixed-recurrence.test.js test/financial-history.test.js
+

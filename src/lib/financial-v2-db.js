@@ -2,6 +2,7 @@
 const trash = require('./trash-db')
 
 const crypto = require('crypto')
+const installments = require('./financial-installments')
 const storeLib = require('./store')
 const fixed = require('./financial-fixed-recurrence')
 
@@ -87,6 +88,15 @@ async function ensureSchema(){
       ON app_financial_entries_v2 (company_id,tipo,data_vencimento,id);
     CREATE INDEX IF NOT EXISTS idx_financial_entries_v2_company_status_date
       ON app_financial_entries_v2 (company_id,status,data_vencimento,id);
+
+    CREATE TABLE IF NOT EXISTS app_financial_installment_requests_v2 (
+      company_id TEXT NOT NULL,
+      request_id TEXT NOT NULL,
+      request_hash TEXT NOT NULL,
+      entry_ids JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY(company_id,request_id)
+    );
 
     CREATE TABLE IF NOT EXISTS app_financial_audit_v2 (
       id BIGSERIAL PRIMARY KEY,
@@ -237,6 +247,10 @@ async function createEntry(companyId,input={}){
   return entryFromRow(result.rows[0])
 }
 
+async function createInstallments(companyId,input={}){
+  return installments.createInstallments(getPool(),text(companyId),input,entryFromRow)
+}
+
 async function updateEntry(companyId,id,patch={}){
   const current=await getEntry(companyId,id)
   if(!current) return null
@@ -294,11 +308,13 @@ module.exports={
   listEntries,
   getEntry,
   createEntry,
+  createInstallments,
   updateEntry,
   deleteEntry,
   removeEntryFromHistory,
   auditEvent
 }
+
 
 
 
