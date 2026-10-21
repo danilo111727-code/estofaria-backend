@@ -31,6 +31,7 @@ function load(rows){
   const pool = {query:async(sql,params)=>{
     assert.match(sql.trim(),/^SELECT /)
     assert.equal(params[0],'test')
+    if(sql.includes('FROM app_quote_models_v2')) return {rows:rows.models || []}
     if(sql.includes('FROM app_agenda_orders_v2')) return {rows:rows.agenda}
     if(sql.includes('FROM app_quotes_v2')) return {rows:rows.quotes}
     throw new Error('Unexpected query')
@@ -242,4 +243,5 @@ test('Pedido excluído do Vendedor não deixa o espelho da Agenda faturado',asyn
   rows.quotes=[]
   await check(rows,{count:0,cents:0,active:0})
 })
+
 

@@ -21,3 +21,15 @@ test('conciliação histórica não duplica lembretes e pedidos manuais continua
  const db=load([order()],[quote()]);assert.equal((await db.listReminderOrders('company-a')).length,1);
  assert.equal((await load([order()]).listReminderOrders('company-a')).length,1);
 });
+test('ranking exclui cancelados e inclui vendas sem agendamento pelos modelos da venda',async()=>{
+ const db=load([order({id:'cancelled',status:'cancelado',payload:{valor:100,modelos:[{name:'Cancelado'}]}})],[quote()],[{quote_id:'q1',model_name:'Modelo vendido',extra:{}}]);
+ const summary=await db.getSummary('company-a');assert.equal(summary.charts.top_models.length,1);assert.equal(summary.charts.top_models[0].name,'Modelo vendido');assert.equal(summary.charts.top_models[0].sales,1);
+});
+test('ranking concilia espelho e venda sem contar duas vezes, inclusive após entrega',async()=>{
+ const db=load([order({source_quote_id:'q1',status:'entregue',payload:{valor:100,modelos:[{name:'Modelo vendido'}]}})],[quote()],[{quote_id:'q1',model_name:'Modelo vendido',extra:{}}]);
+ const summary=await db.getSummary('company-a');assert.equal(summary.charts.top_models.length,1);assert.equal(summary.charts.top_models[0].sales,1);
+});
+test('ranking não duplica conciliação histórica',async()=>{
+ const db=load([order({payload:{valor:100,modelos:[{name:'Modelo vendido'}]}})],[quote()],[{quote_id:'q1',model_name:'Modelo vendido',extra:{}}]);
+ assert.equal((await db.getSummary('company-a')).charts.top_models[0].sales,1);
+});
