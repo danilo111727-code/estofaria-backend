@@ -140,6 +140,7 @@ async function listDashboardOrders(companyId){
       total_cents:Number(row.total_cents || payload.total_cents || 0),
       source_quote_id:row.id,
       financial_order:true,
+      agenda_reminder:Boolean(agenda && !['entregue','cancelado','indisponivel'].includes(normalize(agenda.status)) && !isIgnoredPlaceholder(agenda)),
       reconciliation_created_at:row.created_at,
       agenda_status:payload.agenda_status || (agenda ? 'agendado' : 'pendente'),
       created_at:payload.data_pedido || row.created_at,
@@ -405,5 +406,16 @@ async function getSummary(companyId){
   }
 }
 
-module.exports = { getSummary, listDashboardOrders, activeOrders, billableOrders, revenueCents,
+async function listReminderOrders(companyId){
+  const orders = await listDashboardOrders(companyId)
+  return orders.filter(order =>
+    !isIgnoredPlaceholder(order) &&
+    !(order.historical_reconciliation_quote_id && orders.some(candidate => candidate.financial_order === true && candidate.agenda_reminder === true && text(candidate.source_quote_id) === text(order.historical_reconciliation_quote_id))) &&
+    !['entregue','cancelado','indisponivel','disponivel'].includes(normalize(order.status)) &&
+    (order.financial_order !== true || order.agenda_reminder === true)
+  ).map(order => ({...order,dashboard_reminder:true}))
+}
+
+module.exports = { getSummary, listDashboardOrders, listReminderOrders, activeOrders, billableOrders, revenueCents,
   rowToOrder,extractQuoteRef,reconcileHistoricalAgenda }
+

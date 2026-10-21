@@ -3,6 +3,7 @@
 const express = require('express')
 const { hasMasterAccess } = require('../lib/policies')
 const db = require('../lib/dashboard-v2-retro')
+const dashboardDb = require('../lib/dashboard-v2-db')
 const { requireAuth,requirePermission } = require('../middleware/auth')
 
 const router = express.Router()
@@ -39,6 +40,14 @@ router.get('/dashboard/summary',async(req,res,next)=>{
   }catch(err){ next(err) }
 })
 
+router.get('/dashboard/reminders',requireAuth,requirePermission('painel'),async(req,res,next)=>{
+  try{
+    const companyId=companyIdFor(req)
+    if(!companyId)return res.status(400).json({message:'Selecione uma empresa.'})
+    res.json(await dashboardDb.listReminderOrders(companyId))
+  }catch(error){next(error)}
+})
+
 router.get('/dashboard/revenue-history',requireAuth,requirePermission('painel'),async(req,res,next)=>{
   try{
     const companyId=companyIdFor(req)
@@ -59,4 +68,5 @@ for(const method of ['patch','delete'])router[method]('/dashboard/revenue-histor
   }
 })
 module.exports = router
+
 
