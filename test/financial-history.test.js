@@ -7,7 +7,7 @@ function load(file,requires){const m={exports:{}};vm.runInNewContext(fs.readFile
 before(async()=>{
  pg=new PGlite();pool={query:async(s,p=[])=>{if(fail&&s.startsWith('UPDATE app_financial_entries_v2'))throw Error('database unavailable');return p.length?pg.query(s,p):(await pg.exec(s)).at(-1)},connect:async()=>({...pool,release(){}})}
  trash=load('trash-db.js',{'./store':{_pg:{pool}}});await trash.ensureSchema(pool)
- db=load('financial-v2-db.js',{'./store':{_pg:{pool}},'./trash-db':trash,'./financial-fixed-recurrence':require('../src/lib/financial-fixed-recurrence')});await db.ensureSchema()
+ db=load('financial-v2-db.js',{'./store':{_pg:{pool}},'./financial-installments':require('../src/lib/financial-installments'),'./trash-db':trash,'./financial-fixed-recurrence':require('../src/lib/financial-fixed-recurrence')});await db.ensureSchema()
  await pg.exec("INSERT INTO app_financial_entries_v2(company_id,id,tipo,status,valor,payload) VALUES('a','record','pagar','pago',123,'{\"other\":123}'),('a','active','pagar','pendente',100,'{}'),('a','failure','pagar','pago',100,'{}')")
 })
 after(async()=>pg?.close())
