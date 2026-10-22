@@ -1,0 +1,32 @@
+name: Agenda pacote 3 - concorrência
+on:
+  push:
+    branches: [fix/agenda-pacote3-teste-20261022, dev]
+    paths: [src/lib/agenda-v2-db.js, src/routes/agenda-v2.js, test/agenda-capacity.test.js, .github/workflows/agenda-package3-tests.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  capacity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: agenda_test_only
+          POSTGRES_DB: agenda_capacity_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --ignore-scripts
+      - run: npm install --prefix /tmp/agenda-test-deps --no-audit --no-fund @electric-sql/pglite@0.3.14
+      - run: node --test test/agenda-capacity.test.js test/agenda-financial-dates.test.js test/agenda-history.test.js
+        env:
+          AGENDA_TEST_DATABASE_URL: postgres://postgres:agenda_test_only@localhost:5432/agenda_capacity_test
+          NODE_PATH: /tmp/agenda-test-deps/node_modules
