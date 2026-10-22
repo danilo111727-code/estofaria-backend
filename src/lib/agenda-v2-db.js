@@ -3,6 +3,7 @@ const trash = require('./trash-db')
 
 const crypto = require('crypto')
 const storeLib = require('./store')
+const {syncDeliveryReceivable} = require('./agenda-financial-dates')
 
 function getPool(){
   const pool = storeLib && storeLib._pg && storeLib._pg.pool
@@ -436,6 +437,7 @@ async function updateOrder(companyId,id,patch={}){
       const rawBefore={...result.rows[0],bloco_id:existing.bloco_id||null,cliente:existing.cliente,descricao:existing.descricao,prod_date:existing.prod_date,ent_date:existing.ent_date,status:existing.status,payload:existing}
       await trash.archive(client,companyId,'agenda','agenda-unschedule',id,{row:rawBefore,expected_updated_at:result.rows[0].updated_at})
     }
+    await syncDeliveryReceivable(client,companyId,existing,next)
     await client.query('COMMIT')
     return orderFromRow(result.rows[0])
   }catch(err){
@@ -593,6 +595,7 @@ async function updateBlock(companyId,id,patch={}){
     )
     for(const raw of orders.rows){
       const order = orderFromRow(raw)
+      const before = {...order}
       order.prod_date = newProd
       order.ent_date = newEnt
       order.updated_at = new Date().toISOString()
@@ -600,6 +603,7 @@ async function updateBlock(companyId,id,patch={}){
         UPDATE app_agenda_orders_v2 SET prod_date=$3,ent_date=$4,payload=$5::jsonb,updated_at=NOW()
         WHERE company_id=$1 AND id=$2
       `,[text(companyId),order.id,newProd,newEnt,JSON.stringify(order)])
+      await syncDeliveryReceivable(client,companyId,before,order)
     }
 
     await client.query('COMMIT')
@@ -749,5 +753,6 @@ module.exports = {
   createBlockOrder,
   auditEvent
 }
+
 
 
