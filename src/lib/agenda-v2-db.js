@@ -502,7 +502,7 @@ async function deliverOrderAndConsumeSlot(companyId,id){
     // Idempotência: se já estava entregue, não consome outra vaga.
     if(String(existing.status || '').toLowerCase() === 'entregue'){
       await client.query('ROLLBACK')
-      return { row:existing, bloco:existing.bloco_id ? await getBlock(companyId,existing.bloco_id) : null, alreadyDelivered:true }
+      return { row:existing, bloco:existing.bloco_id ? await getBlock(companyId,existing.bloco_id,client) : null, alreadyDelivered:true }
     }
 
     const next = { ...existing, status:'entregue', updated_at:new Date().toISOString() }

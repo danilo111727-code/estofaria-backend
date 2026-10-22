@@ -50,6 +50,13 @@ test('POST genérico não ultrapassa a capacidade do bloco',async()=>{
   assert.equal(results.filter(x=>x.status==='fulfilled').length,1);assert.equal(await count(),1)
   assert.ok(results.filter(x=>x.status==='rejected').every(x=>x.reason.code==='bloco_full'))
 })
+test('repetir entrega com todas as conexões ocupadas não trava o pool',async()=>{
+  await block('block',3);const created=await db.createBlockOrder('a','block',{})
+  await db.deliverOrderAndConsumeSlot('a',created.row.id)
+  const results=await Promise.all(Array.from({length:16},()=>db.deliverOrderAndConsumeSlot('a',created.row.id)))
+  assert.equal(results.length,16);assert.ok(results.every(x=>x.alreadyDelivered))
+  assert.equal((await db.getBlock('a','block')).qtd_vagas,2)
+})
 test('PATCH não move nem reativa um pedido em bloco lotado',async()=>{
   await block();await db.createBlockOrder('a','block',{})
   const pending=await db.createOrder('a',{})
