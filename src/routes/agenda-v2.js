@@ -176,10 +176,17 @@ router.post('/agenda/blocos/:id/pedido',async(req,res,next)=>{
     const result = await db.createBlockOrder(req.agendaV2CompanyId,req.params.id,req.body || {})
     if(result.notFound) return res.status(404).json({error:'not_found',message:'Bloco não encontrado.'})
     if(result.full) return res.status(400).json({error:'bloco_full',message:'Todas as vagas deste bloco estão ocupadas.'})
-    audit(req,'agenda.bloco.pedido.create',`Pedido adicionado ao bloco ${req.params.id}: ${result.row.cliente}`)
-    return res.status(201).json(result.row)
+    if(!result.replayed) audit(req,'agenda.bloco.pedido.create',`Pedido adicionado ao bloco ${req.params.id}: ${result.row.cliente}`)
+    return res.status(result.replayed?200:201).json(result.row)
   }catch(err){ next(err) }
 })
 
+router.use((err,_req,res,next)=>{
+  if(err?.statusCode===409 && ['bloco_not_found','bloco_full','order_already_scheduled','capacity_below_occupied'].includes(err.code))
+    return res.status(409).json({error:err.code,message:err.message})
+  next(err)
+})
+
 module.exports = router
+
 

@@ -20,6 +20,39 @@ function text(value, fallback=''){
   return String(value).trim()
 }
 
+async function lockAgenda(client,companyId){
+  // One transaction at a time per company: capacity reads and writes must agree.
+  await client.query('SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))',
+    ['agenda-capacity-v1',text(companyId)])
+}
+
+function capacityConflict(code,message){
+  return Object.assign(new Error(message),{code,statusCode:409})
+}
+
+const activeOrder = row => !['entregue','cancelado','indisponivel'].includes(text(row.status).toLowerCase())
+
+async function requireFreeSlot(client,companyId,blockId){
+  const block = await getBlock(companyId,blockId,client)
+  if(!block) throw capacityConflict('bloco_not_found','Bloco não encontrado. Atualize a Agenda.')
+  const result = await client.query(`SELECT COUNT(*)::int AS count FROM app_agenda_orders_v2
+    WHERE company_id=$1 AND bloco_id=$2 AND COALESCE(status,'') NOT IN ('entregue','cancelado','indisponivel')`,
+    [text(companyId),text(blockId)])
+  if(Number(result.rows[0]?.count || 0) >= block.qtd_vagas)
+    throw capacityConflict('bloco_full','Todas as vagas deste bloco estão ocupadas. Atualize a Agenda.')
+}
+
+async function existingQuoteOrder(client,companyId,input){
+  const ref=text(input.source_quote_id)
+  if(!ref) return null
+  const result=await client.query('SELECT * FROM app_agenda_orders_v2 WHERE company_id=$1 AND source_quote_id=$2 ORDER BY id LIMIT 1',
+    [text(companyId),ref])
+  const existing=orderFromRow(result.rows[0])
+  if(existing && (text(existing.bloco_id)!==text(input.bloco_id) || !activeOrder(existing)))
+    throw capacityConflict('order_already_scheduled','Este pedido já está na Agenda. Confira o agendamento existente.')
+  return existing
+}
+
 function num(value, fallback=0){
   const n = Number(value)
   return Number.isFinite(n) ? n : fallback
@@ -380,6 +413,10 @@ async function createOrder(companyId,input={}){
   const client = await pool.connect()
   try{
     await client.query('BEGIN')
+    await lockAgenda(client,companyId)
+    const existing = await existingQuoteOrder(client,companyId,input)
+    if(existing){await client.query('COMMIT');return existing}
+    if(text(input.bloco_id) && activeOrder(input)) await requireFreeSlot(client,companyId,input.bloco_id)
     const row = await insertOrder(client,companyId,input)
     await client.query('COMMIT')
     return row
@@ -394,6 +431,7 @@ async function updateOrder(companyId,id,patch={}){
   const client = await pool.connect()
   try{
     await client.query('BEGIN')
+    await lockAgenda(client,companyId)
     const existing = await getOrder(companyId,id,client)
     if(!existing){
       await client.query('ROLLBACK')
@@ -417,6 +455,9 @@ async function updateOrder(companyId,id,patch={}){
     }
     if(patch.bloco_id !== undefined) next.bloco_id = text(patch.bloco_id) || undefined
     if(patch.source_quote_id !== undefined) next.source_quote_id = text(patch.source_quote_id) || null
+
+    if(next.bloco_id && activeOrder(next) && (text(next.bloco_id)!==text(existing.bloco_id) || !activeOrder(existing)))
+      await requireFreeSlot(client,companyId,next.bloco_id)
 
     const today = new Date().toISOString().slice(0,10)
     const refDate = next.ent_date || next.prod_date
@@ -451,6 +492,7 @@ async function deliverOrderAndConsumeSlot(companyId,id){
   const client = await pool.connect()
   try{
     await client.query('BEGIN')
+    await lockAgenda(client,companyId)
     const existing = await getOrder(companyId,id,client)
     if(!existing){
       await client.query('ROLLBACK')
@@ -460,7 +502,7 @@ async function deliverOrderAndConsumeSlot(companyId,id){
     // Idempotência: se já estava entregue, não consome outra vaga.
     if(String(existing.status || '').toLowerCase() === 'entregue'){
       await client.query('ROLLBACK')
-      return { row:existing, bloco:existing.bloco_id ? await getBlock(companyId,existing.bloco_id) : null, alreadyDelivered:true }
+      return { row:existing, bloco:existing.bloco_id ? await getBlock(companyId,existing.bloco_id,client) : null, alreadyDelivered:true }
     }
 
     const next = { ...existing, status:'entregue', updated_at:new Date().toISOString() }
@@ -572,6 +614,7 @@ async function updateBlock(companyId,id,patch={}){
   const client = await pool.connect()
   try{
     await client.query('BEGIN')
+    await lockAgenda(client,companyId)
     const existing = await getBlock(companyId,id,client)
     if(!existing){
       await client.query('ROLLBACK')
@@ -581,6 +624,12 @@ async function updateBlock(companyId,id,patch={}){
     const newEnt = patch.data_entrega !== undefined ? (isoDate(patch.data_entrega) || existing.data_entrega) : existing.data_entrega
     const next = { ...existing, data_producao:newProd, data_entrega:newEnt, updated_at:new Date().toISOString() }
     if(patch.qtd_vagas !== undefined) next.qtd_vagas = Math.max(1,Math.round(num(patch.qtd_vagas,existing.qtd_vagas)))
+    if(patch.qtd_vagas !== undefined){
+      const occupied=await client.query(`SELECT COUNT(*)::int AS count FROM app_agenda_orders_v2
+        WHERE company_id=$1 AND bloco_id=$2 AND COALESCE(status,'') NOT IN ('entregue','cancelado','indisponivel')`,[text(companyId),text(id)])
+      if(next.qtd_vagas < Number(occupied.rows[0]?.count || 0))
+        throw capacityConflict('capacity_below_occupied','A capacidade não pode ser menor que a quantidade de pedidos agendados.')
+    }
 
     const blockResult = await client.query(`
       UPDATE app_agenda_blocos_v2 SET
@@ -619,6 +668,7 @@ async function deleteBlock(companyId,id){
   const client = await pool.connect()
   try{
     await client.query('BEGIN')
+    await lockAgenda(client,companyId)
     const existing = await getBlock(companyId,id,client)
     if(!existing){
       await client.query('ROLLBACK')
@@ -642,6 +692,7 @@ async function changeSlots(companyId,id,delta){
   const client = await pool.connect()
   try{
     await client.query('BEGIN')
+    await lockAgenda(client,companyId)
     const bloco = await getBlock(companyId,id,client)
     if(!bloco){
       await client.query('ROLLBACK')
@@ -680,11 +731,14 @@ async function createBlockOrder(companyId,blockId,input={}){
   const client = await pool.connect()
   try{
     await client.query('BEGIN')
+    await lockAgenda(client,companyId)
     const bloco = await getBlock(companyId,blockId,client)
     if(!bloco){
       await client.query('ROLLBACK')
       return { notFound:true }
     }
+    const existing=await existingQuoteOrder(client,companyId,{...input,bloco_id:blockId})
+    if(existing){await client.query('COMMIT');return {row:existing,replayed:true}}
     const occupiedRes = await client.query(`
       SELECT COUNT(*)::int AS count
       FROM app_agenda_orders_v2
@@ -753,6 +807,7 @@ module.exports = {
   createBlockOrder,
   auditEvent
 }
+
 
 
 
