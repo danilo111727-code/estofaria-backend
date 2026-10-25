@@ -45,3 +45,23 @@ test('legacy upsert SQL remains valid with category',async()=>{
  const {db}=fixture();const a=await db.upsertMigratedModel('company-A','legacy-1',{name:'Antigo',base_meters:2,category:'Sofá fixo'});
  assert.equal(a.category,'Sofá fixo');
 });
+
+test('dimensões descritivas persistem sem afetar altura base nem preços',async()=>{
+ const {db}=fixture();
+ const a=await db.createModel('company-A',{name:'Sofá',category:'Sofá fixo',base_meters:2.1,base_height_meters:1.2,display_depth_meters:0.95,display_height_meters:0.85,total_cost_cents:10000,target_profit_cents:5000,sale_price_cents:15000});
+ assert.equal(a.display_depth_meters,0.95);assert.equal(a.display_height_meters,0.85);
+ assert.equal(a.base_meters,2.1);assert.equal(a.base_height_meters,1.2);
+ const b=await db.updateModel('company-A',a.id,{name:'Novo sofá'});
+ assert.equal(b.display_depth_meters,0.95);assert.equal(b.display_height_meters,0.85);assert.equal(b.sale_price_cents,15000);
+ const c=await db.updateModel('company-A',a.id,{display_height_meters:null});
+ assert.equal(c.display_height_meters,null);assert.equal(c.base_height_meters,1.2);
+ assert.equal(await db.getModel('company-B',a.id),null);
+});
+test('modelos antigos não recebem medidas fictícias e valores inválidos são bloqueados',async()=>{
+ const {db}=fixture();
+ const a=await db.createModel('company-A',{name:'Antigo'});
+ assert.equal(a.display_depth_meters,null);assert.equal(a.display_height_meters,null);
+ for(const value of [-1,0,'abc',Infinity,100000000]){
+  assert.throws(()=>db.normalizeModelInput({name:'Erro',display_depth_meters:value}));
+ }
+});

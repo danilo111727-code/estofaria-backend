@@ -40,6 +40,8 @@ async function ensureSchema() {
 
     ALTER TABLE app_models_v2
       ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT '';
+    ALTER TABLE app_models_v2 ADD COLUMN IF NOT EXISTS display_depth_meters NUMERIC(10,2);
+    ALTER TABLE app_models_v2 ADD COLUMN IF NOT EXISTS display_height_meters NUMERIC(10,2);
     ALTER TABLE app_models_v2
       ADD COLUMN IF NOT EXISTS included_items JSONB NOT NULL DEFAULT '[]'::jsonb;
     ALTER TABLE app_models_v2
@@ -174,9 +176,22 @@ function normalizeModelCategory(value) {
   throw err
 }
 
+function normalizeDisplayDimension(value) {
+  if(value === undefined || value === null || value === '') return null
+  const n = typeof value === 'number' ? value : Number(String(value).replace(',','.'))
+  const rounded = Math.round(n * 100) / 100
+  if(Number.isFinite(n) && rounded > 0 && rounded <= 99999999.99) return rounded
+  const err = new Error('Dimensão descritiva inválida.')
+  err.code = 'invalid_display_dimension'
+  err.status = 400
+  throw err
+}
+
 function normalizeModelInput(input = {}) {
   return {
     category: normalizeModelCategory(input.category),
+    displayDepthMeters:normalizeDisplayDimension(input.display_depth_meters),
+    displayHeightMeters:normalizeDisplayDimension(input.display_height_meters),
     name: text(input.name || input.nome || input.modelo).trim().slice(0, 180),
     description: text(input.description ?? input.descricao_modelo ?? input.descricao ?? '').trim().slice(0, 2000),
     baseMeters: Math.max(0, number(input.base_meters ?? input.baseMeters ?? input.metragem_base ?? 0)),
@@ -243,6 +258,8 @@ function rowToModel(row) {
     legacy_id: row.legacy_id,
     name: row.name,
     category: text(row.category),
+    display_depth_meters:row.display_depth_meters == null ? null : number(row.display_depth_meters),
+    display_height_meters:row.display_height_meters == null ? null : number(row.display_height_meters),
     descricao_modelo: row.description || '',
     description: row.description || '',
     base_meters: number(row.base_meters),
@@ -368,8 +385,8 @@ async function createModel(companyId, input = {}) {
       INSERT INTO app_models_v2 (
         id, company_id, name, description, base_meters, base_height_meters, spacing_cm, height_spacing_cm,
         total_cost_cents, target_profit_cents, sale_price_cents,
-        value_per_spacing_cents, height_value_per_spacing_cents, included_items, variation_mode, specific_variations, category, active, created_at, updated_at
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15,$16::jsonb,$17,TRUE,NOW(),NOW())
+        value_per_spacing_cents, height_value_per_spacing_cents, included_items, variation_mode, specific_variations, category, display_depth_meters, display_height_meters, active, created_at, updated_at
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15,$16::jsonb,$17,$18,$19,TRUE,NOW(),NOW())
     `, [
       id,
       companyId,
@@ -387,7 +404,9 @@ async function createModel(companyId, input = {}) {
       JSON.stringify(normalized.includedItems),
       normalized.variationMode,
       JSON.stringify(normalized.specificVariations),
-      normalized.category
+      normalized.category,
+      normalized.displayDepthMeters,
+      normalized.displayHeightMeters
     ])
     await replaceMaterials(client, companyId, id, normalized.materials)
     await client.query('COMMIT')
@@ -431,6 +450,8 @@ async function updateModel(companyId, modelId, input = {}) {
           variation_mode = $15,
           specific_variations = $16::jsonb,
           category = $17,
+          display_depth_meters = $18,
+          display_height_meters = $19,
           updated_at = NOW()
       WHERE company_id = $1 AND id = $2
       RETURNING id
@@ -451,7 +472,9 @@ async function updateModel(companyId, modelId, input = {}) {
       JSON.stringify(merged.includedItems),
       merged.variationMode,
       JSON.stringify(merged.specificVariations),
-      merged.category
+      merged.category,
+      merged.displayDepthMeters,
+      merged.displayHeightMeters
     ])
     if (!result.rows.length) {
       await client.query('ROLLBACK')
@@ -499,8 +522,8 @@ async function upsertMigratedModel(companyId, legacyId, input = {}) {
       INSERT INTO app_models_v2 (
         id, company_id, legacy_id, name, description, base_meters, base_height_meters, spacing_cm, height_spacing_cm,
         total_cost_cents, target_profit_cents, sale_price_cents,
-        value_per_spacing_cents, height_value_per_spacing_cents, included_items, variation_mode, specific_variations, category, active, created_at, updated_at
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,$16,$17::jsonb,$20,TRUE,$18,$19)
+        value_per_spacing_cents, height_value_per_spacing_cents, included_items, variation_mode, specific_variations, category, display_depth_meters, display_height_meters, active, created_at, updated_at
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,$16,$17::jsonb,$20,$21,$22,TRUE,$18,$19)
       ON CONFLICT (id) DO UPDATE SET
         name = EXCLUDED.name,
         description = EXCLUDED.description,
@@ -517,6 +540,8 @@ async function upsertMigratedModel(companyId, legacyId, input = {}) {
         variation_mode = EXCLUDED.variation_mode,
         specific_variations = EXCLUDED.specific_variations,
         category = COALESCE(NULLIF(EXCLUDED.category, ''), app_models_v2.category),
+        display_depth_meters = COALESCE(EXCLUDED.display_depth_meters, app_models_v2.display_depth_meters),
+        display_height_meters = COALESCE(EXCLUDED.display_height_meters, app_models_v2.display_height_meters),
         active = TRUE,
         updated_at = EXCLUDED.updated_at
     `, [
@@ -539,7 +564,9 @@ async function upsertMigratedModel(companyId, legacyId, input = {}) {
       JSON.stringify(normalized.specificVariations),
       input.created_at || input.createdAt || new Date().toISOString(),
       input.updated_at || input.updatedAt || new Date().toISOString(),
-      normalized.category
+      normalized.category,
+      normalized.displayDepthMeters,
+      normalized.displayHeightMeters
     ])
     await replaceMaterials(client, companyId, id, normalized.materials)
     await client.query('COMMIT')
