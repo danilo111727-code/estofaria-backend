@@ -161,6 +161,9 @@ async function restore(client,companyId,id,{restoreLegacy}={}){
   }else if(item.kind==='model'){
     const r=await client.query('UPDATE app_models_v2 SET active=TRUE,updated_at=NOW() WHERE company_id=$1 AND id=$2 AND active=FALSE RETURNING id',[companyId,item.record_key])
     if(!r.rows.length)throw conflict('Este modelo já está ativo ou não está mais disponível.')
+  }else if(item.kind==='ready-model'){
+    const r=await client.query('UPDATE app_ready_models_v1 SET active=TRUE,revision=revision+1,updated_at=NOW() WHERE company_id=$1 AND id=$2 AND active=FALSE RETURNING id',[companyId,item.record_key])
+    if(!r.rows.length)throw conflict('Este modelo já está ativo ou não está mais disponível.')
   }else if(item.kind==='financial'){
     const payload=s.row.payload||{},quoteId=text(payload.quote_id||payload.source_quote_id),agendaId=text(payload.agenda_order_id||payload.order_id)
     if(quoteId||agendaId){
@@ -232,6 +235,7 @@ async function purgeExpired(db=pool()){
         await client.query("DELETE FROM app_revenue_adjustments_v1 WHERE company_id=$1 AND record_key=$2 AND NOT EXISTS(SELECT 1 FROM app_quotes_v2 WHERE company_id=$1 AND id=$3)",[item.company_id,'quote:'+item.record_key,item.record_key])
       }
       if(item.kind==='model')await client.query('DELETE FROM app_models_v2 WHERE company_id=$1 AND id=$2 AND active=FALSE',[item.company_id,item.record_key])
+      if(item.kind==='ready-model')await client.query('DELETE FROM app_ready_models_v1 WHERE company_id=$1 AND id=$2 AND active=FALSE',[item.company_id,item.record_key])
       await client.query('DELETE FROM app_trash_v1 WHERE company_id=$1 AND id=$2',[item.company_id,item.id])
     }
   })
@@ -241,6 +245,7 @@ async function purgeExpired(db=pool()){
     // Nunca apaga uma imagem ainda referenciada por outro registro ativo ou pela lixeira.
     const used=await db.query(`SELECT EXISTS(SELECT 1 FROM app_quote_models_v2 WHERE company_id=$1 AND extra->>'quote_image_key'=$2)
       OR EXISTS(SELECT 1 FROM app_model_images_v2 WHERE company_id=$1 AND object_key=$2)
+      OR EXISTS(SELECT 1 FROM app_ready_models_v1 WHERE company_id=$1 AND images::text LIKE '%'||$2||'%')
       OR EXISTS(SELECT 1 FROM app_trash_v1 WHERE company_id=$1 AND snapshot::text LIKE '%'||$2||'%') AS used`,[row.company_id,row.object_key])
     if(!used.rows[0].used)await r2.deleteObject(row.object_key)
     await db.query('DELETE FROM app_trash_object_cleanup_v1 WHERE company_id=$1 AND object_key=$2',[row.company_id,row.object_key])
