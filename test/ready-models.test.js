@@ -69,3 +69,28 @@ test('the existing made-to-order models retain their own pricing and trash flow'
  const a=await models.createModel('a',{name:'Sob encomenda',base_meters:2.1,target_profit_cents:60000,sale_price_cents:60200,category:'Sofá fixo'});assert.equal(a.base_meters,2.1);assert.equal(a.sale_price_cents,60200)
  await models.deactivateModel('a',a.id);const item=(await pool.query("SELECT * FROM app_trash_v1 WHERE kind='model' AND record_key=$1",[a.id])).rows[0];await trash.transaction(pool,c=>trash.restore(c,'a',item.id));assert.equal((await models.getModel('a',a.id)).sale_price_cents,60200)
 })
+test('card surcharge persists, preserves cash price, and omitted rates remain unchanged',async()=>{
+ const a=(await request('/api/v2/ready-models','POST',{...body(),card_rate_percent:12})).data
+ assert.equal(a.price_cents,150000);assert.equal(a.card_rate_percent,12);assert.equal(a.card_price_cents,168000)
+ const next={...body(),revision:a.revision,quantity:3};delete next.photo
+ const b=await request('/api/v2/ready-models/'+a.id,'PUT',next)
+ assert.equal(b.status,200);assert.equal(b.data.card_rate_percent,12);assert.equal(b.data.price_cents,150000)
+ const cleared=await request('/api/v2/ready-models/'+a.id,'PUT',{...next,revision:2,card_rate_percent:0})
+ assert.equal(cleared.data.card_price_cents,150000)
+ for(const card_rate_percent of [-1,16,2.5,'12'])assert.equal((await request('/api/v2/ready-models','POST',{...body(),card_rate_percent})).status,400)
+})
+test('additive migration defaults existing models to zero without changing prices or stock',async()=>{
+ const row=(await request('/api/v2/ready-models','POST',body())).data
+ await pool.query('ALTER TABLE app_ready_models_v1 DROP COLUMN card_rate_percent');await db.ensureSchema()
+ const existing=await db.get('a',row.id);assert.equal(existing.card_rate_percent,0);assert.equal(Number(existing.price_cents),150000);assert.equal(existing.quantity,2)
+})
+test('description stores all details, preserves legacy fabric and survives clearing and migration',async()=>{
+ const a=(await request('/api/v2/ready-models','POST',{...body(),description:'Linho bege; espuma D33; pés de madeira.'})).data
+ assert.equal(a.description,'Linho bege; espuma D33; pés de madeira.')
+ const input={...body(),description:'',revision:1};delete input.photo
+ assert.equal((await request('/api/v2/ready-models/'+a.id,'PUT',input)).data.description,'')
+ await db.ensureSchema();assert.equal((await db.get('a',a.id)).description,'')
+ const legacy=(await request('/api/v2/ready-models','POST',body())).data;assert.equal(legacy.description,'Linho bege')
+ await pool.query("UPDATE app_ready_models_v1 SET description='',fabric='Suede azul' WHERE id=$1",[legacy.id]);await db.ensureSchema();assert.equal((await db.get('a',legacy.id)).description,'Suede azul')
+ assert.equal((await request('/api/v2/ready-models','POST',{...body(),description:'x'.repeat(1001)})).status,400)
+})

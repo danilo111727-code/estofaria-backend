@@ -27,6 +27,10 @@ async function decorate(row){
  const {images,...item}=row
  for(const key of ['width_meters','depth_meters','height_meters'])item[key]=row[key]==null?null:Number(row[key])
  item.price_cents=Number(row.price_cents)
+ item.card_rate_percent=Number(row.card_rate_percent||0)
+ item.card_price_cents=Math.round(item.price_cents*(100+item.card_rate_percent)/100)
+ item.description=String(row.description||row.fabric||'')
+ item.fabric=item.description
  item.image_url=images?.thumb?.object_key&&r2.isConfigured()?await r2.presignGetUrl(images.thumb.object_key,900):null
  return item
 }
@@ -43,7 +47,8 @@ router.get('/ready-models/:id',route(async(req,res)=>{
 }))
 async function save(req,res,creating){
  const companyId=req.readyCompanyId,id=creating?db.newId():req.params.id
- const normalized=db.normalize(req.body||{}),previous=creating?null:await db.get(companyId,id)
+ const previous=creating?null:await db.get(companyId,id)
+ const normalized=db.normalize({...req.body,card_rate_percent:req.body?.card_rate_percent??previous?.card_rate_percent??0,description:req.body?.description??req.body?.fabric??previous?.description??''})
  if(!creating&&!previous)throw error(404,'Modelo não encontrado.')
  const revision=creating?null:req.body.revision
  if(!creating&&(!Number.isSafeInteger(revision)||revision!==previous.revision))throw error(409,'Este modelo mudou. Reabra-o antes de editar.')
