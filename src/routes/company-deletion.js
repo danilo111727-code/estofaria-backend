@@ -186,6 +186,7 @@ async function verifyV2Clean(client, companyId){
     'app_model_images_v2',
     'app_model_personalization_v2',
     'app_models_v2',
+    'app_ready_models_v1',
     'app_quote_model_items_v2',
     'app_quote_models_v2',
     'app_quotes_v2',
@@ -235,6 +236,10 @@ async function deletePgData(companyId, company, actor){
       [companyId]
     )
     imageKeys = imageResult.rows.map(row => text(row.object_key)).filter(Boolean)
+    const readyImages = await client.query('SELECT images FROM app_ready_models_v1 WHERE company_id=$1', [companyId])
+    for(const row of readyImages.rows) for(const image of Object.values(row.images || {})) if(image.object_key) imageKeys.push(image.object_key)
+    const readyModels = await client.query('DELETE FROM app_ready_models_v1 WHERE company_id=$1', [companyId])
+    v2Counts.ready_models = readyModels.rowCount || 0
 
     const revenueAdjustments = await revenueAdjustmentsDb.deleteForCompany(client,companyId)
     const personalizationModels = await client.query('DELETE FROM app_model_personalization_v2 WHERE company_id = $1', [companyId])
@@ -392,5 +397,6 @@ module.exports = router
 module.exports.deleteCompanyCompletely = deleteCompanyCompletely
 module.exports.cleanLegacyStore = cleanLegacyStore
 module.exports.assertLegacyClean = assertLegacyClean
+
 
 
