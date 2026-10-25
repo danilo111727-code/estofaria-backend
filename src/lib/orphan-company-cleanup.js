@@ -3,6 +3,7 @@
 const crypto = require('crypto')
 
 const COMPANY_TABLES = [
+  'app_ready_models_v1',
   'app_trash_v1',
   'app_trash_object_cleanup_v1',
   'app_quote_model_items_v2',
@@ -95,7 +96,7 @@ function assertOrphanTarget(store, companyId) {
 async function readCompanyRows(client, companyId) {
   const rows = {}
   for (const table of COMPANY_TABLES) {
-    if(table.startsWith('app_trash_') && !(await client.query('SELECT to_regclass($1) AS name',[table])).rows[0]?.name)continue
+    if((table.startsWith('app_trash_') || table==='app_ready_models_v1') && !(await client.query('SELECT to_regclass($1) AS name',[table])).rows[0]?.name)continue
     const result = await client.query(
       `SELECT to_jsonb(t) AS row FROM ${table} t WHERE company_id = $1`,
       [companyId]
@@ -108,7 +109,7 @@ async function readCompanyRows(client, companyId) {
 async function deleteCompanyRows(client, companyId) {
   const counts = {}
   for (const table of COMPANY_TABLES) {
-    if(table.startsWith('app_trash_') && !(await client.query('SELECT to_regclass($1) AS name',[table])).rows[0]?.name)continue
+    if((table.startsWith('app_trash_') || table==='app_ready_models_v1') && !(await client.query('SELECT to_regclass($1) AS name',[table])).rows[0]?.name)continue
     const result = await client.query(`DELETE FROM ${table} WHERE company_id = $1`, [companyId])
     if (result.rowCount) counts[table] = result.rowCount
   }
@@ -117,7 +118,7 @@ async function deleteCompanyRows(client, companyId) {
 
 async function assertPgClean(client, companyId) {
   for (const table of COMPANY_TABLES) {
-    if(table.startsWith('app_trash_') && !(await client.query('SELECT to_regclass($1) AS name',[table])).rows[0]?.name)continue
+    if((table.startsWith('app_trash_') || table==='app_ready_models_v1') && !(await client.query('SELECT to_regclass($1) AS name',[table])).rows[0]?.name)continue
     const result = await client.query(
       `SELECT COUNT(*)::int AS total FROM ${table} WHERE company_id = $1`,
       [companyId]

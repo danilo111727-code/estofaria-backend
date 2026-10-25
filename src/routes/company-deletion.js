@@ -182,6 +182,7 @@ async function cancelStripeSubscription(company){
 
 async function verifyV2Clean(client, companyId){
   const tables = [
+    'app_ready_models_v1',
     'app_model_materials_v2',
     'app_model_images_v2',
     'app_model_personalization_v2',
@@ -235,6 +236,15 @@ async function deletePgData(companyId, company, actor){
       [companyId]
     )
     imageKeys = imageResult.rows.map(row => text(row.object_key)).filter(Boolean)
+
+    const readyModels = await client.query('DELETE FROM app_ready_models_v1 WHERE company_id = $1 RETURNING images', [companyId])
+    for(const row of readyModels.rows){
+      for(const image of Object.values(row.images || {})){
+        const key = text(typeof image === 'string' ? image : image?.object_key)
+        if(key) imageKeys.push(key)
+      }
+    }
+    v2Counts.ready_models = readyModels.rowCount || 0
 
     const revenueAdjustments = await revenueAdjustmentsDb.deleteForCompany(client,companyId)
     const personalizationModels = await client.query('DELETE FROM app_model_personalization_v2 WHERE company_id = $1', [companyId])

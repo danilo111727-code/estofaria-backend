@@ -4,12 +4,13 @@ const {test}=require('node:test')
 const assert=require('node:assert/strict')
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm')
 const {PGlite}=require('@electric-sql/pglite')
-const tables=['app_model_materials_v2','app_model_images_v2','app_model_personalization_v2','app_models_v2','app_quote_model_items_v2','app_quote_models_v2','app_quotes_v2','app_personalization_catalog_v2','app_agenda_orders_v2','app_agenda_blocos_v2','app_agenda_configs_v2','app_agenda_audit_v2','app_financial_entries_v2','app_financial_audit_v2','app_audit_logs_v2']
+const tables=['app_ready_models_v1','app_model_materials_v2','app_model_images_v2','app_model_personalization_v2','app_models_v2','app_quote_model_items_v2','app_quote_models_v2','app_quotes_v2','app_personalization_catalog_v2','app_agenda_orders_v2','app_agenda_blocos_v2','app_agenda_configs_v2','app_agenda_audit_v2','app_financial_entries_v2','app_financial_audit_v2','app_audit_logs_v2']
 function load(file,requires){const context={module:{exports:{}},console,Date,process:{env:{}},require:name=>name in requires?requires[name]:require(name)};vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../src',file),'utf8'),context);return context.module.exports}
 async function scenario(fail){
  const pg=new PGlite()
  try{
   await pg.exec('CREATE TABLE kv_store(key text PRIMARY KEY,value jsonb,updated_at timestamptz);'+tables.map(table=>'CREATE TABLE '+table+'(id text PRIMARY KEY,company_id text,object_key text);').join(''))
+  await pg.exec("ALTER TABLE app_ready_models_v1 ADD COLUMN images jsonb DEFAULT '{}'::jsonb")
   for(const [child,parent,column] of [
    ['app_model_materials_v2','app_models_v2','model_id'],
    ['app_model_images_v2','app_models_v2','model_id'],
@@ -45,10 +46,13 @@ async function scenario(fail){
    assert.equal((await adjustments.list('remove')).size,1)
    assert.equal((await pg.query("SELECT id FROM app_quotes_v2 WHERE company_id='remove'")).rows.length,1)
    assert.equal(snapshot.companies.length,2)
+   assert.equal((await pg.query("SELECT id FROM app_ready_models_v1 WHERE company_id='remove'")).rows.length,1)
    assert.equal((await pg.query("SELECT count(*)::int n FROM app_trash_v1 WHERE company_id='remove'")).rows[0].n,1)
   }else{
    const result=await route.deleteCompanyCompletely('remove',{id:'master'})
    assert.equal(result.v2_deleted.revenue_adjustments,1)
+   assert.equal(result.v2_deleted.ready_models,1)
+   assert.equal((await pg.query("SELECT id FROM app_ready_models_v1 WHERE company_id='remove'")).rows.length,0)
    assert.equal((await pg.query("SELECT count(*)::int n FROM app_trash_v1 WHERE company_id='remove'")).rows[0].n,0)
    assert.equal((await adjustments.list('remove')).size,0)
    assert.equal(snapshot.companies.length,1)
