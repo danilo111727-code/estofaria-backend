@@ -14,12 +14,12 @@ Pronta entrega e suas rotas, fotos, estoque, busca, total, lixeira e limpeza por
 
 ## Verificação
 
-56 testes passaram: 6 de cadastro/medidas, 10 do frontend de pronta entrega e 40 de backend (pronta entrega, lixeira, limpeza por empresa e inicialização). Um teste adicional de importação de recuperação ficou ignorado por depender de arquivo externo. Sintaxe JavaScript e diff verificados. A compilação pública completa e a revisão visual desta combinação isolada ainda devem ser executadas antes de autorizar a publicação.
+56 testes passaram: 6 de cadastro/medidas, 10 do frontend de pronta entrega e 40 de backend (pronta entrega, lixeira, limpeza por empresa e inicialização). Um teste adicional de importação de recuperação ficou ignorado por depender de arquivo externo. Sintaxe JavaScript e diff verificados. O build público completo e a revisão visual em oito larguras foram concluídos; veja PACOTE02_CHECKUP.md. Os 16 testes de frontend também passaram sobre o bundle público gerado.
 
 ## Publicação, somente após nova autorização
 
 1. Versão de retorno confirmada no Render; reconferir o deploy ao vivo imediatamente antes de publicar.
-2. Concluir build público e revisão da candidata em desktop e celular.
+2. Build público e revisão da candidata concluídos; obter autorização explícita para publicação. A proposta posterior de cadastro por botão/página separada permanece fora desta candidata.
 3. Publicar o backend com o novo schema aditivo e validar saúde/rotas.
 4. Publicar o frontend e verificar as funções do pacote 02.
 
