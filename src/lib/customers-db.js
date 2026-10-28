@@ -96,15 +96,6 @@ const PURCHASES=`FROM app_customer_quotes_v1 l JOIN app_quotes_v2 q ON q.company
     AND lower(COALESCE(q.payload_meta->>'agenda_status','')) NOT IN ('cancelado','cancelada','canceled','cancelled')
     AND lower(COALESCE(q.payload_meta->>'delivery_status','')) NOT IN ('cancelado','cancelada','canceled','cancelled')
     AND ($2::date IS NULL OR l.purchase_date >= $2::date) AND ($3::date IS NULL OR l.purchase_date <= $3::date)`
-async function ranking(companyId,query={}){
-  const [start,end]=period(query)
-  const rows=await pool().query(`WITH purchases AS(SELECT l.customer_id,q.total_cents,l.purchase_date ${PURCHASES})
-    SELECT c.id,c.name,c.active,COUNT(*)::int AS purchases,SUM(p.total_cents)::text AS total_cents,
-      to_char(MAX(p.purchase_date),'YYYY-MM-DD') AS last_purchase
-    FROM purchases p JOIN app_customers_v1 c ON c.company_id=$1 AND c.id=p.customer_id
-    GROUP BY c.id,c.name,c.active ORDER BY SUM(p.total_cents) DESC,COUNT(*) DESC,c.name,c.id LIMIT 50`,[companyId,start,end])
-  return {items:rows.rows,start,end}
-}
 async function purchases(companyId,id,query={}){
   const customer=await get(companyId,id);if(!customer)throw fail('Cliente não encontrado.',404)
   const [start,end]=period(query),offset=Math.max(0,Math.min(Number(query.offset)||0,1000000))
@@ -113,4 +104,4 @@ async function purchases(companyId,id,query={}){
     ${PURCHASES} AND l.customer_id=$4 ORDER BY l.purchase_date DESC,q.created_at DESC,q.id LIMIT 50 OFFSET $5`,[companyId,start,end,id,offset])
   return {customer:{id:customer.id,name:customer.name,active:customer.active},items:rows.rows,total:rows.rows[0]?.result_count || 0,offset,start,end}
 }
-module.exports={ensureSchema,list,get,save,remove,syncQuote,ranking,purchases,normalize,dateOnly,period}
+module.exports={ensureSchema,list,get,save,remove,syncQuote,purchases,normalize,dateOnly,period}

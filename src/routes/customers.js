@@ -11,8 +11,7 @@ function permission(...allowed){return (req,res,next)=>{
   next()
 }}
 const handle=fn=>async(req,res,next)=>{try{await fn(req,res)}catch(error){if(error.status)return res.status(error.status).json({message:error.message,duplicates:error.duplicates});next(error)}}
-router.get('/customers/ranking',permission('painel'),handle(async(req,res)=>res.json(await db.ranking(req.customerCompany,req.query))))
-router.get('/customers/:id/purchases',permission('painel','configuracao'),handle(async(req,res)=>res.json(await db.purchases(req.customerCompany,req.params.id,req.query))))
+router.get('/customers/:id/purchases',permission('configuracao'),handle(async(req,res)=>res.json(await db.purchases(req.customerCompany,req.params.id,req.query))))
 router.get('/customers',permission('vendedor','configuracao'),handle(async(req,res)=>res.json(await db.list(req.customerCompany,req.query))))
 router.post('/customers',permission('vendedor','configuracao'),handle(async(req,res)=>res.status(201).json(await db.save(req.customerCompany,null,req.body))))
 router.patch('/customers/:id',permission('configuracao'),handle(async(req,res)=>res.json(await db.save(req.customerCompany,req.params.id,req.body))))
