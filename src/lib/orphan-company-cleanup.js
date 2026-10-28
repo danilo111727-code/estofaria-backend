@@ -8,6 +8,8 @@ const COMPANY_TABLES = [
   'app_quote_model_items_v2',
   'app_quote_models_v2',
   'app_quotes_v2',
+  'app_customer_quotes_v1',
+  'app_customers_v1',
   'app_model_images_v2',
   'app_model_materials_v2',
   'app_model_personalization_v2',

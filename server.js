@@ -131,6 +131,7 @@ app.get('/api/health', (_req, res) => {
     store_file: storeLib.STORE_FILE,
     models_v2: process.env.DATABASE_URL ? 'available' : 'postgres_required',
     quotes_v2: process.env.DATABASE_URL ? 'available' : 'postgres_required',
+    customers_v1: process.env.DATABASE_URL ? 'available' : 'postgres_required',
     personalization_v2: process.env.DATABASE_URL ? 'available' : 'postgres_required',
     agenda_v2: process.env.DATABASE_URL ? 'available' : 'postgres_required',
     financial_v2: process.env.DATABASE_URL ? 'available' : 'postgres_required',
@@ -158,6 +159,7 @@ app.use('/api/v2/models', normalizeModelsV2BaseMeters)
 app.use('/api/v2', modelsV2ImageUploadRoutes)
 app.use('/api/v2', modelsV2Routes)
 app.use('/api/v2', readyModelsRoutes)
+app.use('/api/v2', require('./src/routes/customers'))
 app.use('/api/v2', quotesV2Routes)
 app.use('/api/v2', personalizationV2Routes)
 app.use('/api', materialRepricingAfterSave)
@@ -183,6 +185,7 @@ app.use((err, _req, res, _next) => {
   if (err && err.message === 'origin_not_allowed') {
     return res.status(403).json({ error: 'forbidden_origin', message: 'Origem não permitida por CORS.' })
   }
+  if(err?.status && err.status >= 400 && err.status < 500) return res.status(err.status).json({message:err.message})
   console.error(err)
   res.status(500).json({ error: 'internal_error', message: 'Erro interno do servidor.' })
 })
@@ -212,6 +215,7 @@ async function start() {
     await modelsV2Db.ensureSchema()
     await readyModelsDb.ensureSchema()
     await quotesV2Db.ensureSchema()
+    await require('./src/lib/customers-db').ensureSchema()
     await personalizationV2Db.ensureSchema()
     await ensurePersonalizationIsolation()
     await agendaV2Db.ensureSchema()
