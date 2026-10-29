@@ -51,7 +51,10 @@ async function archiveQuote(client,companyId,id,agendaRef){
   const models=(await client.query('SELECT * FROM app_quote_models_v2 WHERE company_id=$1 AND quote_id=$2 ORDER BY sort_order',[companyId,id])).rows
   const model_items=(await client.query('SELECT i.* FROM app_quote_model_items_v2 i JOIN app_quote_models_v2 m ON m.id=i.quote_model_id AND m.company_id=i.company_id WHERE m.company_id=$1 AND m.quote_id=$2',[companyId,id])).rows
   const agenda=(await client.query(`SELECT * FROM app_agenda_orders_v2 WHERE company_id=$1 AND ${agendaRef}=ANY($2::text[]) FOR UPDATE`,[companyId,[quote.id,quote.legacy_id].filter(Boolean)])).rows
-  await archive(client,companyId,'vendas','quote',id,{quote,models,model_items,agenda})
+  const customer_link=quote.payload_meta?.customer_id
+    ? (await client.query('SELECT * FROM app_customer_quotes_v1 WHERE company_id=$1 AND quote_id=$2',[companyId,id])).rows[0] || null
+    : null
+  await archive(client,companyId,'vendas','quote',id,{quote,models,model_items,agenda,...(customer_link?{customer_link}:{})})
 }
 async function deleteRow(db,table,companyId,id,category,kind){
   return transaction(db,async client=>{
@@ -152,6 +155,9 @@ async function restore(client,companyId,id,{restoreLegacy}={}){
   if(item.kind==='quote'){
     if(text(s.quote?.company_id)!==text(companyId))throw new Error('invalid_restore_scope')
     await insertRow(client,'app_quotes_v2',s.quote,companyId)
+    if(s.customer_link && text(s.customer_link.company_id)===text(companyId)){
+      await client.query('INSERT INTO app_customer_quotes_v1(company_id,quote_id,customer_id,purchase_date) VALUES($1,$2,$3,$4)',[companyId,s.quote.id,s.customer_link.customer_id,s.customer_link.purchase_date])
+    }
     for(const m of s.models||[])await insertRow(client,'app_quote_models_v2',m,companyId)
     for(const m of s.model_items||[])await insertRow(client,'app_quote_model_items_v2',m,companyId,{omitId:true})
     for(const raw of s.agenda||[]){

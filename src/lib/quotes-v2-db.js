@@ -314,6 +314,7 @@ async function createQuote(companyId,input={},options={}){
       VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,TRUE,$8,$9)
     `,[id,companyId,legacyId,cliente,status,totalCents,JSON.stringify(payloadMeta),createdAt,updatedAt])
     await replaceModels(client,companyId,id,models)
+    await require('./customers-db').syncQuote(client,companyId,id,status,payloadMeta)
     await client.query('COMMIT')
   }catch(err){
     await client.query('ROLLBACK').catch(()=>{})
@@ -328,7 +329,9 @@ async function updateQuote(companyId,id,patch={}){
   const cliente=patch.cliente !== undefined ? (text(patch.cliente).trim() || existing.cliente) : existing.cliente
   const status=patch.status !== undefined ? (text(patch.status).trim().toLowerCase() || existing.status) : existing.status
   const totalCents=patch.total_cents !== undefined ? Math.max(0,Math.round(number(patch.total_cents,existing.total_cents))) : existing.total_cents
-  const payload = patch.payload !== undefined ? patch.payload : existing.payload
+  const payload = patch.payload !== undefined ? {...patch.payload,
+    ...(existing.payload?.customer_id && patch.payload?.customer_id === undefined ? {customer_id:existing.payload.customer_id} : {})
+  } : existing.payload
   const normalized=normalizePayload({payload})
   const pool=getPool()
   const client=await pool.connect()
@@ -339,6 +342,7 @@ async function updateQuote(companyId,id,patch={}){
       WHERE company_id=$1 AND id=$2 AND active=TRUE
     `,[companyId,id,cliente,status,totalCents,JSON.stringify(normalized.payloadMeta)])
     if(patch.payload !== undefined) await replaceModels(client,companyId,id,normalized.models)
+    await require('./customers-db').syncQuote(client,companyId,id,status,normalized.payloadMeta,existing.status)
     await client.query('COMMIT')
   }catch(err){
     await client.query('ROLLBACK').catch(()=>{})

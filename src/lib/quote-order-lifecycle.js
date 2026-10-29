@@ -128,6 +128,7 @@ async function markReadyDelivery(pool,companyId,id,input={}){
     }
     await client.query(`UPDATE app_quotes_v2 SET status='pedido',total_cents=$3,payload_meta=$4::jsonb,updated_at=NOW()
       WHERE company_id=$1 AND id=$2`,[companyId,id,totalCents,JSON.stringify(payload)])
+    await require('./customers-db').syncQuote(client,companyId,id,'pedido',payload,quote.status)
     await client.query('COMMIT')
     return {id,agendaId}
   }catch(error){

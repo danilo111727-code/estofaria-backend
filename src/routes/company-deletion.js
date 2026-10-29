@@ -189,6 +189,8 @@ async function verifyV2Clean(client, companyId){
     'app_quote_model_items_v2',
     'app_quote_models_v2',
     'app_quotes_v2',
+    'app_customers_v1',
+    'app_customer_quotes_v1',
     'app_personalization_catalog_v2',
     'app_agenda_orders_v2',
     'app_agenda_blocos_v2',
@@ -240,6 +242,7 @@ async function deletePgData(companyId, company, actor){
     const personalizationModels = await client.query('DELETE FROM app_model_personalization_v2 WHERE company_id = $1', [companyId])
     const personalizationCatalog = await client.query('DELETE FROM app_personalization_catalog_v2 WHERE company_id = $1', [companyId])
     const quotes = await client.query('DELETE FROM app_quotes_v2 WHERE company_id = $1', [companyId])
+    await client.query('DELETE FROM app_customers_v1 WHERE company_id=$1',[companyId])
     const models = await client.query('DELETE FROM app_models_v2 WHERE company_id = $1', [companyId])
     const agendaOrders = await client.query('DELETE FROM app_agenda_orders_v2 WHERE company_id = $1', [companyId])
     const agendaBlocks = await client.query('DELETE FROM app_agenda_blocos_v2 WHERE company_id = $1', [companyId])
