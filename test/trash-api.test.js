@@ -13,7 +13,7 @@ before(async()=>{
  atomic=load('lib/atomic-store.js',{'./trash-db':trash,'./audit-v2-db':{isEnabled:()=>false}});atomic.install(store)
  const policies={hasMasterAccess:u=>u?.role==='master',hasPermission:(u,p)=>u?.role==='master'||u?.permissions?.includes(p)}
  const auth={requireAuth:(req,res,next)=>{try{req.user=JSON.parse(req.headers['x-user']||'null')}catch(e){};if(!req.user)return res.status(401).json({message:'Não autenticado'});next()}}
- const router=load('routes/trash.js',{'express':express,'../middleware/auth':auth,'../lib/policies':policies,'../lib/store':store,'../lib/atomic-store':atomic,'../lib/trash-db':trash})
+ const router=load('routes/trash.js',{'express':express,'../middleware/auth':auth,'../lib/policies':policies,'../lib/store':store,'../lib/atomic-store':atomic,'../lib/trash-db':trash,'../lib/orphan-agenda-db':{}})
  const app=express();app.use(express.json());app.use(atomic.middleware);app.use('/api',router)
  app.delete('/api/materials/:id',(req,res)=>{const s=store.readStore();s.materials=s.materials.filter(r=>!(r.company_id==='a'&&r.id===Number(req.params.id)));store.writeStore(s);res.json({ok:true})})
  app.use((e,req,res,next)=>res.status(500).json({message:e.message}));server=app.listen(0);base='http://127.0.0.1:'+server.address().port
