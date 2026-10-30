@@ -5,6 +5,7 @@ const {hasMasterAccess,hasPermission}=require('../lib/policies')
 const store=require('../lib/store')
 const atomic=require('../lib/atomic-store')
 const trash=require('../lib/trash-db')
+const orphans=require('../lib/orphan-agenda-db')
 const router=express.Router()
 const permissions={materiais:'material',catalogo:'precificacao',adicionais:'itens-personalizacao',vendas:'vendedor',agenda:'agenda',financeiro:'financeiro'}
 router.use('/trash',requireAuth,(req,res,next)=>{
@@ -27,7 +28,24 @@ router.get('/trash',async(req,res,next)=>{
     const offset=Math.max(0,Math.min(100000,Math.floor(Number(req.query.offset)||0)))
     const data=await trash.list(req.trashCompanyId,category,offset)
     if(data.categories)data.categories=data.categories.filter(c=>can(req,c.key))
-    res.json({...data,can_import_recovery:hasMasterAccess(req.user)})
+    res.json({...data,can_import_recovery:hasMasterAccess(req.user),can_manage_orphans:can(req,'agenda')})
+  }catch(e){fail(e,res,next)}
+})
+router.get('/trash/orphans',async(req,res,next)=>{
+  try{
+    if(!can(req,'agenda'))return res.status(403).json({message:'Sem acesso aos registros da Agenda.'})
+    const offset=Math.max(0,Math.min(100000,Math.floor(Number(req.query.offset)||0)))
+    res.json(await orphans.list(req.trashCompanyId,offset))
+  }catch(e){fail(e,res,next)}
+})
+router.post('/trash/orphans/:id/exclude',async(req,res,next)=>{
+  try{
+    if(!can(req,'agenda'))return res.status(403).json({message:'Sem permissão para excluir registros da Agenda.'})
+    const client=atomic.getTransactionClient();if(!client)throw Object.assign(new Error('A exclusão requer armazenamento transacional.'),{status:503})
+    const result=await orphans.exclude(client,req.trashCompanyId,req.params.id,req.body?.expected_updated_at)
+    const current=store.readStore()
+    store.upsertAudit(current,{company_id:req.trashCompanyId,action:'trash.orphan.exclude',message:'Pendência órfã removida do Painel: '+req.params.id,actor_name:req.user.name||req.user.email,actor_email:req.user.email,source:'trash-api'})
+    store.writeStore(current);atomic.markTransactionDirty();res.json(result)
   }catch(e){fail(e,res,next)}
 })
 router.post('/trash/:id/restore',async(req,res,next)=>{

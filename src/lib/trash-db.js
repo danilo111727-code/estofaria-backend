@@ -184,6 +184,10 @@ async function restore(client,companyId,id,{restoreLegacy}={}){
   else if(item.kind==='agenda'){
     const row=await prepareAgenda(client,companyId,s.row)
     await insertRow(client,'app_agenda_orders_v2',row,companyId);await syncQuoteAgenda(client,companyId,row)
+  }else if(item.kind==='agenda-orphan'){
+    const current=(await client.query('SELECT * FROM app_agenda_orders_v2 WHERE company_id=$1 AND id=$2 FOR UPDATE',[companyId,item.record_key])).rows[0]
+    if(!current?.payload?.orphan_removed_at || new Date(current.updated_at).getTime()!==new Date(s.expected_updated_at).getTime())throw conflict('Este registro foi alterado depois da exclusão. A recuperação não sobrescreverá alterações recentes.')
+    await client.query("UPDATE app_agenda_orders_v2 SET payload=payload-'orphan_removed_at',updated_at=NOW() WHERE company_id=$1 AND id=$2",[companyId,item.record_key])
   }else if(item.kind==='agenda-unschedule'){
     const current=(await client.query('SELECT * FROM app_agenda_orders_v2 WHERE company_id=$1 AND id=$2 FOR UPDATE',[companyId,item.record_key])).rows[0]
     if(!current || new Date(current.updated_at).getTime()!==new Date(s.expected_updated_at).getTime())throw conflict('Este agendamento foi alterado depois da exclusão. Confira o pedido na Agenda antes de recuperar.')
@@ -234,7 +238,7 @@ async function purgeExpired(db=pool()){
   await transaction(db,async client=>{
     const rows=(await client.query('SELECT * FROM app_trash_v1 WHERE expires_at<=NOW() ORDER BY expires_at LIMIT 100 FOR UPDATE SKIP LOCKED')).rows
     for(const item of rows){
-      for(const key of objectKeys(item.snapshot))if(key.startsWith('companies/'+item.company_id+'/')&&!key.includes('..')){
+      for(const key of item.kind==='agenda-orphan'?[]:objectKeys(item.snapshot))if(key.startsWith('companies/'+item.company_id+'/')&&!key.includes('..')){
         await client.query('INSERT INTO app_trash_object_cleanup_v1(company_id,object_key) VALUES($1,$2) ON CONFLICT DO NOTHING',[item.company_id,key])
       }
       if(item.kind==='quote' && (await client.query("SELECT to_regclass('app_revenue_adjustments_v1') AS name")).rows[0]?.name){

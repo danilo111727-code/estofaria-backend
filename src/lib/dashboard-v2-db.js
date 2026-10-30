@@ -100,8 +100,8 @@ function reconcileHistoricalAgenda(manualOrders, vendorOrders){
     : order)
 }
 
-async function listDashboardOrders(companyId){
-  const pool = getPool()
+async function listDashboardOrders(companyId, client = getPool()){
+  const pool = client
   const [agendaResult, quoteResult] = await Promise.all([
     pool.query(`
       SELECT company_id,id,bloco_id,cliente,descricao,prod_date,ent_date,status,tecido,qtd,
@@ -244,6 +244,7 @@ function uniqueFiltered(orders,predicate,includeFinancial = false){
 
 function activeOrders(orders){
   return uniqueFiltered(orders,order => {
+    if(order?.orphan_removed_at) return false
     // A contagem usa a mesma conciliação financeira e inclui pedidos sem agenda.
     if(order?.exclude_from_revenue === true) return false
     const status = normalize(order?.status)
@@ -418,6 +419,7 @@ async function getSummary(companyId){
 async function listReminderOrders(companyId){
   const orders = await listDashboardOrders(companyId)
   return orders.filter(order =>
+    !order.orphan_removed_at &&
     !isIgnoredPlaceholder(order) &&
     !(order.historical_reconciliation_quote_id && orders.some(candidate => candidate.financial_order === true && candidate.agenda_reminder === true && text(candidate.source_quote_id) === text(order.historical_reconciliation_quote_id))) &&
     !['entregue','cancelado','indisponivel','disponivel'].includes(normalize(order.status)) &&
