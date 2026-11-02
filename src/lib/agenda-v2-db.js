@@ -426,6 +426,16 @@ async function createOrder(companyId,input={}){
   }finally{ client.release() }
 }
 
+function agendaModelReference(model){
+  const m = model && typeof model === 'object' ? model : {}
+  const key = text(m.quote_image_key || m.quoteImageKey)
+  return {
+    id:text(m.id),
+    name:text(m.name),
+    ...(key ? {quote_image_key:key} : {})
+  }
+}
+
 async function updateOrder(companyId,id,patch={}){
   const pool = getPool()
   const client = await pool.connect()
@@ -451,7 +461,7 @@ async function updateOrder(companyId,id,patch={}){
     if(patch.saldo_restante !== undefined) next.saldo_restante = num(patch.saldo_restante,num(existing.saldo_restante,0))
     if(patch.modelos !== undefined){
       next.modelos = Array.isArray(patch.modelos)
-        ? patch.modelos.map(m=>({id:String(m?.id || ''),name:String(m?.name || '')})) : []
+        ? patch.modelos.map(agendaModelReference) : []
     }
     if(patch.bloco_id !== undefined) next.bloco_id = text(patch.bloco_id) || undefined
     if(patch.source_quote_id !== undefined) next.source_quote_id = text(patch.source_quote_id) || null
@@ -762,7 +772,7 @@ async function createBlockOrder(companyId,blockId,input={}){
       tecido_comprado:false,
       valor:num(input.valor,0),
       modelos:Array.isArray(input.modelos)
-        ? input.modelos.map(m=>({id:String(m?.id || ''),name:String(m?.name || '')})) : [],
+        ? input.modelos.map(agendaModelReference) : [],
       status:'pendente'
     }
     const row = await insertOrder(client,companyId,orderInput)
