@@ -2,7 +2,7 @@ name: Stripe package - offline validation
 on:
   push:
     branches: [correcao-stripe-segura-teste-20261105]
-    paths: [src/routes/billing.js, src/middleware/auth.js, src/lib/atomic-store.js, test/billing-stripe.test.js, test/server-smoke.test.js, .github/workflows/stripe-package-tests.yml]
+    paths: [src/routes/billing.js, src/middleware/auth.js, src/lib/atomic-store.js, test/**, .github/workflows/stripe-package-tests.yml]
   workflow_dispatch:
 permissions:
   contents: read
@@ -17,4 +17,5 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts --no-audit --no-fund
-      - run: node --test test/billing-stripe.test.js test/server-smoke.test.js test/dashboard-v2-reconciliation.test.js test/quote-order-lifecycle.test.js test/quote-agenda-reconciliation.test.js
+      - run: npm install --prefix "$RUNNER_TEMP/stripe-qa" --no-audit --no-fund @electric-sql/pglite@0.3.14
+      - run: NODE_PATH="$RUNNER_TEMP/stripe-qa/node_modules" STRIPE_SQL_TEST=1 node --test test/billing-stripe.test.js test/server-smoke.test.js test/frontend-stripe-current-contract.test.js test/dashboard-v2-reconciliation.test.js test/quote-order-lifecycle.test.js test/quote-agenda-reconciliation.test.js

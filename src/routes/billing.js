@@ -515,7 +515,7 @@ router.post('/webhooks/stripe', express.raw({ type:'application/json' }), async 
       'invoice.paid','invoice.payment_failed','customer.subscription.created',
       'customer.subscription.updated','customer.subscription.deleted']
     const initialStore = readStore()
-    if(initialStore.webhookEvents.some(e => e.id === event.id)){
+    if(initialStore.webhookEvents.some(e => e.id === event.id && e.status !== 'ignored')){
       // A previous attempt may have updated the in-memory snapshot but failed
       // its database commit. Flush before acknowledging a duplicate delivery.
       await flushStore('webhook_persistence_error')
@@ -534,7 +534,7 @@ router.post('/webhooks/stripe', express.raw({ type:'application/json' }), async 
         if(!target || (target.stripe_subscription_id && target.stripe_subscription_id !== subId)) return
         if(companyId && companyId !== String(target.id)) return
         if(customerId && target.stripe_customer_id && customerId !== target.stripe_customer_id) return
-        if(latest.webhookEvents.some(e => e.id === event.id)) return
+        if(latest.webhookEvents.some(e => e.id === event.id && e.status !== 'ignored')) return
         // Retrieve live state: Stripe does not guarantee event delivery order.
         const subscription = await stripe.subscriptions.retrieve(subId)
         const actualCustomer = stripeId(subscription.customer)
@@ -562,6 +562,10 @@ router.post('/webhooks/stripe', express.raw({ type:'application/json' }), async 
           actor_name:'stripe-webhook',actor_role:'system',reason:event.type,
           request_json:event,after_json:JSON.parse(JSON.stringify(target)),source:'billing-webhook'})
         // Record success together with the mutation. API failures remain retryable.
+        // A legacy event may have arrived before its company linkage was
+        // verified. Reprocess ignored deliveries after linkage, then dedupe
+        // normally; never keep both ignored and processed copies of one ID.
+        latest.webhookEvents = latest.webhookEvents.filter(e => e.id !== event.id)
         latest.webhookEvents.push({id:event.id,type:event.type,created_at:nowIso(),payload:event,status:'processed'})
         writeStore(latest)
         await flushStore('webhook_persistence_error')

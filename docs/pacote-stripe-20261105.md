@@ -53,3 +53,35 @@ Uma tentativa ampliada incluiu testes financeiros que exigem FINANCIAL_TEST_DATA
 ## Retorno
 Não há migração de schema neste pacote. Antes do deploy, registrar o commit efetivamente implantado e manter esse commit disponível para redeploy. A base de código observada é e9fbd49; não se presume que seja o SHA em execução no Render.
 Reverter somente os arquivos deste pacote, preservando mudanças posteriores. Não reativar/recriar cobranças ao reverter; estado financeiro deve ser conciliado separadamente.
+
+## Validação ampliada de 05/11 — resultado e impedimentos
+
+### Implantação e banco (somente leitura)
+- Produção Render: deploy live dep-dblqcigae00c73df1vo0, commit e9fbd49b2dd89dff2fcc8b961b081c0f98446c52, uma instância, auto deploy desativado.
+- Teste Render: deploy live dep-dblkgjrbc2fs739rsdd0, commit c168c79ae55fa0d872e3ce386550c18471bed14b, uma instância, branch dev com auto deploy.
+- O pacote deste PR não está implantado em nenhum dos dois.
+- Banco Render consultado: estofaria_db/public, kv_store main com 59 empresas e zero webhookEvents. Nenhuma empresa tem stripe_customer_id ou stripe_subscription_id preenchido.
+- Três candidatos encontrados por e-mail (não prova suficiente para vinculação automática). Cortesia no app termina em 16, 16 e 23/11; os trials correspondentes no Stripe terminam em 12, 15 e 22/11. Um candidato está em Gestão no app e Individual no Stripe.
+- Ferramentas Render disponíveis não oferecem leitura de variáveis de ambiente. Não foi comprovado se dev e produção usam bancos/schemas, JWT e credenciais Stripe separados. Nenhuma alteração de configuração foi realizada.
+
+### Sandbox desta rodada
+- Conta acct_1UQGxJ07cTYAJL7T, livemode=false, sem endpoint webhook configurado.
+- Preços mensais BRL 89,90 / 149 / 399 conferidos.
+- Clock QA clock_1UYQEL07cTYAJL7Tvhwira8h e cliente fictício cus_VZZO168UPZO7Ru.
+- Assinatura sub_1UYQFT07cTYAJL7ThzMwtBzz criada trialing com diferença exata de 60 dias entre trial_start e trial_end.
+- Trial encerrado explicitamente com trial_end=now: passou a active e gerou fatura in_1UYQFy07cTYAJL7Ts539xl17 paid, amount_paid=8990. Isso NÃO é avanço do Test Clock nem validação de renovação futura.
+- Cancelamento no fim do período manteve active; cancelamento imediato retornou canceled.
+- Recusa: cliente fictício separado cus_VZZQPk8WC2GpMG com cartão de teste que falha na cobrança. Assinatura sub_1UYQHn07cTYAJL7TH32HebHx ficou incomplete; fatura in_1UYQHn07cTYAJL7TqPJ0BvM1 open, amount_paid=0, amount_due=8990, attempt_count=1. Assinatura de teste encerrada após a coleta.
+- Nenhuma dessas operações foi feita na conta live. Snapshot reduzido dos objetos fictícios em test/fixtures/stripe-sandbox-20261105.json; sem segredo, cartão ou URL de fatura.
+
+### Validação local ampliada
+- Sete testes executam trechos do frontend atual, identificados por SHA dos blobs no snapshot novo; mensagens de erro, roteamento de ambiente, plano e retorno pendente passaram.
+- Quatro testes adicionais usam PGlite 0.3.14, motor PostgreSQL embarcado descartável. Executam SQL de kv_store, COMMIT e ROLLBACK, incluindo falha de commit, repetição e concorrência de checkout. Não equivalem ao serviço PostgreSQL do Render nem ao teste oficial.
+- Os objetos reais de Sandbox são reproduzidos localmente. A assinatura dos eventos locais usa segredo fictício; a API de consulta Stripe é simulada nessa reprodução. Não houve entrega de webhook público.
+- Regressão nova reproduzida: evento legado marcado ignored não podia ser reprocessado após correção explícita do vínculo. O teste falhou antes do ajuste. Corrigido para repetir eventos ignored, substituir seu registro após sucesso e continuar bloqueando duplicidade de eventos processados.
+- Renovação futura permanece coberta por simulação local, não por avanço de clock nesta rodada.
+
+### Parecer
+Pacote apto à revisão e aos testes de integração, ainda NÃO aprovado para produção.
+Faltam isolamento verificável e implantação autorizada no teste oficial; entrega real de webhook Sandbox e fluxo no navegador; decisão e reconciliação dos legados (incluindo plano e cortesia); captura do retorno e planejamento da reativação live.
+A ausência de vínculo foi reproduzida com dados fictícios: receber HTTP 200 não é prova de liberar acesso, pois o evento pode ter sido ignorado.

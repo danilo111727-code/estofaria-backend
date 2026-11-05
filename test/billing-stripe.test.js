@@ -28,6 +28,7 @@ async function fixture(t, extra = {}, options = {}) {
     webhooks:{constructEvent:(...args)=>Stripe.webhooks.constructEvent(...args)}
   }
   if(options.atomic){
+    let sqlDb
     store.updateStore = mutator => { const next = mutator(store.readStore()); if(next) store.writeStore(next) }
     store._pg = {pool:{connect:async()=>{
       let staged
@@ -43,11 +44,25 @@ async function fixture(t, extra = {}, options = {}) {
         return {rows:[]}
       },release(){}}
     }},flushNow:async()=>{}}
+    if(options.sql){
+      const {PGlite}=require('@electric-sql/pglite')
+      sqlDb=new PGlite()
+      await sqlDb.exec("CREATE TABLE kv_store(key text PRIMARY KEY,value jsonb NOT NULL,updated_at timestamptz DEFAULT now())")
+      await sqlDb.query("INSERT INTO kv_store(key,value) VALUES('main',$1::jsonb)",[JSON.stringify(state)])
+      store._pg.pool.connect=async()=>({
+        query:async(sql,params=[])=>{
+          if(sql==='COMMIT' && options.failCommitOnce){options.failCommitOnce=false;throw Error('simulated DB commit failure')}
+          const result=await sqlDb.query(sql,params)
+          if(sql==='COMMIT' || sql==='ROLLBACK')state=(await sqlDb.query("SELECT value FROM kv_store WHERE key='main'")).rows[0].value
+          return result
+        },release(){}
+      })
+    }
     delete require.cache[require.resolve('../src/lib/atomic-store')]
     const atomic = require('../src/lib/atomic-store')
     atomic.install(store)
     store.atomicMiddleware = atomic.middleware
-    t.after(async()=>store._pg.flushNow())
+    t.after(async()=>{await store._pg.flushNow();if(sqlDb)await sqlDb.close()})
   }
   const storePath = require.resolve('../src/lib/store')
   const oldStore = require.cache[storePath]
@@ -301,4 +316,62 @@ test('paid recovery and renewal update access and the next due date', async t =>
   f.subscriptions.set('sub_current',sub({current_period_end:end+30*86400}))
   await f.webhook('invoice.paid',{id:'in_renewal',subscription:'sub_current',customer:'cus_fixture',amount_paid:8990})
   assert.equal(f.company.next_charge_at,new Date((end+30*86400)*1000).toISOString())
+})
+
+if(process.env.STRIPE_SQL_TEST === '1'){
+  const sample=require('./fixtures/stripe-sandbox-20261105.json')
+  test('SQL engine persists access and positive receipt replayed from current Sandbox objects', async t=>{
+    const f=await fixture(t,{stripe_customer_id:sample.paid.customer,stripe_subscription_id:sample.paid.id,billing_mode:'stripe',access_status:'blocked',courtesy_until:''},{atomic:true,sql:true})
+    f.subscriptions.set(sample.paid.id,sample.paid)
+    const invoice=sample.invoices.find(i=>i.amount_paid>0)
+    assert.equal((await f.webhook('invoice.paid',invoice,'evt_sql_paid')).status,200)
+    assert.equal(f.persisted.companies[0].access_status,'active')
+    assert.ok(f.persisted.companies[0].last_payment_at)
+    assert.equal(f.persisted.webhookEvents.length,1)
+  })
+  test('SQL engine rolls back failed commit and persists exactly one event on retry', async t=>{
+    const f=await fixture(t,{stripe_customer_id:sample.paid.customer,stripe_subscription_id:sample.paid.id,billing_mode:'stripe',access_status:'blocked',courtesy_until:''},{atomic:true,sql:true,failCommitOnce:true})
+    f.subscriptions.set(sample.paid.id,sample.paid)
+    const invoice=sample.invoices.find(i=>i.amount_paid>0)
+    assert.equal((await f.webhook('invoice.paid',invoice,'evt_sql_retry')).status,503)
+    assert.equal(f.persisted.companies[0].access_status,'blocked')
+    assert.equal(f.persisted.webhookEvents.length,0)
+    assert.equal((await f.webhook('invoice.paid',invoice,'evt_sql_retry')).status,200)
+    assert.equal(f.persisted.companies[0].access_status,'active')
+    assert.equal(f.persisted.webhookEvents.length,1)
+  })
+  test('SQL engine persists one customer and session after eight concurrent checkouts', async t=>{
+    const f=await fixture(t,{}, {atomic:true,sql:true})
+    const responses=await Promise.all(Array.from({length:8},()=>f.checkout()))
+    assert.ok(responses.every(r=>r.status===200))
+    assert.equal(new Set(responses.map(r=>r.body.session_id)).size,1)
+    assert.equal(f.calls.sessions.length,1)
+    assert.equal(f.persisted.companies[0].stripe_checkout_session_id,responses[0].body.session_id)
+  })
+  test('SQL engine: legacy payment without company or subscription link is ignored, never guessed from email',async t=>{
+    const f=await fixture(t,{billing_mode:'stripe',access_status:'pending_payment',courtesy_until:''},{atomic:true,sql:true})
+    const invoice=sample.invoices.find(i=>i.amount_paid>0)
+    assert.equal((await f.webhook('invoice.paid',invoice,'evt_sql_legacy')).status,200)
+    assert.equal(f.persisted.companies[0].access_status,'pending_payment')
+    assert.equal(f.persisted.companies[0].stripe_subscription_id,undefined)
+    assert.equal(f.persisted.webhookEvents[0].status,'ignored')
+  })
+}
+
+test('previously ignored legacy event can reconcile after explicit verified linkage',async t=>{
+  const f=await fixture(t,{billing_mode:'stripe',access_status:'pending_payment',courtesy_until:''})
+  f.subscriptions.set('sub_current',sub({metadata:{}}))
+  const invoice={id:'in_legacy_replay',object:'invoice',subscription:'sub_current',customer:'cus_fixture',amount_paid:8990}
+  assert.equal((await f.webhook('invoice.paid',invoice,'evt_legacy_replay')).status,200)
+  assert.equal(f.company.access_status,'pending_payment')
+  assert.equal(f.state.webhookEvents[0].status,'ignored')
+  // Simulate a separately verified admin reconciliation. Never guess by email.
+  f.company.stripe_subscription_id='sub_current'
+  f.company.stripe_customer_id='cus_fixture'
+  assert.equal((await f.webhook('invoice.paid',invoice,'evt_legacy_replay')).status,200)
+  assert.equal(f.company.access_status,'active')
+  assert.equal(f.state.webhookEvents.length,1)
+  assert.equal(f.state.webhookEvents[0].status,'processed')
+  assert.equal(f.state.auditLogs.filter(a=>a.action==='billing_webhook').length,1)
+  assert.equal((await f.webhook('invoice.paid',invoice,'evt_legacy_replay')).body.duplicate,true)
 })

@@ -1,0 +1,175 @@
+{
+  "observed_at": "2026-11-05",
+  "sandbox_account": "acct_1UQGxJ07cTYAJL7T",
+  "note": "Live Stripe Sandbox objects captured through MCP. Trial ended with trial_end=now; clock was NOT advanced. Local replay signs its own fixture webhook and mocks Stripe retrieval; not a public-endpoint delivery.",
+  "trial": {
+    "id": "sub_1UYQFT07cTYAJL7ThzMwtBzz",
+    "object": "subscription",
+    "customer": "cus_VZZO168UPZO7Ru",
+    "status": "trialing",
+    "metadata": {
+      "company_id": "co_test",
+      "qa_package": "20261105"
+    },
+    "trial_start": 1793876400,
+    "trial_end": 1799060400,
+    "items": {
+      "data": [
+        {
+          "current_period_end": 1799060400,
+          "current_period_start": 1793876400,
+          "price": {
+            "id": "price_1UQGxq07cTYAJL7Tu1MBQzph",
+            "unit_amount": 8990,
+            "currency": "brl"
+          }
+        }
+      ]
+    },
+    "cancel_at_period_end": false
+  },
+  "paid": {
+    "id": "sub_1UYQFT07cTYAJL7ThzMwtBzz",
+    "object": "subscription",
+    "customer": "cus_VZZO168UPZO7Ru",
+    "status": "active",
+    "metadata": {
+      "company_id": "co_test",
+      "qa_package": "20261105"
+    },
+    "trial_start": 1793876400,
+    "trial_end": 1793876400,
+    "items": {
+      "data": [
+        {
+          "current_period_end": 1796468400,
+          "current_period_start": 1793876400,
+          "price": {
+            "id": "price_1UQGxq07cTYAJL7Tu1MBQzph",
+            "unit_amount": 8990,
+            "currency": "brl"
+          }
+        }
+      ]
+    },
+    "cancel_at_period_end": false
+  },
+  "scheduledCancellation": {
+    "id": "sub_1UYQFT07cTYAJL7ThzMwtBzz",
+    "object": "subscription",
+    "customer": "cus_VZZO168UPZO7Ru",
+    "status": "active",
+    "metadata": {
+      "company_id": "co_test",
+      "qa_package": "20261105"
+    },
+    "trial_start": 1793876400,
+    "trial_end": 1793876400,
+    "items": {
+      "data": [
+        {
+          "current_period_end": 1796468400,
+          "current_period_start": 1793876400,
+          "price": {
+            "id": "price_1UQGxq07cTYAJL7Tu1MBQzph",
+            "unit_amount": 8990,
+            "currency": "brl"
+          }
+        }
+      ]
+    },
+    "cancel_at_period_end": true
+  },
+  "canceled": {
+    "id": "sub_1UYQFT07cTYAJL7ThzMwtBzz",
+    "object": "subscription",
+    "customer": "cus_VZZO168UPZO7Ru",
+    "status": "canceled",
+    "metadata": {
+      "company_id": "co_test",
+      "qa_package": "20261105"
+    },
+    "trial_start": 1793876400,
+    "trial_end": 1793876400,
+    "items": {
+      "data": [
+        {
+          "current_period_end": 1796468400,
+          "current_period_start": 1793876400,
+          "price": {
+            "id": "price_1UQGxq07cTYAJL7Tu1MBQzph",
+            "unit_amount": 8990,
+            "currency": "brl"
+          }
+        }
+      ]
+    },
+    "cancel_at_period_end": false
+  },
+  "declined": {
+    "id": "sub_1UYQHn07cTYAJL7TH32HebHx",
+    "object": "subscription",
+    "customer": "cus_VZZQPk8WC2GpMG",
+    "status": "incomplete",
+    "metadata": {
+      "company_id": "co_decline_test",
+      "qa_package": "20261105"
+    },
+    "trial_start": null,
+    "trial_end": null,
+    "items": {
+      "data": [
+        {
+          "current_period_end": 1796475659,
+          "current_period_start": 1793883659,
+          "price": {
+            "id": "price_1UQGxq07cTYAJL7Tu1MBQzph",
+            "unit_amount": 8990,
+            "currency": "brl"
+          }
+        }
+      ]
+    },
+    "cancel_at_period_end": false
+  },
+  "invoices": [
+    {
+      "id": "in_1UYQFy07cTYAJL7Ts539xl17",
+      "object": "invoice",
+      "customer": "cus_VZZO168UPZO7Ru",
+      "parent": {
+        "quote_details": null,
+        "subscription_details": {
+          "metadata": {
+            "company_id": "co_test",
+            "qa_package": "20261105"
+          },
+          "subscription": "sub_1UYQFT07cTYAJL7ThzMwtBzz"
+        },
+        "type": "subscription_details"
+      },
+      "amount_paid": 8990,
+      "amount_due": 8990,
+      "status": "paid"
+    },
+    {
+      "id": "in_1UYQFT07cTYAJL7TwyyYZgjz",
+      "object": "invoice",
+      "customer": "cus_VZZO168UPZO7Ru",
+      "parent": {
+        "quote_details": null,
+        "subscription_details": {
+          "metadata": {
+            "company_id": "co_test",
+            "qa_package": "20261105"
+          },
+          "subscription": "sub_1UYQFT07cTYAJL7ThzMwtBzz"
+        },
+        "type": "subscription_details"
+      },
+      "amount_paid": 0,
+      "amount_due": 0,
+      "status": "paid"
+    }
+  ]
+}
