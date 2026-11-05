@@ -1,0 +1,20 @@
+name: Stripe package - offline validation
+on:
+  push:
+    branches: [correcao-stripe-segura-teste-20261105]
+    paths: [src/routes/billing.js, src/middleware/auth.js, src/lib/atomic-store.js, test/billing-stripe.test.js, test/server-smoke.test.js, .github/workflows/stripe-package-tests.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node --test test/billing-stripe.test.js test/server-smoke.test.js test/dashboard-v2-reconciliation.test.js test/quote-order-lifecycle.test.js test/quote-agenda-reconciliation.test.js
