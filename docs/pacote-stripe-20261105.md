@@ -85,3 +85,21 @@ Reverter somente os arquivos deste pacote, preservando mudanças posteriores. N�
 Pacote apto à revisão e aos testes de integração, ainda NÃO aprovado para produção.
 Faltam isolamento verificável e implantação autorizada no teste oficial; entrega real de webhook Sandbox e fluxo no navegador; decisão e reconciliação dos legados (incluindo plano e cortesia); captura do retorno e planejamento da reativação live.
 A ausência de vínculo foi reproduzida com dados fictícios: receber HTTP 200 não é prova de liberar acesso, pois o evento pode ter sido ignorado.
+
+## Etapa 1 — conferência autenticada do Render concluída
+
+Esta seção substitui a pendência anterior de leitura das configurações, sem alterar valores ou disparar deploy.
+
+- Acesso autenticado confirmado ao workspace autorizado My Workspace.
+- Teste: estofaria-backend-dev, branch dev, último deploy c168c79.
+- Produção: estofaria-backend, branch main, último deploy e9fbd49.
+- Bancos diferentes: teste aponta para Neon, produção para PostgreSQL do Render. Hosts e nomes dos bancos diferem. Nenhuma credencial de banco é registrada aqui.
+- JWT_SECRET configurado nos dois serviços e diferente, comparado sem registrar o conteúdo.
+- Chave Stripe do teste classificada como test; não foi copiada nem usada fora do painel.
+- REQUIRE_STRIPE_TEST_MODE configurado como true no teste; a presença da variável não comprova, sozinha, que o código a aplica. Os arquivos server.js e src/routes/billing.js do commit dev consultado não referenciam essa variável.
+- FRONTEND_URL do teste aponta para estofaria-frontend.pages.dev.
+- Preços configurados em dev: Gestão price_1UAnx90mQhGFYwYVNFWRGBBA e Individual price_1UEJuD0mQhGFYwYVTMgWQdiW. Consulta de cada ID na conta Estofaria Digital Teste acct_1UQGxJ07cTYAJL7T retornou No such price. Portanto, não pertencem ao Sandbox usado nesta validação. Isso não prova que sejam inválidos em outra conta de teste; a conta correspondente à chave do serviço ainda precisa ser alinhada ao Sandbox escolhido.
+- Não há STRIPE_PRICE_ID_EMPRESARIAL nem STRIPE_WEBHOOK_SECRET entre as variáveis do serviço dev. Não há grupos de ambiente vinculados nem arquivos secretos listados.
+- A conferência usou leitura pontual e resultados derivados; valores secretos não foram salvos no repositório.
+- A etapa 1 de acesso e conferência terminou. Para a etapa 2, falta alinhar chave/conta, preços dos três planos e webhook do ambiente de teste, antes da implantação e teste integrado.
+- Nenhum valor foi editado, nenhum deploy foi feito e nenhuma assinatura live foi alterada.
