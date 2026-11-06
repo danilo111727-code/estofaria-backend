@@ -138,3 +138,13 @@ Evidência mais forte que e-mail: metadata.company_id das Checkout Sessions conc
 - Não usar Checkout pago de valor zero como prova de recebimento: o estado trialing continua sem primeira cobrança positiva.
 - O conector de banco disponível é somente leitura. Não houve tentativa de contornar essa restrição com SQL de escrita.
 - O pacote do PR #17 continua sem aprovação para produção; a etapa 2 ainda depende da chave/conta Sandbox e teste integrado.
+
+## Decisão comercial do titular — 06/11/2026
+
+- Luis / Ara Estofados deve permanecer no plano Gestão. Não alterar seu cadastro para Individual nem elevar uma assinatura antiga automaticamente.
+- Preservar integralmente as cortesias do aplicativo: Luis e Isaac até 16/11/2026; Auricelio até 23/11/2026.
+- O titular informou que cancelou a assinatura e definiu nova contratação/cadastro de pagamento após a cortesia. Não transferir nem reativar uma assinatura antiga como se houvesse autorização de renovação automática.
+- Nova consulta Stripe contradiz o cancelamento informado: as três assinaturas sub_1UFGXv0mQhGFYwYVBJr4KIbu, sub_1UGNwS0mQhGFYwYV5Dcqenrs e sub_1UIwE20mQhGFYwYVUfElwnwS continuam trialing, cancel_at_period_end=false e cancel_at=null.
+- Nenhum cancelamento real foi executado nesta rodada. A execução de cancelamento das três assinaturas antigas deve ter seu escopo confirmado com o titular, dado que ele as considera já canceladas.
+- Não estender trials Stripe para resolver as divergências: a cortesia que deve ser preservada é a do aplicativo, seguida de nova contratação expressa.
+- A recontratação deve preservar a conta e os dados da empresa; não instruir exclusão/recriação de conta da aplicação. Verificar o checkout para reutilizar com segurança cliente verificado sem reativar assinatura antiga nem bloquear indevidamente nova contratação por vínculo cancelado.
