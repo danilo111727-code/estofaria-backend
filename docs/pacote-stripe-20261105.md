@@ -103,3 +103,16 @@ Esta seção substitui a pendência anterior de leitura das configurações, sem
 - A conferência usou leitura pontual e resultados derivados; valores secretos não foram salvos no repositório.
 - A etapa 1 de acesso e conferência terminou. Para a etapa 2, falta alinhar chave/conta, preços dos três planos e webhook do ambiente de teste, antes da implantação e teste integrado.
 - Nenhum valor foi editado, nenhum deploy foi feito e nenhuma assinatura live foi alterada.
+
+## Etapa 2 — configuração parcial pelo plugin Stripe (06/11/2026)
+
+- Conexão confirmada com Estofaria Digital Teste (acct_1UQGxJ07cTYAJL7T, livemode=false).
+- Os três preços mensais ativos foram conferidos no Sandbox.
+- Endpoint de teste criado: we_1UYdY507cTYAJL7T6Y2pw9Aq, URL https://estofaria-backend-dev.onrender.com/api/subscription/webhooks/stripe, API version 2025-02-24.acacia, sete eventos previstos no pacote.
+- Endpoint colocado e conferido como disabled, aguardando alinhamento da chave e implantação do pacote.
+- Render estofaria-backend-dev atualizado por merge de variáveis: preços Individual/Gestão/Empresarial do Sandbox e STRIPE_WEBHOOK_SECRET deste endpoint. Segredo transmitido diretamente entre as ferramentas, sem registro neste documento.
+- A atualização das variáveis pelo conector disparou automaticamente atualização do serviço de teste, deploy dep-dbmkafom7kps73bk1aj0, ainda com commit c168c79. Isso não implanta o pacote do PR #17.
+- STRIPE_SECRET_KEY não foi substituída: o plugin não disponibiliza chaves de API; falta concluir login no painel para obter/configurar a chave da conta Sandbox escolhida.
+- Portanto, os preços e o segredo novos NÃO bastam para declarar o teste operacional: a chave/conta pode continuar divergente. Não executar contratação até alinhá-la.
+- Nenhuma configuração ou assinatura de produção foi alterada.
+- Pendem: chave Sandbox, implantação da correção, ativação do endpoint de teste e comprovação do fluxo integrado. Não aprovado para produção.
