@@ -116,3 +116,25 @@ Esta seção substitui a pendência anterior de leitura das configurações, sem
 - Portanto, os preços e o segredo novos NÃO bastam para declarar o teste operacional: a chave/conta pode continuar divergente. Não executar contratação até alinhá-la.
 - Nenhuma configuração ou assinatura de produção foi alterada.
 - Pendem: chave Sandbox, implantação da correção, ativação do endpoint de teste e comprovação do fluxo integrado. Não aprovado para produção.
+
+## Etapa 3 — reconciliação dos legados: identidade verificada (06/11/2026)
+
+Consultas somente leitura na conta Stripe live e no banco PostgreSQL de produção, sem alterações financeiras ou de cadastros.
+
+Evidência mais forte que e-mail: metadata.company_id das Checkout Sessions concluídas que criaram as assinaturas em trial.
+
+| Cadastro atual | Checkout aponta para empresa atual? | Plano do app / Stripe | Cortesia app / Stripe |
+| --- | --- | --- | --- |
+| Messias Confort (Isaac) | Sim, e48283ef-98ec-4e15-9ad8-befba5c4d662 | Individual / Individual R$ 89,90 | 16/11 / 15/11 |
+| Tapeçaria Marques (Auricelio) | Sim, 4f9db2d1-5502-4ce7-b100-5e504d11cfd2 | Individual / Individual R$ 89,90 | 23/11 / 22/11 |
+| Ara Estofados (Luis) | Não: checkout usa 57999957-1006-405f-b6b9-bc5db35c13dc; cadastro atual 68c6ae9f-f8cc-407c-9429-f5175439758d | Gestão R$ 149 / Individual R$ 89,90 | 16/11 / 12/11 |
+
+- Consultas atuais confirmam ausência de stripe_customer_id e stripe_subscription_id nos três cadastros.
+- O ID de empresa do checkout de Luis não está em companies; o usuário ativo desse e-mail aponta para a empresa atual. Isso não demonstra, sozinho, que se pode transferir uma assinatura entre empresas.
+- As três assinaturas permanecem trialing e as sete antigas permanecem canceled. Nenhuma assinatura foi recriada.
+- Para Isaac e Auricelio, estão identificados com evidência direta os vínculos corretos; falta aplicar a reconciliação de forma controlada e auditar.
+- Para Luis, é necessária confirmação do titular do projeto sobre transferência do vínculo antigo para o cadastro atual e sobre o plano que deve prevalecer. Não elevar valor nem reduzir recursos por inferência.
+- Proposta de datas a revisar: preservar os prazos mais longos exibidos pelo aplicativo, evitando antecipação de cobrança. Nenhuma data Stripe foi modificada.
+- Não usar Checkout pago de valor zero como prova de recebimento: o estado trialing continua sem primeira cobrança positiva.
+- O conector de banco disponível é somente leitura. Não houve tentativa de contornar essa restrição com SQL de escrita.
+- O pacote do PR #17 continua sem aprovação para produção; a etapa 2 ainda depende da chave/conta Sandbox e teste integrado.
