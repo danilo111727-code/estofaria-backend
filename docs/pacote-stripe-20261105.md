@@ -148,3 +148,22 @@ Evidência mais forte que e-mail: metadata.company_id das Checkout Sessions conc
 - Nenhum cancelamento real foi executado nesta rodada. A execução de cancelamento das três assinaturas antigas deve ter seu escopo confirmado com o titular, dado que ele as considera já canceladas.
 - Não estender trials Stripe para resolver as divergências: a cortesia que deve ser preservada é a do aplicativo, seguida de nova contratação expressa.
 - A recontratação deve preservar a conta e os dados da empresa; não instruir exclusão/recriação de conta da aplicação. Verificar o checkout para reutilizar com segurança cliente verificado sem reativar assinatura antiga nem bloquear indevidamente nova contratação por vínculo cancelado.
+
+## Cancelamento autorizado das três assinaturas antigas — 06/11/2026
+
+Autorização explícita do titular: cancelar as três para que os clientes assinem novamente após a cortesia.
+
+Executado na conta Stripe live acct_1U0rO70mQhGFYwYV:
+- Luis: sub_1UFGXv0mQhGFYwYVBJr4KIbu -> canceled.
+- Isaac: sub_1UGNwS0mQhGFYwYV5Dcqenrs -> canceled.
+- Auricelio: sub_1UIwE20mQhGFYwYVUfElwnwS -> canceled.
+- Cancelamentos com invoice_now=false e prorate=false; sem solicitar fatura final ou ajuste proporcional.
+- Consulta de confirmação: dez assinaturas no total, todas canceled, paginação completa (has_more=false).
+
+Conferência no banco após os cancelamentos:
+- Ara Estofados: Gestão, courtesy_active/courtesy, até 16/11/2026.
+- Messias Confort: Individual, courtesy_active/courtesy, até 16/11/2026.
+- Tapeçaria Marques: Individual, courtesy_active/courtesy, até 23/11/2026.
+- Nenhuma cortesia, plano ou dado de conta do aplicativo foi alterado nesta operação.
+
+A antiga proposta de vincular as assinaturas em trial deixa de ser aplicável. Não reativar/recriar cobranças automaticamente. A nova contratação deve ser expressa e manter a conta/dados; ainda é necessário validar o fluxo de recontratação diante dos clientes Stripe legados e das restrições customer_link_required/subscription_already_linked.
