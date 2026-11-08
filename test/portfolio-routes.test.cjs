@@ -1,6 +1,6 @@
 'use strict'
 const assert=require('node:assert/strict')
-const {test}=require('node:test')
+const {test,after}=require('node:test')
 const Module=require('node:module')
 const http=require('node:http')
 const express=require('express')
@@ -70,4 +70,4 @@ test('despublicar desativa link e impede visitas públicas',async()=>{
  const gone=await request('GET','/api/v2/public/portfolio/'+record.slug)
  assert.equal(gone.status,404)
 })
-process.on('beforeExit',()=>srv.close())
+after(()=>srv.close())
