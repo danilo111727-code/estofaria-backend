@@ -1,0 +1,23 @@
+name: Validar Portfólio Etapa 2
+
+on:
+  push:
+    branches:
+      - feature/portfolio-etapa2-dev-20261108
+      - dev
+  workflow_dispatch:
+
+jobs:
+  portfolio:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: node --test test/portfolio-routes.test.cjs
+      - run: node --check server.js
+      - run: node --check src/routes/portfolio.js
+      - run: node --check src/lib/portfolio-db.js
