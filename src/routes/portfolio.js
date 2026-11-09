@@ -74,7 +74,7 @@ router.put('/portfolio',respond(async(req,res)=>{
  for(const id of readyIds)if(!await readyDb.get(companyId(req),id))throw error(400,'Um produto à pronta entrega não está disponível.')
  const row=await db.update(companyId(req),{name,description,whatsapp,show_prices:body.show_prices,custom_ids:customIds,ready_ids:readyIds},revision)
  if(!row)throw error(409,'A vitrine foi alterada em outra sessão. Reabra para continuar.')
- res.json(details(row))
+ res.json(await details(row))
 }))
 router.post('/portfolio/cover/upload',respond(async(req,res)=>{
  if(!r2.isConfigured())throw error(503,'Armazenamento de imagens indisponível.')
@@ -107,6 +107,6 @@ router.post('/portfolio/publish',respond(async(req,res)=>{
  if(published&&(!before.name.trim()||!before.whatsapp||!(before.custom_ids.length+before.ready_ids.length)))throw error(400,'Informe nome, WhatsApp e selecione ao menos um produto.')
  const row=await db.publish(companyId(req),published,revision)
  if(!row)throw error(409,'A vitrine foi alterada. Atualize a página.')
- res.json(details(row))
+ res.json(await details(row))
 }))
 module.exports=router
