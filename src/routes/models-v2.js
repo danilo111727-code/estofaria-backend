@@ -11,7 +11,8 @@ const IMAGE_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp
 const MAX_ORIGINAL_BYTES = 5 * 1024 * 1024
 const MAX_THUMB_BYTES = 1024 * 1024
 
-router.use(requireAuth)
+// Restringe autenticação às rotas de modelos; não bloqueia /public/portfolio.
+router.use('/models', requireAuth)
 
 function modelReadAllowed(user) {
   return hasMasterAccess(user) || ['precificacao', 'catalogo', 'vendedor', 'itens-personalizacao'].some(permission => hasPermission(user, permission))
