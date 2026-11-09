@@ -11,10 +11,22 @@ const respond=fn=>async(req,res,next)=>{try{await fn(req,res)}catch(e){if(e.stat
 const companyId=req=>String(req.user?.company_id||'').trim()
 const allowed=req=>hasMasterAccess(req.user)||hasPermission(req.user,'catalogo')||hasPermission(req.user,'precificacao')
 const safeIds=ids=>Array.isArray(ids)?[...new Set(ids.map(x=>String(x)).filter(x=>x.length>0&&x.length<=128))].slice(0,200):[]
+const safeDirectModels=items=>{
+ if(!Array.isArray(items)||items.length>100)throw error(400,'Limite de 100 modelos exclusivos.');
+ return items.map(item=>{
+  const id=String(item.id||'').trim(),name=String(item.name||'').trim(),category=String(item.category||'').trim(),description=String(item.description||'').trim();
+  if(!/^[a-zA-Z0-9_-]{8,80}$/.test(id)||!name||name.length>100||!category||category.length>60||description.length>500)throw error(400,'Dados inválidos do modelo exclusivo.');
+  const images=Array.isArray(item.images)?item.images:[];
+  if(images.length>8||images.some(url=>typeof url!=='string'||url.length>1500||!/^https:\/\//.test(url)))throw error(400,'Fotos inválidas.');
+  const variants=Array.isArray(item.variants)?item.variants:[];
+  if(variants.length>30||variants.some(v=>!Number.isFinite(Number(v.meters))||Number(v.meters)<=0||Number(v.meters)>100||!Number.isSafeInteger(Number(v.price_cents))||Number(v.price_cents)<0||Number(v.price_cents)>1000000000))throw error(400,'Metragens ou valores inválidos.');
+  return {id,name,category,description,images,variants:variants.map(v=>({meters:Number(v.meters),price_cents:Number(v.price_cents)}))};
+ });
+};
 const publicUrl=slug=>'https://estofaria-frontend.pages.dev/vitrine/?loja='+encodeURIComponent(slug)
 const details=row=>({
  slug:row.slug,url:publicUrl(row.slug),name:row.name,description:row.description,whatsapp:row.whatsapp,
- show_prices:row.show_prices,custom_ids:row.custom_ids,ready_ids:row.ready_ids,
+ show_prices:row.show_prices,custom_ids:row.custom_ids,ready_ids:row.ready_ids,direct_models:row.direct_models||[],
  published:row.published,revision:row.revision
 })
 const imageUrl=async images=>{
@@ -45,7 +57,7 @@ router.get('/public/portfolio/:slug',respond(async(req,res)=>{
  }))
  res.setHeader('Cache-Control','no-store')
  res.json({name:row.name,description:row.description,whatsapp:row.whatsapp,
-  show_prices:row.show_prices,custom:custom.filter(Boolean),ready:ready.filter(Boolean)})
+  show_prices:row.show_prices,custom:custom.filter(Boolean),ready:ready.filter(Boolean),direct_models:(row.direct_models||[]).map(m=>({...m,variants:row.show_prices?m.variants:m.variants.map(v=>({meters:v.meters,price_cents:null}))}))})
 }))
 router.use('/portfolio',requireAuth,(req,res,next)=>{
  if(!allowed(req))return res.status(403).json({message:'Sem acesso às configurações do Portfólio.'})
@@ -67,11 +79,11 @@ router.put('/portfolio',respond(async(req,res)=>{
  if(whatsapp&&(!/^\d{10,13}$/.test(whatsapp)))throw error(400,'Informe um WhatsApp válido com DDD.')
  if(typeof body.show_prices!=='boolean')throw error(400,'Preferência de preços inválida.')
  if(!Array.isArray(body.custom_ids)||!Array.isArray(body.ready_ids)||body.custom_ids.length>200||body.ready_ids.length>200)throw error(400,'Seleção de produtos inválida.')
- const customIds=safeIds(body.custom_ids),readyIds=safeIds(body.ready_ids)
+ const customIds=safeIds(body.custom_ids),readyIds=safeIds(body.ready_ids),directModels=safeDirectModels(body.direct_models||[])
  // Impede gravar seleções de outra empresa.
  for(const id of customIds)if(!await modelDb.getModel(companyId(req),id))throw error(400,'Um modelo sob encomenda não está disponível.')
  for(const id of readyIds)if(!await readyDb.get(companyId(req),id))throw error(400,'Um produto à pronta entrega não está disponível.')
- const row=await db.update(companyId(req),{name,description,whatsapp,show_prices:body.show_prices,custom_ids:customIds,ready_ids:readyIds},revision)
+ const row=await db.update(companyId(req),{name,description,whatsapp,show_prices:body.show_prices,custom_ids:customIds,ready_ids:readyIds,direct_models:directModels},revision)
  if(!row)throw error(409,'A vitrine foi alterada em outra sessão. Reabra para continuar.')
  res.json(details(row))
 }))
@@ -80,7 +92,7 @@ router.post('/portfolio/publish',respond(async(req,res)=>{
  if(!Number.isInteger(revision)||revision<1||typeof published!=='boolean')throw error(400,'Solicitação inválida.')
  const before=await db.get(companyId(req))
  if(!before)throw error(404,'Configure sua vitrine antes de publicar.')
- if(published&&(!before.name.trim()||!before.whatsapp||!(before.custom_ids.length+before.ready_ids.length)))throw error(400,'Informe nome, WhatsApp e selecione ao menos um produto.')
+ if(published&&(!before.name.trim()||!before.whatsapp||!(before.custom_ids.length+before.ready_ids.length+(before.direct_models||[]).length)))throw error(400,'Informe nome, WhatsApp e selecione ao menos um produto.')
  const row=await db.publish(companyId(req),published,revision)
  if(!row)throw error(409,'A vitrine foi alterada. Atualize a página.')
  res.json(details(row))
