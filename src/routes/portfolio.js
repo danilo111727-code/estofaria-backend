@@ -78,9 +78,10 @@ router.put('/portfolio',respond(async(req,res)=>{
 }))
 router.post('/portfolio/cover/upload',respond(async(req,res)=>{
  if(!r2.isConfigured())throw error(503,'Armazenamento de imagens indisponível.')
- const type=String(req.headers['content-type']||'').toLowerCase().split(';')[0].trim()
+ const type=String(req.body?.content_type||req.headers['content-type']||'').toLowerCase().split(';')[0].trim()
  if(!['image/jpeg','image/png','image/webp'].includes(type))throw error(415,'Use JPG, PNG ou WebP.')
- const bytes=Buffer.isBuffer(req.body)?req.body:Buffer.alloc(0)
+ const encoded=typeof req.body?.image_base64==='string'?req.body.image_base64:''
+ const bytes=Buffer.isBuffer(req.body)?req.body:encoded&&/^[A-Za-z0-9+/]+={0,2}$/.test(encoded)?Buffer.from(encoded,'base64'):Buffer.alloc(0)
  if(!bytes.length||bytes.length>5*1024*1024)throw error(413,'Foto inválida ou maior que 5 MB.')
  await db.ensure(companyId(req))
  const before=await db.get(companyId(req))
