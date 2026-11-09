@@ -104,7 +104,7 @@ app.use((req, res, next) => {
     }
     return next()
   }
-  if (/^\/api\/v2\/models\/[^/]+\/images\/(?:original|thumb)\/upload$/.test(req.path)) {
+  if (/^\/api\/v2\/models\/[^/]+\/images\/(?:original|thumb)\/upload$/.test(req.path) || req.path === '/api/v2/portfolio/cover/upload') {
     return modelImageBinaryParser(req, res, next)
   }
   return jsonParser(req, res, next)
