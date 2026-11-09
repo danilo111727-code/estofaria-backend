@@ -104,7 +104,7 @@ app.use((req, res, next) => {
     }
     return next()
   }
-  if (/^\/api\/v2\/models\/[^/]+\/images\/(?:original|thumb)\/upload$/.test(req.path) || req.path === '/api/v2/portfolio/cover/upload') {
+  if (/^\/api\/v2\/models\/[^/]+\/images\/(?:original|thumb)\/upload$/.test(req.path) || (req.path === '/api/v2/portfolio/cover/upload' && /^image\/(?:jpeg|png|webp)(?:;|$)/i.test(String(req.headers['content-type'] || '')))) {
     return modelImageBinaryParser(req, res, next)
   }
   return jsonParser(req, res, next)
