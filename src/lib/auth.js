@@ -23,7 +23,7 @@ function resolveJwtSecret(){
 }
 
 const JWT_SECRET = resolveJwtSecret()
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '48h'
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '30d'
 
 function normalizeArray(value){
   if(!value) return []
