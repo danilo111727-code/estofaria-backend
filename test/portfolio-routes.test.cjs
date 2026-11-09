@@ -16,11 +16,12 @@ const modules={
    get:async c=>c==='company-a'?record:null,
    bySlug:async s=>record.published&&s===record.slug?record:null,
    update:async(c,data,revision)=>{if(c!=='company-a'||revision!==record.revision)return null;record={...record,...data,revision:revision+1};return record},
+   setCover:async(c,key)=>{if(c!=='company-a')return null;record={...record,cover_image_key:key,revision:record.revision+1};return record},
    publish:async(c,published,revision)=>{if(c!=='company-a'||revision!==record.revision)return null;record={...record,published,revision:revision+1};return record}
  },
  '../lib/models-v2-db':{getModel:async(c,id)=>c==='company-a'&&id==='m1'?model:null},
  '../lib/ready-models-db':{get:async(c,id)=>c==='company-a'&&id==='r1'?ready:null},
- '../lib/r2-storage':{isConfigured:()=>true,presignGetUrl:async key=>'https://images.example.test/'+key}
+ '../lib/r2-storage':{isConfigured:()=>true,presignGetUrl:async key=>'https://images.example.test/'+key,putObject:async()=>({etag:'ok'}),deleteObject:async()=>({ok:true}),extensionForContentType:()=> 'jpg'}
 }
 Module._load=function(request,parent,isMain){
  if(parent?.filename?.endsWith('/src/routes/portfolio.js')&&modules[request])return modules[request]
@@ -71,3 +72,21 @@ test('despublicar desativa link e impede visitas públicas',async()=>{
  assert.equal(gone.status,404)
 })
 after(()=>srv.close())
+
+test('foto de capa: adiciona, recupera, publica e exclui sem perder identidade',async()=>{
+ const bytes=Buffer.from('fake-image-for-route-test').toString('base64');
+ let result=await request('POST','/api/v2/portfolio/cover/upload',{image_base64:bytes,content_type:'image/jpeg'});
+ assert.equal(result.status,200);
+ assert.match(result.body.cover_image,/^https:\/\/images\.example\.test\//);
+ const name=result.body.name;
+ result=await request('GET','/api/v2/portfolio');
+ assert.equal(result.body.cover_image!==null,true);
+ result=await request('GET','/api/v2/public/portfolio/'+record.slug);
+ assert.equal(result.body.cover_image!==null,true);
+ result=await request('DELETE','/api/v2/portfolio/cover');
+ assert.equal(result.status,200);
+ assert.equal(result.body.cover_image,null);
+ assert.equal(result.body.name,name);
+ result=await request('GET','/api/v2/portfolio');
+ assert.equal(result.body.cover_image,null);
+})
