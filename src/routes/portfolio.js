@@ -12,8 +12,9 @@ const companyId=req=>String(req.user?.company_id||'').trim()
 const allowed=req=>hasMasterAccess(req.user)||hasPermission(req.user,'catalogo')||hasPermission(req.user,'precificacao')
 const safeIds=ids=>Array.isArray(ids)?[...new Set(ids.map(x=>String(x)).filter(x=>x.length>0&&x.length<=128))].slice(0,200):[]
 const publicUrl=slug=>'https://estofaria-frontend.pages.dev/vitrine/?loja='+encodeURIComponent(slug)
-const details=row=>({
- slug:row.slug,url:publicUrl(row.slug),name:row.name,description:row.description,whatsapp:row.whatsapp,
+const coverUrl=async row=>row.cover_image_key&&r2.isConfigured()?await r2.presignGetUrl(row.cover_image_key,3600):null
+const details=async row=>({
+ slug:row.slug,url:publicUrl(row.slug),name:row.name,description:row.description,whatsapp:row.whatsapp,cover_image:await coverUrl(row),
  show_prices:row.show_prices,custom_ids:row.custom_ids,ready_ids:row.ready_ids,
  published:row.published,revision:row.revision
 })
@@ -45,7 +46,7 @@ router.get('/public/portfolio/:slug',respond(async(req,res)=>{
  }))
  res.setHeader('Cache-Control','no-store')
  res.json({name:row.name,description:row.description,whatsapp:row.whatsapp,
-  show_prices:row.show_prices,custom:custom.filter(Boolean),ready:ready.filter(Boolean)})
+  cover_image:await coverUrl(row),show_prices:row.show_prices,custom:custom.filter(Boolean),ready:ready.filter(Boolean)})
 }))
 router.use('/portfolio',requireAuth,(req,res,next)=>{
  if(!allowed(req))return res.status(403).json({message:'Sem acesso às configurações do Portfólio.'})
@@ -55,7 +56,7 @@ router.use('/portfolio',requireAuth,(req,res,next)=>{
 router.get('/portfolio',respond(async(req,res)=>{
  await db.ensure(companyId(req))
  const row=await db.get(companyId(req))
- res.json(details(row))
+ res.json(await details(row))
 }))
 router.put('/portfolio',respond(async(req,res)=>{
  const body=req.body||{}
@@ -74,6 +75,28 @@ router.put('/portfolio',respond(async(req,res)=>{
  const row=await db.update(companyId(req),{name,description,whatsapp,show_prices:body.show_prices,custom_ids:customIds,ready_ids:readyIds},revision)
  if(!row)throw error(409,'A vitrine foi alterada em outra sessão. Reabra para continuar.')
  res.json(details(row))
+}))
+router.post('/portfolio/cover/upload',respond(async(req,res)=>{
+ if(!r2.isConfigured())throw error(503,'Armazenamento de imagens indisponível.')
+ const type=String(req.headers['content-type']||'').toLowerCase().split(';')[0].trim()
+ if(!['image/jpeg','image/png','image/webp'].includes(type))throw error(415,'Use JPG, PNG ou WebP.')
+ const bytes=Buffer.isBuffer(req.body)?req.body:Buffer.alloc(0)
+ if(!bytes.length||bytes.length>5*1024*1024)throw error(413,'Foto inválida ou maior que 5 MB.')
+ await db.ensure(companyId(req))
+ const before=await db.get(companyId(req))
+ const key='companies/'+companyId(req)+'/portfolio/cover-'+require('crypto').randomBytes(12).toString('hex')+'.'+r2.extensionForContentType(type)
+ await r2.putObject(key,bytes,type)
+ let row
+ try{row=await db.setCover(companyId(req),key)}catch(e){await r2.deleteObject(key).catch(()=>{});throw e}
+ if(before.cover_image_key)await r2.deleteObject(before.cover_image_key).catch(()=>{})
+ res.json(await details(row))
+}))
+router.delete('/portfolio/cover',respond(async(req,res)=>{
+ await db.ensure(companyId(req))
+ const before=await db.get(companyId(req))
+ const row=await db.setCover(companyId(req),'')
+ if(before.cover_image_key)await r2.deleteObject(before.cover_image_key).catch(()=>{})
+ res.json(await details(row))
 }))
 router.post('/portfolio/publish',respond(async(req,res)=>{
  const revision=req.body?.revision,published=req.body?.published
