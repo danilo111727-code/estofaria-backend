@@ -66,7 +66,7 @@ function stripForeignCompanySelectors(req, user){
 
 function requireAuth(req, res, next){
   const token = getBearerToken(req)
-  if(!token) return res.status(401).json({ error:'unauthorized', message:'Token ausente.' })
+  if(!token) return res.status(401).json({ error:'unauthorized', message:'Sua sessão expirou. Clique em Sair e faça login novamente.' })
 
   let payload
   try {
