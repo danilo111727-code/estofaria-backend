@@ -16,7 +16,10 @@ async function ensureSchema(){
    "revision INTEGER NOT NULL DEFAULT 1,"+
    "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"+
    "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())")
+ await ensureCoverColumn()
 }
+async function ensureCoverColumn(){await pool().query("ALTER TABLE app_portfolio_v1 ADD COLUMN IF NOT EXISTS cover_image_key TEXT NOT NULL DEFAULT ''")}
+async function setCover(companyId,key){const r=await pool().query("UPDATE app_portfolio_v1 SET cover_image_key=$2,revision=revision+1,updated_at=NOW() WHERE company_id=$1 RETURNING *",[companyId,key]);return r.rows[0]||null}
 async function ensure(companyId){
  const response=await pool().query("INSERT INTO app_portfolio_v1(company_id,slug) VALUES($1,$2) ON CONFLICT (company_id) DO UPDATE SET company_id=EXCLUDED.company_id RETURNING *",[companyId,slug()])
  return response.rows[0]
@@ -37,4 +40,4 @@ async function publish(companyId,published,revision){
   "WHERE company_id=$1 AND revision=$3 RETURNING *",[companyId,published,revision])
  return result.rows[0]||null
 }
-module.exports={ensureSchema,ensure,get,bySlug,update,publish}
+module.exports={ensureSchema,ensure,get,bySlug,update,publish,setCover}
