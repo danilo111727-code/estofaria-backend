@@ -12,7 +12,10 @@ const companyId=req=>String(req.user?.company_id||'').trim()
 const allowed=req=>hasMasterAccess(req.user)||hasPermission(req.user,'catalogo')||hasPermission(req.user,'precificacao')
 const safeIds=ids=>Array.isArray(ids)?[...new Set(ids.map(x=>String(x)).filter(x=>x.length>0&&x.length<=128))].slice(0,200):[]
 const publicUrl=slug=>'https://estofaria-frontend.pages.dev/vitrine/?loja='+encodeURIComponent(slug)
-const coverUrl=async row=>row.cover_image_key&&r2.isConfigured()?await r2.presignGetUrl(row.cover_image_key,3600):null
+const coverUrl=async row=>{
+ if(!row.cover_image_key||!r2.isConfigured())return null
+ try{return await r2.presignGetUrl(row.cover_image_key,3600)}catch(e){console.warn('[portfolio-public] capa indisponível:',e.message);return null}
+}
 const details=async row=>({
  slug:row.slug,url:publicUrl(row.slug),name:row.name,description:row.description,whatsapp:row.whatsapp,cover_image:await coverUrl(row),
  show_prices:row.show_prices,custom_ids:row.custom_ids,ready_ids:row.ready_ids,
@@ -20,7 +23,8 @@ const details=async row=>({
 })
 const imageUrl=async images=>{
  const key=images?.thumb?.object_key||images?.original?.object_key
- return key&&r2.isConfigured()?await r2.presignGetUrl(key,900):null
+ if(!key||!r2.isConfigured())return null
+ try{return await r2.presignGetUrl(key,900)}catch(e){console.warn('[portfolio-public] imagem indisponível:',e.message);return null}
 }
 router.get('/public/portfolio/:slug',respond(async(req,res)=>{
  const slug=String(req.params.slug||'')
