@@ -17,6 +17,7 @@ async function ensureSchema(){
    "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"+
    "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())")
  await ensureCoverColumn()
+ await pool().query("ALTER TABLE app_portfolio_v1 ADD COLUMN IF NOT EXISTS direct_models JSONB NOT NULL DEFAULT '[]'::jsonb")
  await pool().query("ALTER TABLE app_portfolio_v1 ADD COLUMN IF NOT EXISTS fabric_albums JSONB NOT NULL DEFAULT '[]'::jsonb")
 }
 async function ensureCoverColumn(){await pool().query("ALTER TABLE app_portfolio_v1 ADD COLUMN IF NOT EXISTS cover_image_key TEXT NOT NULL DEFAULT ''")}
@@ -29,10 +30,10 @@ async function get(companyId){return(await pool().query('SELECT * FROM app_portf
 async function bySlug(publicSlug){return(await pool().query('SELECT * FROM app_portfolio_v1 WHERE slug=$1 AND published=TRUE',[publicSlug])).rows[0]||null}
 async function update(companyId,details,revision){
  const result=await pool().query("UPDATE app_portfolio_v1 SET "+
-  "name=$2,description=$3,whatsapp=$4,show_prices=$5,custom_ids=$6::jsonb,ready_ids=$7::jsonb,fabric_albums=$8::jsonb,revision=revision+1,updated_at=NOW() "+
-  "WHERE company_id=$1 AND revision=$9 RETURNING *",[
+  "name=$2,description=$3,whatsapp=$4,show_prices=$5,custom_ids=$6::jsonb,ready_ids=$7::jsonb,fabric_albums=$8::jsonb,direct_models=$9::jsonb,revision=revision+1,updated_at=NOW() "+
+  "WHERE company_id=$1 AND revision=$10 RETURNING *",[
    companyId,details.name,details.description,details.whatsapp,details.show_prices,
-   JSON.stringify(details.custom_ids),JSON.stringify(details.ready_ids),JSON.stringify(details.fabric_albums),revision
+   JSON.stringify(details.custom_ids),JSON.stringify(details.ready_ids),JSON.stringify(details.fabric_albums),JSON.stringify(details.direct_models),revision
   ])
  return result.rows[0]||null
 }
