@@ -18,7 +18,7 @@ const coverUrl=async row=>{
 }
 const details=async row=>({
  slug:row.slug,url:publicUrl(row.slug),name:row.name,description:row.description,whatsapp:row.whatsapp,cover_image:await coverUrl(row),
- show_prices:row.show_prices,custom_ids:row.custom_ids,ready_ids:row.ready_ids,
+ show_prices:row.show_prices,custom_ids:row.custom_ids,ready_ids:row.ready_ids,fabric_albums:row.fabric_albums||[],
  published:row.published,revision:row.revision
 })
 const imageUrl=async images=>{
@@ -50,7 +50,7 @@ router.get('/public/portfolio/:slug',respond(async(req,res)=>{
  }))
  res.setHeader('Cache-Control','no-store')
  res.json({name:row.name,description:row.description,whatsapp:row.whatsapp,
-  cover_image:await coverUrl(row),show_prices:row.show_prices,custom:custom.filter(Boolean),ready:ready.filter(Boolean)})
+  cover_image:await coverUrl(row),show_prices:row.show_prices,custom:custom.filter(Boolean),ready:ready.filter(Boolean),fabric_albums:(Array.isArray(row.fabric_albums)?row.fabric_albums:[]).filter(a=>a.visible!==false).map(a=>({id:a.id,name:a.name,fabrics:(a.fabrics||[]).filter(t=>t.visible!==false).map(t=>({id:t.id,name:t.name,image_url:t.image_url}))}))})
 }))
 router.use('/portfolio',requireAuth,(req,res,next)=>{
  if(!allowed(req))return res.status(403).json({message:'Sem acesso às configurações do Portfólio.'})
@@ -73,10 +73,15 @@ router.put('/portfolio',respond(async(req,res)=>{
  if(typeof body.show_prices!=='boolean')throw error(400,'Preferência de preços inválida.')
  if(!Array.isArray(body.custom_ids)||!Array.isArray(body.ready_ids)||body.custom_ids.length>200||body.ready_ids.length>200)throw error(400,'Seleção de produtos inválida.')
  const customIds=safeIds(body.custom_ids),readyIds=safeIds(body.ready_ids)
+ const albums=body.fabric_albums===undefined?null:body.fabric_albums
+ if(albums!==null&&(!Array.isArray(albums)||albums.length>50))throw error(400,'Álbuns de tecidos inválidos.')
+ const safeAlbums=albums===null?null:albums.map(a=>({id:String(a?.id||''),name:String(a?.name||'').trim(),visible:a?.visible!==false,fabrics:Array.isArray(a?.fabrics)?a.fabrics.map(t=>({id:String(t?.id||''),name:String(t?.name||'').trim(),image_url:String(t?.image_url||''),visible:t?.visible!==false})):[]}))
+ if(safeAlbums&&safeAlbums.some(a=>!/^[-_a-zA-Z0-9]{1,100}$/.test(a.id)||!a.name||a.name.length>100||a.fabrics.length>100||a.fabrics.some(t=>!/^[-_a-zA-Z0-9]{1,100}$/.test(t.id)||!t.name||t.name.length>100||!/^https:\/\/|^data:image\/(jpeg|png|webp);base64,/.test(t.image_url)||t.image_url.length>250000))))throw error(400,'Confira nomes e imagens dos álbuns.')
  // Impede gravar seleções de outra empresa.
  for(const id of customIds)if(!await modelDb.getModel(companyId(req),id))throw error(400,'Um modelo sob encomenda não está disponível.')
  for(const id of readyIds)if(!await readyDb.get(companyId(req),id))throw error(400,'Um produto à pronta entrega não está disponível.')
- const row=await db.update(companyId(req),{name,description,whatsapp,show_prices:body.show_prices,custom_ids:customIds,ready_ids:readyIds},revision)
+ const current=await db.get(companyId(req))
+ const row=await db.update(companyId(req),{name,description,whatsapp,show_prices:body.show_prices,custom_ids:customIds,ready_ids:readyIds,fabric_albums:safeAlbums===null?(current?.fabric_albums||[]):safeAlbums},revision)
  if(!row)throw error(409,'A vitrine foi alterada em outra sessão. Reabra para continuar.')
  res.json(await details(row))
 }))
