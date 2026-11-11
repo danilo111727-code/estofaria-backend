@@ -1,5 +1,6 @@
 'use strict'
 const trash = require('./trash-db')
+const receivables = require('./order-receivables')
 
 const {randomUUID} = require('crypto')
 const {reconcileCompanyAgendaInTransaction} = require('./quote-agenda-reconciliation')
@@ -33,7 +34,15 @@ async function deleteQuoteWithAgenda(pool,companyId,id,reconciliationHelpers=req
       await client.query('ROLLBACK')
       return false
     }
-    await trash.archiveQuote(client,companyId,id,AGENDA_QUOTE_REF)
+    const linkedAgenda = await client.query(`SELECT id FROM app_agenda_orders_v2
+      WHERE company_id=$1 AND ${AGENDA_QUOTE_REF}=ANY($2::text[]) FOR UPDATE`,[companyId,refs(found.rows[0])])
+    const pending = await receivables.lockPending(client,companyId,refs(found.rows[0]),linkedAgenda.rows.map(row=>row.id))
+    const receivedIds = await receivables.markReceivedDeleted(client,companyId,id,refs(found.rows[0]),linkedAgenda.rows.map(row=>row.id))
+    await trash.archiveQuote(client,companyId,id,AGENDA_QUOTE_REF,pending,receivedIds)
+    if(pending.length){
+      await client.query(`DELETE FROM app_financial_entries_v2
+        WHERE company_id=$1 AND id=ANY($2::text[]) AND tipo='receber' AND status='pendente'`,[companyId,pending.map(row=>row.id)])
+    }
     await client.query(`DELETE FROM app_agenda_orders_v2
       WHERE company_id=$1 AND ${AGENDA_QUOTE_REF}=ANY($2::text[])`,[companyId,refs(found.rows[0])])
     await client.query('DELETE FROM app_quotes_v2 WHERE company_id=$1 AND id=$2 RETURNING id',[companyId,id])

@@ -36,6 +36,8 @@ function database(initial,failPattern){
       if(sql==='COMMIT'){ snapshot=null;return {rows:[]} }
       if(sql.startsWith('INSERT')) assert.match(sql,/\(company_id,.*VALUES \(\$1,/s)
       else assert.match(sql,/company_id=\$1/,'Todas as operações devem estar isoladas por empresa')
+      if(sql.startsWith('SELECT') && sql.includes('FROM app_financial_entries_v2'))return {rows:[]}
+      if(sql.startsWith('UPDATE app_financial_entries_v2'))return {rows:[]}
       if(sql.startsWith('SELECT') && sql.includes('FROM app_quotes_v2')){
         assert.match(sql,/FOR UPDATE/,'Bloquear o pedido evita duas entregas concorrentes')
         return {rows:structuredClone(state.quotes.filter(q=>q.company_id===args[0] && (args[1] === undefined || q.id===args[1]) && (!sql.includes('active=TRUE') || (q.active && (args[1] !== undefined || q.status==='pedido')))))}
