@@ -1,0 +1,19 @@
+name: Sessao de 30 dias - validacao
+on:
+  push:
+    branches: [dev, main]
+    paths: [src/lib/auth.js, src/middleware/auth.js, test/session-30-days.test.js, .github/workflows/session-30-days.yml]
+permissions:
+  contents: read
+jobs:
+  session:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node --test test/session-30-days.test.js
