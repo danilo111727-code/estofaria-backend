@@ -44,7 +44,7 @@ async function transaction(db,work){
   try{await client.query('BEGIN');const result=await work(client);await client.query('COMMIT');return result}
   catch(e){await client.query('ROLLBACK').catch(()=>{});throw e}finally{client.release()}
 }
-async function archiveQuote(client,companyId,id,agendaRef){
+async function archiveQuote(client,companyId,id,agendaRef,financial=[]){
   if(!enabled)return
   const result=await client.query('SELECT * FROM app_quotes_v2 WHERE company_id=$1 AND id=$2 FOR UPDATE',[companyId,id])
   const quote=result.rows[0];if(!quote)return
@@ -54,7 +54,8 @@ async function archiveQuote(client,companyId,id,agendaRef){
   const customer_link=quote.payload_meta?.customer_id
     ? (await client.query('SELECT * FROM app_customer_quotes_v1 WHERE company_id=$1 AND quote_id=$2',[companyId,id])).rows[0] || null
     : null
-  await archive(client,companyId,'vendas','quote',id,{quote,models,model_items,agenda,...(customer_link?{customer_link}:{})})
+  const archived = await archive(client,companyId,'vendas','quote',id,{quote,models,model_items,agenda,financial,...(customer_link?{customer_link}:{})})
+  if(financial.length && !archived)throw conflict('Já existe uma exclusão deste pedido na lixeira. Confira os registros antes de excluir novamente.')
 }
 async function deleteRow(db,table,companyId,id,category,kind){
   return transaction(db,async client=>{
@@ -148,6 +149,18 @@ async function syncQuoteAgenda(client,companyId,row){
   await client.query(`UPDATE app_quotes_v2 SET payload_meta=payload_meta || $3::jsonb,updated_at=NOW()
     WHERE company_id=$1 AND (id=$2 OR legacy_id=$2)`,[companyId,ref,JSON.stringify({agenda_order_id:row.id,agenda_bloco_id:row.bloco_id||null,agenda_status:row.status==='entregue'?'pronta_entrega':row.bloco_id?'agendado':'pendente',data_producao:row.prod_date||'',data_entrega:row.ent_date||''})])
 }
+async function restoreFinancial(client,companyId,row){
+  const receivables = require('./order-receivables')
+  const payload=row.payload||{},quoteId=text(payload.quote_id||payload.source_quote_id||payload.quoteId||payload.sourceQuoteId||payload.orcamento_id||payload.budget_id),agendaId=text(payload.agenda_order_id||payload.order_id)
+  if(quoteId||agendaId){
+    const linked=(await client.query(`SELECT payload FROM app_financial_entries_v2 WHERE company_id=$1 AND tipo=$2
+      AND (($3<>'' AND ${receivables.QUOTE_REF}=$3)
+        OR ($4<>'' AND ${receivables.AGENDA_REF}=$4))`,[companyId,row.tipo,quoteId,agendaId])).rows
+    const installment=p=>text(p.parcela_index??p.parcela_numero??p.parcela??p.installment_index??'')
+    if(linked.some(r=>text(r.payload?.financial_source)===text(payload.financial_source)&&installment(r.payload||{})===installment(payload)))throw conflict('Já existe um lançamento financeiro vinculado a este pedido. Nenhuma conta foi duplicada.')
+  }
+  await insertRow(client,'app_financial_entries_v2',row,companyId)
+}
 async function restore(client,companyId,id,{restoreLegacy}={}){
   const found=await client.query('SELECT * FROM app_trash_v1 WHERE company_id=$1 AND id=$2 AND expires_at>NOW() FOR UPDATE',[companyId,id])
   const item=found.rows[0];if(!item)throw Object.assign(new Error('Item não encontrado ou prazo de recuperação encerrado.'),{status:404})
@@ -164,6 +177,10 @@ async function restore(client,companyId,id,{restoreLegacy}={}){
       const row=await prepareAgenda(client,companyId,raw,{restoringQuote:true})
       await insertRow(client,'app_agenda_orders_v2',row,companyId);await syncQuoteAgenda(client,companyId,row)
     }
+    for(const row of s.financial||[]){
+      if(text(row.company_id)!==text(companyId) || row.tipo!=='receber' || row.status!=='pendente' || row.payload?.financial_source!=='order')throw new Error('invalid_restore_scope')
+      await restoreFinancial(client,companyId,row)
+    }
   }else if(item.kind==='model'){
     const r=await client.query('UPDATE app_models_v2 SET active=TRUE,updated_at=NOW() WHERE company_id=$1 AND id=$2 AND active=FALSE RETURNING id',[companyId,item.record_key])
     if(!r.rows.length)throw conflict('Este modelo já está ativo ou não está mais disponível.')
@@ -171,15 +188,7 @@ async function restore(client,companyId,id,{restoreLegacy}={}){
     const r=await client.query('UPDATE app_ready_models_v1 SET active=TRUE,revision=revision+1,updated_at=NOW() WHERE company_id=$1 AND id=$2 AND active=FALSE RETURNING id',[companyId,item.record_key])
     if(!r.rows.length)throw conflict('Este modelo já está ativo ou não está mais disponível.')
   }else if(item.kind==='financial'){
-    const payload=s.row.payload||{},quoteId=text(payload.quote_id||payload.source_quote_id),agendaId=text(payload.agenda_order_id||payload.order_id)
-    if(quoteId||agendaId){
-      const linked=(await client.query(`SELECT payload FROM app_financial_entries_v2 WHERE company_id=$1 AND tipo=$2
-        AND (($3<>'' AND COALESCE(payload->>'quote_id',payload->>'source_quote_id','')=$3)
-          OR ($4<>'' AND COALESCE(payload->>'agenda_order_id',payload->>'order_id','')=$4))`,[companyId,s.row.tipo,quoteId,agendaId])).rows
-      const installment=p=>text(p.parcela_index??p.parcela_numero??p.parcela??p.installment_index??'')
-      if(linked.some(r=>text(r.payload?.financial_source)===text(payload.financial_source)&&installment(r.payload||{})===installment(payload)))throw conflict('Já existe um lançamento financeiro vinculado a este pedido. Nenhuma conta foi duplicada.')
-    }
-    await insertRow(client,'app_financial_entries_v2',s.row,companyId)
+    await restoreFinancial(client,companyId,s.row)
   }
   else if(item.kind==='agenda'){
     const row=await prepareAgenda(client,companyId,s.row)

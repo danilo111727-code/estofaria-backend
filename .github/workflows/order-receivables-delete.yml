@@ -1,0 +1,37 @@
+name: Exclusao de pedido e contas a receber
+on:
+  push:
+    branches: [dev, main]
+    paths: [src/lib/order-receivables.js, src/lib/quote-order-lifecycle.js, src/lib/trash-db.js, test/order-receivables-delete.test.js, test/quote-order-lifecycle.test.js, .github/workflows/order-receivables-delete.yml]
+permissions:
+  contents: read
+jobs:
+  financial-delete:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: order_delete_fixture
+          POSTGRES_DB: financial_fixed_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm install --prefix "$RUNNER_TEMP/order-delete-tests" --no-audit --no-fund @electric-sql/pglite@0.3.14
+      - name: Exclusao e baixa concorrentes no PostgreSQL real
+        run: node --test test/order-receivables-delete.test.js
+        env:
+          ORDER_FINANCIAL_TEST_DATABASE_URL: postgres://postgres:order_delete_fixture@localhost:5432/financial_fixed_test
+      - name: Regressoes de pedido, lixeira, painel e financeiro
+        run: node --test --test-concurrency=1 test/quote-order-lifecycle.test.js test/trash.test.js test/trash-api.test.js test/dashboard-v2-reconciliation.test.js test/quote-agenda-reconciliation.test.js test/financial-history.test.js test/financial-installments.test.js test/financial-fixed-recurrence.test.js
+        env:
+          NODE_PATH: ${{ runner.temp }}/order-delete-tests/node_modules
+          FINANCIAL_TEST_DATABASE_URL: postgres://postgres:order_delete_fixture@localhost:5432/financial_fixed_test
