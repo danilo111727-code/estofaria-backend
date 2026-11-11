@@ -44,7 +44,7 @@ async function transaction(db,work){
   try{await client.query('BEGIN');const result=await work(client);await client.query('COMMIT');return result}
   catch(e){await client.query('ROLLBACK').catch(()=>{});throw e}finally{client.release()}
 }
-async function archiveQuote(client,companyId,id,agendaRef,financial=[]){
+async function archiveQuote(client,companyId,id,agendaRef,financial=[],receivedIds=[]){
   if(!enabled)return
   const result=await client.query('SELECT * FROM app_quotes_v2 WHERE company_id=$1 AND id=$2 FOR UPDATE',[companyId,id])
   const quote=result.rows[0];if(!quote)return
@@ -54,8 +54,8 @@ async function archiveQuote(client,companyId,id,agendaRef,financial=[]){
   const customer_link=quote.payload_meta?.customer_id
     ? (await client.query('SELECT * FROM app_customer_quotes_v1 WHERE company_id=$1 AND quote_id=$2',[companyId,id])).rows[0] || null
     : null
-  const archived = await archive(client,companyId,'vendas','quote',id,{quote,models,model_items,agenda,financial,...(customer_link?{customer_link}:{})})
-  if(financial.length && !archived)throw conflict('Já existe uma exclusão deste pedido na lixeira. Confira os registros antes de excluir novamente.')
+  const archived = await archive(client,companyId,'vendas','quote',id,{quote,models,model_items,agenda,financial,received_financial_ids:receivedIds,...(customer_link?{customer_link}:{})})
+  if((financial.length || receivedIds.length) && !archived)throw conflict('Já existe uma exclusão deste pedido na lixeira. Confira os registros antes de excluir novamente.')
 }
 async function deleteRow(db,table,companyId,id,category,kind){
   return transaction(db,async client=>{
@@ -181,6 +181,7 @@ async function restore(client,companyId,id,{restoreLegacy}={}){
       if(text(row.company_id)!==text(companyId) || row.tipo!=='receber' || row.status!=='pendente' || row.payload?.financial_source!=='order')throw new Error('invalid_restore_scope')
       await restoreFinancial(client,companyId,row)
     }
+    if(s.received_financial_ids?.length)await require('./order-receivables').clearReceivedDeleted(client,companyId,s.quote.id,s.received_financial_ids)
   }else if(item.kind==='model'){
     const r=await client.query('UPDATE app_models_v2 SET active=TRUE,updated_at=NOW() WHERE company_id=$1 AND id=$2 AND active=FALSE RETURNING id',[companyId,item.record_key])
     if(!r.rows.length)throw conflict('Este modelo já está ativo ou não está mais disponível.')

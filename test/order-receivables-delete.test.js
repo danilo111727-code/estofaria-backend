@@ -77,6 +77,9 @@ test('preserva recebido, contas a pagar, manuais, outro pedido e outra empresa',
  assert.equal(await one('app_financial_entries_v2','remove-due'),undefined)
  for(const id of ['keep-received','keep-payable','keep-manual','keep-unlinked','keep-other'])assert.ok(await one('app_financial_entries_v2',id))
  assert.ok(await one('app_financial_entries_v2','keep-foreign','b'))
+ const receipt=await one('app_financial_entries_v2','keep-received');assert.equal(receipt.payload.order_deleted.quote_id,'preserve')
+ for(const id of ['keep-payable','keep-manual','keep-unlinked','keep-other'])assert.equal((await one('app_financial_entries_v2',id)).payload.order_deleted,undefined)
+ assert.equal((await one('app_financial_entries_v2','keep-foreign','b')).payload.order_deleted,undefined)
 })
 test('aceita vínculo legado e só pela Agenda; vínculo explícito de outro pedido prevalece',async()=>{
  await sale('aliases',{legacy:'legacy-alias'})
@@ -102,11 +105,14 @@ for(const [id,pattern] of [['financial-failure',/DELETE FROM app_financial_entri
 }
 test('recupera o saldo com o pedido uma única vez, preservando valores recebidos',async()=>{
  await sale('restore-sale');await bill('restore-due','restore-sale',{payload:{parcela_index:2}});await bill('restore-received','restore-sale',{status:'recebido',payload:{parcela_index:1}})
+ const before=await one('app_financial_entries_v2','restore-received')
  await quotes.deleteQuote('a','restore-sale');const item=await archived('restore-sale')
+ const deleted=await one('app_financial_entries_v2','restore-received');assert.equal(deleted.payload.order_deleted.quote_id,'restore-sale');assert.equal(deleted.valor,before.valor);assert.equal(String(deleted.created_at),String(before.created_at));assert.equal(String(deleted.updated_at),String(before.updated_at));assert.equal(deleted.data_vencimento,before.data_vencimento)
  await restore(item)
  assert.ok(await one('app_quotes_v2','restore-sale'));assert.ok(await one('app_agenda_orders_v2','agenda-restore-sale'))
  assert.equal((await one('app_financial_entries_v2','restore-due')).status,'pendente')
  assert.equal((await one('app_financial_entries_v2','restore-received')).status,'recebido')
+ assert.equal((await one('app_financial_entries_v2','restore-received')).payload.order_deleted,undefined)
  await assert.rejects(restore(item),e=>e.status===404)
  assert.equal(Number((await q("SELECT COUNT(*) AS n FROM app_financial_entries_v2 WHERE id='restore-due'")).rows[0].n),1)
 })
@@ -137,4 +143,21 @@ test('baixa concorrente confirmada antes da exclusão preserva o recebimento',{s
  await new Promise(resolve=>setTimeout(resolve,50));await c.query('COMMIT');c.release();await deletion
  assert.equal((await one('app_financial_entries_v2','concurrent-due')).status,'recebido')
  assert.equal((await archived('concurrent')).snapshot.financial.length,0)
+ assert.equal((await one('app_financial_entries_v2','concurrent-due')).payload.order_deleted.quote_id,'concurrent')
+})
+
+test('falha de exclusão não deixa marca de pedido excluído no recebido',async()=>{
+ await sale('marker-rollback');await bill('receipt-rollback','marker-rollback',{status:'recebido'})
+ failPattern=/DELETE FROM app_quotes_v2/;await assert.rejects(quotes.deleteQuote('a','marker-rollback'))
+ assert.equal((await one('app_financial_entries_v2','receipt-rollback')).payload.order_deleted,undefined)
+ assert.ok(await one('app_quotes_v2','marker-rollback'))
+})
+test('novo ciclo de exclusão e recuperação retira e recoloca a identificação',async()=>{
+ await sale('marker-cycle');await bill('receipt-cycle','marker-cycle',{status:'recebido'})
+ for(let n=0;n<2;n++){
+  await quotes.deleteQuote('a','marker-cycle')
+  assert.equal((await one('app_financial_entries_v2','receipt-cycle')).payload.order_deleted.quote_id,'marker-cycle')
+  await restore(await archived('marker-cycle'))
+  assert.equal((await one('app_financial_entries_v2','receipt-cycle')).payload.order_deleted,undefined)
+ }
 })

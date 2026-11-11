@@ -37,7 +37,8 @@ async function deleteQuoteWithAgenda(pool,companyId,id,reconciliationHelpers=req
     const linkedAgenda = await client.query(`SELECT id FROM app_agenda_orders_v2
       WHERE company_id=$1 AND ${AGENDA_QUOTE_REF}=ANY($2::text[]) FOR UPDATE`,[companyId,refs(found.rows[0])])
     const pending = await receivables.lockPending(client,companyId,refs(found.rows[0]),linkedAgenda.rows.map(row=>row.id))
-    await trash.archiveQuote(client,companyId,id,AGENDA_QUOTE_REF,pending)
+    const receivedIds = await receivables.markReceivedDeleted(client,companyId,id,refs(found.rows[0]),linkedAgenda.rows.map(row=>row.id))
+    await trash.archiveQuote(client,companyId,id,AGENDA_QUOTE_REF,pending,receivedIds)
     if(pending.length){
       await client.query(`DELETE FROM app_financial_entries_v2
         WHERE company_id=$1 AND id=ANY($2::text[]) AND tipo='receber' AND status='pendente'`,[companyId,pending.map(row=>row.id)])
