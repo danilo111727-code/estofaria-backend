@@ -13,14 +13,16 @@ const { issueToken } = require('../src/lib/auth')
 const day = 86400000
 function company(extra = {}) { return { id:'co_test', name:'Fictícia', owner_email:'fixture@example.invalid', plan_code:'gestao', billing_mode:'courtesy', access_status:'courtesy_active', financial_status:'active', courtesy_until:new Date(Date.now()+60*day).toISOString(), ...extra } }
 async function fixture(t, extra = {}, options = {}) {
-  let state = { companies:[company(extra)], users:[{id:'u_test',company_id:'co_test',email:'fixture@example.invalid',is_active:true}], companyUsers:[], billingConfig:options.billingConfig || {}, billingLeads:[], webhookEvents:[], auditLogs:[] }
+  let state = { companies:[company(extra)], users:[{id:'u_test',company_id:'co_test',email:'fixture@example.invalid',is_active:true,...(options.master ? {is_master:true} : {})}], companyUsers:[], billingConfig:options.billingConfig || {}, billingLeads:[], webhookEvents:[], auditLogs:[] }
   const calls = { sessions:[], customers:[], lists:[] }
   const stripeDelay = () => options.stripeDelayMs ? new Promise(r=>setTimeout(r,options.stripeDelayMs)) : Promise.resolve()
   const subscriptions = new Map()
   const sessions = new Map()
   const invoices = new Map()
+  const charges = new Map()
   const store = { readStore:()=>structuredClone(state), writeStore:v=>{ state=structuredClone(v) }, findCompanyById:(s,id)=>s.companies.find(c=>c.id===id), upsertAudit:(s,v)=>s.auditLogs.push(v), nowIso:()=>new Date().toISOString(), planPreset:()=>({code:'gestao',name:'Gestão',monthly_price_cents:14900,seats_limit:2}) }
   const fake = {
+    charges:{retrieve:async id=>{await stripeDelay();if(options.chargeError)throw Error('simulated charge timeout');if(!charges.has(id))throw Error('missing fixture charge '+id);return structuredClone(charges.get(id))}},
     customers:{ list:async()=>{await stripeDelay();return {data:options.customers || [],has_more:false}}, create:async(p,o)=>{ await stripeDelay(); calls.customers.push({p,o}); return {id:'cus_fixture'} } },
     subscriptions:{ list:async p=>{ await stripeDelay(); calls.lists.push(p); return options.list ? options.list(p) : {data:[...subscriptions.values()].filter(s=>s.customer===p.customer),has_more:false} }, retrieve:async id=>{ await stripeDelay(); if(options.retrieveError) throw Error('simulated timeout'); if(!subscriptions.has(id)) throw Error('missing fixture subscription '+id); return structuredClone(subscriptions.get(id)) } },
     invoices:{retrieve:async id=>structuredClone(invoices.get(id))},
@@ -87,7 +89,7 @@ async function fixture(t, extra = {}, options = {}) {
   t.after(()=>{server.close(); if(oldStore)require.cache[storePath]=oldStore; else delete require.cache[storePath]})
   let token=issueToken(state.users[0])
   async function request(path,body, signed=true){ const raw=JSON.stringify(body); const headers={ 'content-type':'application/json',authorization:'Bearer '+token }; if(path.endsWith('webhooks/stripe')) headers['stripe-signature']=signed?Stripe.webhooks.generateTestHeaderString({payload:raw,secret:process.env.STRIPE_WEBHOOK_SECRET}):'invalid'; const res=await fetch('http://127.0.0.1:'+server.address().port+path,{method:body?'POST':'GET',headers,body:body?raw:undefined}); return {status:res.status,body:await res.json()} }
-  return { calls,subscriptions,sessions,invoices,refreshSession:()=>{token=issueToken(state.users[0])},flush:async()=>options.atomic&&store._pg.flushNow(),get persisted(){return state},get state(){return options.atomic?store.readStore():state},get company(){return (options.atomic?store.readStore():state).companies[0]}, request, checkout:()=>request('/api/billing/stripe/create-checkout',{}), webhook:(type,obj,id='evt_'+Math.random())=>request('/api/billing/webhooks/stripe',{id,type,data:{object:obj}}), complete:(id,sub)=>{sessions.set(id,{id,mode:'subscription',status:'complete',payment_status:'paid',metadata:{company_id:'co_test'},customer:sub.customer,subscription:sub.id})} }
+  return { calls,subscriptions,sessions,invoices,charges,refreshSession:()=>{token=issueToken(state.users[0])},flush:async()=>options.atomic&&store._pg.flushNow(),get persisted(){return state},get state(){return options.atomic?store.readStore():state},get company(){return (options.atomic?store.readStore():state).companies[0]}, request, checkout:()=>request('/api/billing/stripe/create-checkout',{}), webhook:(type,obj,id='evt_'+Math.random())=>request('/api/billing/webhooks/stripe',{id,type,data:{object:obj}}), complete:(id,sub)=>{sessions.set(id,{id,mode:'subscription',status:'complete',payment_status:'paid',metadata:{company_id:'co_test'},customer:sub.customer,subscription:sub.id})} }
 }
 function sub(extra={}) { return {id:'sub_current',object:'subscription',customer:'cus_fixture',status:'active',metadata:{company_id:'co_test'},current_period_end:Math.floor(Date.now()/1000)+30*86400,...extra} }
 for(const status of ['canceled','incomplete_expired'])test('verified '+status+' subscription permits a new contract and preserves courtesy',async t=>{
@@ -416,4 +418,78 @@ test('previously ignored legacy event can reconcile after explicit verified link
   assert.equal(f.state.webhookEvents[0].status,'processed')
   assert.equal(f.state.auditLogs.filter(a=>a.action==='billing_webhook').length,1)
   assert.equal((await f.webhook('invoice.paid',invoice,'evt_legacy_replay')).body.duplicate,true)
+})
+
+function seedRisk(f, overrides={}){
+  f.subscriptions.set('sub_current',sub())
+  f.invoices.set('in_risk',{id:'in_risk',object:'invoice',customer:'cus_fixture',subscription:'sub_current',status:'paid',...overrides.invoice})
+  f.charges.set('ch_risk',{id:'ch_risk',object:'charge',customer:'cus_fixture',invoice:'in_risk',currency:'brl',amount:14900,amount_refunded:4900,...overrides.charge})
+}
+const riskTypes=['charge.refunded','charge.dispute.created','radar.early_fraud_warning.created']
+function riskObject(type){return type==='charge.refunded'?{id:'ch_risk',object:'charge'}:{id:'risk_fixture',charge:{id:'ch_risk'},amount:14900,metadata:{company_id:'co_other'}}}
+for(const type of riskTypes)test(type+' resolves ownership from charge and invoice and records one review without changing access',async t=>{
+  const f=await fixture(t,{stripe_customer_id:'cus_fixture',stripe_subscription_id:'sub_current',last_payment_at:'2026-01-01T00:00:00.000Z'})
+  seedRisk(f);const before=structuredClone(f.company)
+  assert.equal((await f.webhook(type,riskObject(type),'evt_risk')).status,200)
+  assert.deepEqual(f.company,before)
+  assert.equal(f.state.webhookEvents[0].status,'review_required')
+  assert.equal(f.state.webhookEvents[0].risk.invoice_id,'in_risk')
+  assert.equal(f.state.webhookEvents[0].risk.amount_refunded_cents,4900)
+  assert.equal(f.state.auditLogs[0].action,'billing_payment_review')
+  assert.equal((await f.request('/api/billing/status')).body.subscription.payment_review_required,true)
+  assert.equal((await f.webhook(type,riskObject(type),'evt_risk')).body.duplicate,true)
+  assert.equal(f.state.auditLogs.length,1)
+  assert.equal((await f.request('/api/billing/stripe/risk-reviews')).status,403)
+  assert.equal((await f.request('/api/billing/stripe/risk-reviews/evt_risk/resolve',{reason:'Revisão concluída.'})).status,403)
+})
+test('risk event for an old verified subscription does not replace the new subscription',async t=>{
+  const f=await fixture(t,{stripe_customer_id:'cus_fixture',stripe_subscription_id:'sub_new'})
+  seedRisk(f);f.subscriptions.set('sub_current',sub({status:'canceled'}))
+  await f.webhook('charge.refunded',riskObject('charge.refunded'))
+  assert.equal(f.state.webhookEvents[0].status,'review_required')
+  assert.equal(f.company.stripe_subscription_id,'sub_new')
+})
+for(const overrides of [{charge:{invoice:null}},{charge:{customer:'cus_other'}},{invoice:{customer:'cus_other'}},{invoice:{subscription:null}}])test('risk event cannot guess ownership when graph is missing or conflicting '+JSON.stringify(overrides),async t=>{
+  const f=await fixture(t,{stripe_customer_id:'cus_fixture',stripe_subscription_id:'sub_current'})
+  seedRisk(f,overrides);await f.webhook('charge.refunded',{id:'ch_risk',metadata:{company_id:'co_test'}})
+  assert.equal(f.state.webhookEvents[0].status,'ignored');assert.equal(f.state.auditLogs.length,0)
+})
+test('risk event cannot use foreign subscription metadata to select an unrelated company',async t=>{
+  const f=await fixture(t,{stripe_customer_id:'cus_fixture',stripe_subscription_id:'sub_current'});seedRisk(f)
+  f.subscriptions.set('sub_current',sub({metadata:{company_id:'co_other'}}))
+  await f.webhook('charge.refunded',riskObject('charge.refunded'))
+  assert.equal(f.state.webhookEvents[0].status,'ignored');assert.equal(f.state.auditLogs.length,0)
+})
+test('risk Stripe API failure remains retryable without recording a review',async t=>{
+  const f=await fixture(t,{stripe_customer_id:'cus_fixture',stripe_subscription_id:'sub_current'},{chargeError:true});seedRisk(f)
+  assert.equal((await f.webhook('charge.refunded',riskObject('charge.refunded'))).status,500)
+  assert.equal(f.state.webhookEvents.length,0);assert.equal(f.state.auditLogs.length,0)
+})
+test('concurrent risk deliveries persist one review and one audit',async t=>{
+  const f=await fixture(t,{stripe_customer_id:'cus_fixture',stripe_subscription_id:'sub_current'},{stripeDelayMs:10});seedRisk(f)
+  const r=await Promise.all(Array.from({length:5},()=>f.webhook('charge.refunded',riskObject('charge.refunded'),'evt_risk')))
+  assert.ok(r.every(x=>x.status===200));assert.equal(f.state.webhookEvents.length,1);assert.equal(f.state.auditLogs.length,1)
+})
+test('Master can list and close a review with an auditable reason, never a payment or cancellation',async t=>{
+  const f=await fixture(t,{stripe_customer_id:'cus_fixture',stripe_subscription_id:'sub_current'},{master:true});seedRisk(f)
+  await f.webhook('charge.refunded',riskObject('charge.refunded'),'evt_risk')
+  const before=structuredClone(f.company)
+  const list=await f.request('/api/billing/stripe/risk-reviews');assert.equal(list.status,200);assert.equal(list.body.items.length,1)
+  assert.equal((await f.request('/api/billing/stripe/risk-reviews/evt_risk/resolve',{reason:'ok'})).status,400)
+  assert.equal((await f.request('/api/billing/stripe/risk-reviews/evt_risk/resolve',{reason:'Estorno conferido no Stripe.'})).status,200)
+  assert.equal(f.state.webhookEvents[0].status,'reviewed');assert.equal(f.state.webhookEvents[0].reviewed_by,'u_test')
+  assert.equal((await f.request('/api/billing/stripe/risk-reviews')).body.items.length,0)
+  assert.equal((await f.request('/api/billing/status')).body.subscription.payment_review_required,false)
+  assert.deepEqual(f.company,before)
+  assert.equal((await f.webhook('charge.refunded',riskObject('charge.refunded'),'evt_risk')).body.duplicate,true)
+  assert.equal(f.state.webhookEvents[0].status,'reviewed')
+  assert.equal(f.state.auditLogs.length,2)
+})
+if(process.env.STRIPE_SQL_TEST==='1')test('SQL risk commit failure retries exactly once and keeps access and courtesy intact',async t=>{
+  const f=await fixture(t,{stripe_customer_id:'cus_fixture',stripe_subscription_id:'sub_current'},{atomic:true,sql:true,failCommitOnce:true});seedRisk(f)
+  const before=structuredClone(f.company)
+  assert.equal((await f.webhook('charge.refunded',riskObject('charge.refunded'),'evt_risk')).status,503)
+  assert.equal((await f.webhook('charge.refunded',riskObject('charge.refunded'),'evt_risk')).status,200)
+  assert.equal(f.persisted.webhookEvents.length,1);assert.equal(f.persisted.webhookEvents[0].status,'review_required')
+  assert.equal(f.persisted.auditLogs.length,1);assert.deepEqual(f.persisted.companies[0],before)
 })

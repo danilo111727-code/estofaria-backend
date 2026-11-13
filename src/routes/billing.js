@@ -27,6 +27,54 @@ function subscriptionId(obj){
   return stripeId(obj.subscription || obj.parent?.subscription_details?.subscription
     || (obj.object === 'subscription' ? obj.id : ''))
 }
+const riskEventTypes = new Set(['charge.refunded','charge.dispute.created','radar.early_fraud_warning.created'])
+async function recordPaymentRisk(event){
+  const obj = event.data?.object || {}
+  const chargeId = event.type === 'charge.refunded' ? stripeId(obj.id) : stripeId(obj.charge)
+  if(!chargeId) return false
+  // Resolve ownership through Stripe resources, never through a risk event's metadata.
+  // Retrieve using this SDK's API version, including the legacy charge.invoice link.
+  const charge = await stripe.charges.retrieve(chargeId)
+  const invoiceId = stripeId(charge.invoice)
+  if(!invoiceId) return false // One-off charges have no subscription entitlement.
+  const invoice = await stripe.invoices.retrieve(invoiceId)
+  const subId = subscriptionId(invoice)
+  if(!subId) return false
+  const subscription = await stripe.subscriptions.retrieve(subId)
+  const customerId = stripeId(subscription.customer)
+  if(!customerId || stripeId(charge.customer) !== customerId || stripeId(invoice.customer) !== customerId) return false
+  const initial = readStore()
+  const linked = initial.companies.filter(c => c.stripe_subscription_id === subId)
+  const candidates = linked.length ? linked : initial.companies.filter(c => c.stripe_customer_id === customerId
+    && String(subscription.metadata?.company_id || '') === String(c.id))
+  if(candidates.length !== 1) return false
+  const companyId = candidates[0].id
+  return withCompanyLock(String(companyId), async () => {
+    const latest = readStore()
+    const company = findCompanyById(latest, companyId)
+    if(!company || company.stripe_customer_id !== customerId
+      || (subscription.metadata?.company_id && String(subscription.metadata.company_id) !== String(company.id))) return false
+    if(latest.webhookEvents.some(e => e.id === event.id && e.status !== 'ignored')) return true
+    const risk = {company_id:company.id,subscription_id:subId,invoice_id:invoiceId,charge_id:chargeId,
+      customer_id:customerId,currency:charge.currency,amount_cents:charge.amount,
+      amount_refunded_cents:charge.amount_refunded || 0,
+      disputed_amount_cents:event.type === 'charge.dispute.created' ? obj.amount : undefined,
+      object_id:obj.id,reason:obj.reason || '',stripe_status:obj.status || '',
+      action:'manual_review',dashboard_url:`https://dashboard.stripe.com/${event.livemode ? '' : 'test/'}payments/${chargeId}`}
+    const label = event.type === 'charge.refunded' ? 'Estorno' : event.type === 'charge.dispute.created' ? 'Contestação' : 'Alerta de fraude'
+    upsertAudit(latest,{company_id:company.id,action:'billing_payment_review',
+      message:`${label} Stripe: revisar pagamento ${chargeId} da assinatura ${subId}.`,
+      actor_name:'stripe-webhook',actor_role:'system',reason:event.type,
+      request_json:risk,source:'billing-webhook'})
+    latest.webhookEvents = latest.webhookEvents.filter(e => e.id !== event.id)
+    latest.webhookEvents.push({id:event.id,type:event.type,created_at:nowIso(),payload:event,
+      company_id:company.id,risk,status:'review_required'})
+    // A risk signal is a review request, not authorization to refund, cancel or remove a courtesy.
+    writeStore(latest)
+    await flushStore('webhook_persistence_error')
+    return true
+  })
+}
 function courtesyActive(company){
   if(!company || company.billing_mode !== 'courtesy' || company.access_status !== 'courtesy_active') return false
   return !company.courtesy_until || Date.parse(company.courtesy_until) > Date.now()
@@ -174,6 +222,7 @@ function buildSubscriptionPayload(company, store, req){
       status: company.financial_status || 'inactive',
       financial_status: company.financial_status || 'inactive',
       access_status: company.access_status || 'inactive',
+      payment_review_required: store.webhookEvents.some(e => e.company_id === company.id && e.status === 'review_required'),
       professional_courtesy_enabled: professionalCourtesyActive(company),
       professional_available: professionalSubscriptionActive(company) || professionalCourtesyActive(company),
       payment_provider: cfg.payment_provider || company.billing_mode || 'stripe',
@@ -514,6 +563,36 @@ router.post('/stripe/confirm-checkout', requireAuth, async (req, res) => {
   }
 })
 
+router.get('/stripe/risk-reviews', requireAuth, requireMaster, requirePermission('saas.audit.read'), (req,res) => {
+  const items = readStore().webhookEvents.filter(e => e.status === 'review_required' && e.risk)
+    .map(e => ({event_id:e.id,type:e.type,created_at:e.created_at,...e.risk}))
+  res.json({items})
+})
+
+router.post('/stripe/risk-reviews/:eventId/resolve', requireAuth, requireMaster, requirePermission('saas.audit.read'), async (req,res) => {
+  const reason = normalizeText(req.body?.reason,1000)
+  if(reason.length < 10) return res.status(400).json({error:'review_reason_required'})
+  const entry = readStore().webhookEvents.find(e => e.id === req.params.eventId && e.risk)
+  if(!entry) return res.status(404).json({error:'review_not_found'})
+  try {
+    await withCompanyLock(String(entry.company_id), async () => {
+      const latest = readStore()
+      const current = latest.webhookEvents.find(e => e.id === entry.id)
+      if(current.status !== 'review_required') return
+      current.status = 'reviewed'
+      current.reviewed_at = nowIso()
+      current.reviewed_by = req.user.id
+      current.review_reason = reason
+      upsertAudit(latest,{company_id:entry.company_id,action:'billing_payment_reviewed',
+        message:`Revisão do evento Stripe ${entry.id} registrada.`,actor_user_id:req.user.id,
+        actor_role:req.user.role,reason,source:'billing-risk-review'})
+      writeStore(latest)
+      await flushStore('webhook_persistence_error')
+    })
+    res.json({ok:true})
+  } catch(error){res.status(503).json({error:'review_persistence_error'})}
+})
+
 router.post('/webhooks/stripe', express.raw({ type:'application/json' }), async (req, res) => {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
   if(!stripe || !webhookSecret) return res.status(503).json({error:'stripe_webhook_not_configured'})
@@ -540,6 +619,7 @@ router.post('/webhooks/stripe', express.raw({ type:'application/json' }), async 
     const byMetadata = companyId ? findCompanyById(initialStore, companyId) : null
     const company = bySub.length === 1 ? bySub[0] : (bySub.length === 0 ? byMetadata : null)
     let processed = false
+    if(riskEventTypes.has(event.type)) processed = await recordPaymentRisk(event)
     const unpaidCheckout = event.type.startsWith('checkout.session.')
       && obj.payment_status !== 'paid' && obj.payment_status !== 'no_payment_required'
     if(company && subId && supported.includes(event.type) && !unpaidCheckout){

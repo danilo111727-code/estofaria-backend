@@ -195,3 +195,18 @@ Chave STRIPE_SECRET_KEY do Sandbox escolhido ainda pendente de configuração. W
 - Correção: consultar a assinatura vinculada; permitir nova contratação somente se encerrada e com customer/empresa verificados. Manter bloqueio para ativa, pendente ou inadimplente. Substituir o vínculo encerrado somente ao persistir um novo Checkout; reutilizar sessão aberta em repetição ou resposta perdida. Não alterar a data da cortesia. Eventos tardios da assinatura antiga não podem substituir a assinatura nova.
 - Casos automatizados cobrem as duas situações encerradas, concorrência/reuso, falha intermediária, vínculo divergente e evento antigo após a nova contratação.
 - Produção não alterada nesta validação. Pendências antes da aprovação integral: ciclo natural/relógio de teste, revisão dos eventos de risco (estorno, contestação e alerta de fraude), vínculos legados verificáveis e configuração/validação controlada do ambiente real. Segredos pertencem à configuração protegida da plataforma; não ao repositório ou documentação.
+
+### Etapa seguinte: revisão de estornos, contestações e alertas de fraude
+
+O webhook agora reconhece `charge.refunded`, `charge.dispute.created` e `radar.early_fraud_warning.created`. A relação é resolvida por Charge → Invoice → Subscription, usando a versão 2025-02-24.acacia do SDK instalado. A associação exige customer consistente nas três entidades e vínculo único com a empresa; metadata do evento de risco não seleciona empresa. Antes de atualizar o SDK/API, revalidar essa resolução, pois Basil migrou o vínculo para InvoicePayments.
+
+Cada evento gera um registro `billing_payment_review` no histórico de auditoria já acessível à gestão e uma pendência persistida com cobrança, fatura, assinatura, valores em centavos e link para conferência no Stripe. `amount_refunded_cents` é o total acumulado informado na cobrança, não um lançamento a somar. Recebimentos históricos, assinatura atual e cortesia não são alterados por sinais de risco. A análise humana decide eventual providência no Stripe; o aplicativo não faz estorno, cancelamento ou bloqueio automático.
+
+Endpoints de gestão (somente Master autenticado):
+- GET `/api/subscription/stripe/risk-reviews`: pendências.
+- POST `/api/subscription/stripe/risk-reviews/:eventId/resolve`, JSON `{ "reason": "Justificativa da análise" }`: encerra apenas a revisão e registra responsável/data. Não movimenta dinheiro ou altera acesso.
+- `/api/subscription/status` acrescenta `payment_review_required`; a interface existente permanece compatível.
+
+Verificação local: 149 testes aprovados, incluindo isolamento entre empresas, cobrança sem assinatura, evento antigo após nova contratação, entrega simultânea repetida, recusa de acesso não Master, revisão com justificativa e rollback/reentrega em PostgreSQL simulado por PGlite.
+
+Limites desta etapa: a conexão Stripe disponibiliza criação do Test Clock, mas a busca de operações não disponibilizou avançar o relógio. Não considerar o teste anterior de alteração de âncora uma renovação natural. Permanecem pendentes a simulação temporal e a ativação/validação controlada do ambiente real. Configuração tributária deve ser conferida conforme as operações da empresa; esta correção não ativa Stripe Tax nem muda impostos. Chaves reais devem ficar na configuração protegida da plataforma, preferindo chave restrita com permissões mínimas.
