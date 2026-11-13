@@ -148,6 +148,11 @@ app.use('/api/auth', authRoutes)
 app.use('/api/saas', auditV2Routes)
 app.use('/api/saas', companyNameRoutes)
 app.use('/api/saas', saasRoutes)
+// Stripe authenticates webhook requests by signature, before generic /api login guards.
+app.use('/api/subscription', (req, res, next) => {
+  if (req.method === 'POST' && req.path === '/webhooks/stripe') return billingRoutes(req, res, next)
+  next()
+})
 app.use('/api/billing', billingRoutes)
 // Public portfolio must be registered before generic authenticated /api routers.
 // Its admin endpoints retain their own requireAuth middleware.

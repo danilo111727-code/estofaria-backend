@@ -175,3 +175,14 @@ Pacote: ea3b3f0139d368fb0e7fb6f5e158394a410f70ba, dez arquivos; workflow passa a
 Validação local nessa combinação: 128 testes aprovados, zero falhas e zero ignorados, incluindo quatro testes SQL descartáveis PGlite. Não equivale a validação de webhook público.
 Chave STRIPE_SECRET_KEY do Sandbox escolhido ainda pendente de configuração. Webhook de teste permanece desativado. Não executar checkout real de validação antes de alinhar credenciais. Produção sem alteração e ainda não aprovada.
 
+
+## Retomada de 13/11/2026 — chave de teste e bloqueio do webhook
+
+- STRIPE_SECRET_KEY configurada somente no serviço estofaria-backend-dev, por atualização parcial de variável; nenhuma credencial é registrada neste documento.
+- Deploy de configuração dep-dbro97om7kps73crthk0 ficou live. Checkout gerado pelo aplicativo foi localizado na conta Sandbox escolhida, livemode=false. Repetição reutilizou a mesma sessão; confirmação de checkout aberto foi recusada; cortesia permaneceu igual.
+- Endpoint Sandbox existente ativado. Uma atualização de metadata em assinatura fictícia cancelada gerou evento real para verificar a entrega, sem reativação ou cobrança.
+- A chamada pública sem assinatura ao alias /api/subscription/webhooks/stripe retornou 401, em vez de chegar à validação de assinatura. Rotas genéricas /api com requireAuth interceptavam esse alias antes de billingRoutes.
+- Correção: encaminhar somente POST /api/subscription/webhooks/stripe ao handler próprio antes dos guards genéricos. Demais rotas continuam autenticadas. O alias /api/billing permanece igual; a verificação da assinatura e o corpo raw permanecem obrigatórios.
+- Regressão ampliada inicia o servidor real com e sem configuração Stripe. Em ambos os aliases, evento sem configuração retorna 503; evento sem assinatura com configuração retorna 400; evento com assinatura HMAC válida e corpo UTF-8 chega ao handler, retorna 200 e persiste como ignored quando não pertence a nenhuma empresa. Consulta da assinatura sem login continua 401.
+- Resultado local: 129 testes aprovados, zero falhas/ignorados, incluindo SQL descartável. A entrega pública após esta correção ainda deve ser comprovada no deploy de teste.
+- Nenhuma alteração em main, webhook live, assinaturas reais, planos ou cortesias de clientes.
