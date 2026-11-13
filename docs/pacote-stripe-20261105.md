@@ -186,3 +186,12 @@ Chave STRIPE_SECRET_KEY do Sandbox escolhido ainda pendente de configuração. W
 - Regressão ampliada inicia o servidor real com e sem configuração Stripe. Em ambos os aliases, evento sem configuração retorna 503; evento sem assinatura com configuração retorna 400; evento com assinatura HMAC válida e corpo UTF-8 chega ao handler, retorna 200 e persiste como ignored quando não pertence a nenhuma empresa. Consulta da assinatura sem login continua 401.
 - Resultado local: 129 testes aprovados, zero falhas/ignorados, incluindo SQL descartável. A entrega pública após esta correção ainda deve ser comprovada no deploy de teste.
 - Nenhuma alteração em main, webhook live, assinaturas reais, planos ou cortesias de clientes.
+
+### Validação Sandbox em 13/11/2026: cobrança, recusa e nova contratação
+
+- Na empresa fictícia de QA, Checkout concluído e eventos reais entregues ao webhook de desenvolvimento. Fatura inicial de cortesia de R$ 0 validada separadamente da cobrança fictícia de R$ 149.
+- Encerramento antecipado do trial apenas na assinatura fictícia gerou fatura paga de R$ 149. Uma segunda fatura, forçada por alteração da âncora de cobrança, foi recusada (`past_due`, R$ 0 recebido) e recuperada com cartão de teste válido. Esses cenários não equivalem à passagem de um ciclo natural com Test Clock.
+- Cancelamento agendado preservou a assinatura ativa. Cancelamento imediato preservou a cortesia no aplicativo, mas revelou bloqueio permanente à nova contratação pelo identificador da assinatura encerrada.
+- Correção: consultar a assinatura vinculada; permitir nova contratação somente se encerrada e com customer/empresa verificados. Manter bloqueio para ativa, pendente ou inadimplente. Substituir o vínculo encerrado somente ao persistir um novo Checkout; reutilizar sessão aberta em repetição ou resposta perdida. Não alterar a data da cortesia. Eventos tardios da assinatura antiga não podem substituir a assinatura nova.
+- Casos automatizados cobrem as duas situações encerradas, concorrência/reuso, falha intermediária, vínculo divergente e evento antigo após a nova contratação.
+- Produção não alterada nesta validação. Pendências antes da aprovação integral: ciclo natural/relógio de teste, revisão dos eventos de risco (estorno, contestação e alerta de fraude), vínculos legados verificáveis e configuração/validação controlada do ambiente real. Segredos pertencem à configuração protegida da plataforma; não ao repositório ou documentação.

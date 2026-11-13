@@ -353,8 +353,17 @@ router.post('/stripe/create-checkout', requireAuth, async (req, res) => {
       const store = readStore()
       let company = findCompanyById(store, initial.id)
       if(!company) return res.status(404).json({ error:'company_not_found' })
+      let endedSubscriptionId
       if(company.stripe_subscription_id){
-        return res.status(409).json({ error:'subscription_already_linked', message:'Consulte a assinatura existente antes de contratar novamente.' })
+        const linked = await stripe.subscriptions.retrieve(company.stripe_subscription_id)
+        if(!['canceled','incomplete_expired'].includes(linked.status)){
+          return res.status(409).json({ error:'subscription_already_linked', message:'Consulte a assinatura existente antes de contratar novamente.' })
+        }
+        if(!stripeId(company.stripe_customer_id) || stripeId(linked.customer) !== stripeId(company.stripe_customer_id)
+          || String(linked.metadata?.company_id || '') !== String(company.id)){
+          return res.status(409).json({error:'customer_link_required',message:'O suporte deve verificar o vínculo da assinatura encerrada antes de uma nova contratação.'})
+        }
+        endedSubscriptionId = linked.id
       }
       const planCode = (company.plan_code || store.billingConfig?.default_plan_code || 'gestao').toLowerCase()
       const priceId = process.env[`STRIPE_PRICE_ID_${planCode.toUpperCase()}`] || process.env.STRIPE_PRICE_ID
@@ -393,13 +402,18 @@ router.post('/stripe/create-checkout', requireAuth, async (req, res) => {
       let previousSession
       if(company.stripe_checkout_session_id){
         previousSession = await stripe.checkout.sessions.retrieve(company.stripe_checkout_session_id)
-        if(previousSession.status === 'complete') return res.status(409).json({error:'checkout_already_completed'})
-        if(previousSession.status === 'open') return res.json({url:previousSession.url,session_id:previousSession.id})
+        if(previousSession.status === 'complete' && (!endedSubscriptionId || stripeId(previousSession.subscription) !== endedSubscriptionId)){
+          return res.status(409).json({error:'checkout_already_completed'})
+        }
+        if(previousSession.status === 'open'){
+          if(endedSubscriptionId) await saveCompanyFields(company.id, {stripe_subscription_id:''})
+          return res.json({url:previousSession.url,session_id:previousSession.id})
+        }
       }
       const openSessions = await listAll(p => stripe.checkout.sessions.list(p), {customer:customerId,status:'open'})
       const open = openSessions.find(s => s.mode === 'subscription' && String(s.metadata?.company_id || '') === String(company.id))
       if(open){
-        await saveCompanyFields(company.id, {stripe_checkout_session_id:open.id})
+        await saveCompanyFields(company.id, {stripe_checkout_session_id:open.id,...(endedSubscriptionId ? {stripe_subscription_id:''} : {})})
         return res.json({url:open.url,session_id:open.id})
       }
       const frontendUrl = process.env.FRONTEND_URL || 'https://estofaria-digital.pages.dev'
@@ -413,11 +427,12 @@ router.post('/stripe/create-checkout', requireAuth, async (req, res) => {
         success_url:`${frontendUrl}/stripe-retorno/?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url:`${frontendUrl}/stripe-retorno/?cancelado=1`, locale:'pt-BR'
       }
-      const generation = previousSession?.id || 'initial'
+      const generation = previousSession?.id || endedSubscriptionId || 'initial'
       const session = await stripe.checkout.sessions.create(params, {
         idempotencyKey:`company-checkout-v2:${company.id}:${generation}:${priceId}:${trialEnd || 'no-trial'}`
       })
-      await saveCompanyFields(company.id, {stripe_checkout_session_id:session.id})
+      // Release the ended link only after a replacement Checkout exists and is persisted.
+      await saveCompanyFields(company.id, {stripe_checkout_session_id:session.id,...(endedSubscriptionId ? {stripe_subscription_id:''} : {})})
       return res.json({url:session.url,session_id:session.id})
     })
   } catch(err) {
