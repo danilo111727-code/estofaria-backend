@@ -242,9 +242,10 @@ function shouldWrap(req){
     if(isAgendaV2Mutation(method,path) || isFinancialV2Mutation(method,path)) return false
     if(path.startsWith('/api/v2/')) return false
     if(path.includes('/companies/') && method === 'DELETE') return false
-    // Stripe network calls must not hold the global store transaction. These
+    // Company-serialized Stripe operations must not hold the global transaction. These
     // routes explicitly flush their final mutations before acknowledging them.
     if(path.endsWith('/stripe/create-checkout') || path.endsWith('/stripe/confirm-checkout')
+      || (/\/stripe\/risk-reviews\/[^/]+\/resolve$/.test(path))
       || path.endsWith('/webhooks/stripe') || path.endsWith('/customer-portal')) return false
     return path.startsWith('/api/')
   }
@@ -385,5 +386,3 @@ function middleware(req, res, next){
 }
 
 module.exports = { install, middleware, persistOutsideChanges, getTransactionClient:()=>requestStore.getStore()?.client, markTransactionDirty:()=>{const ctx=requestStore.getStore();if(ctx)ctx.commit=true} }
-
-

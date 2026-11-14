@@ -167,3 +167,57 @@ Conferência no banco após os cancelamentos:
 - Nenhuma cortesia, plano ou dado de conta do aplicativo foi alterado nesta operação.
 
 A antiga proposta de vincular as assinaturas em trial deixa de ser aplicável. Não reativar/recriar cobranças automaticamente. A nova contratação deve ser expressa e manter a conta/dados; ainda é necessário validar o fluxo de recontratação diante dos clientes Stripe legados e das restrições customer_link_required/subscription_already_linked.
+# Implantação no dev — 2026-11-06
+
+Autorização: usuário solicitou iniciar etapas 1 (chave Sandbox) e 2 (implantação em teste).
+Base dev: c168c79ae55fa0d872e3ce386550c18471bed14b. Os três arquivos de runtime do pacote são idênticos entre essa base e main e9fbd49; aplicação isolada sem substituir as demais alterações do dev.
+Pacote: ea3b3f0139d368fb0e7fb6f5e158394a410f70ba, dez arquivos; workflow passa a executar também em dev.
+Validação local nessa combinação: 128 testes aprovados, zero falhas e zero ignorados, incluindo quatro testes SQL descartáveis PGlite. Não equivale a validação de webhook público.
+Chave STRIPE_SECRET_KEY do Sandbox escolhido ainda pendente de configuração. Webhook de teste permanece desativado. Não executar checkout real de validação antes de alinhar credenciais. Produção sem alteração e ainda não aprovada.
+
+
+## Retomada de 13/11/2026 — chave de teste e bloqueio do webhook
+
+- STRIPE_SECRET_KEY configurada somente no serviço estofaria-backend-dev, por atualização parcial de variável; nenhuma credencial é registrada neste documento.
+- Deploy de configuração dep-dbro97om7kps73crthk0 ficou live. Checkout gerado pelo aplicativo foi localizado na conta Sandbox escolhida, livemode=false. Repetição reutilizou a mesma sessão; confirmação de checkout aberto foi recusada; cortesia permaneceu igual.
+- Endpoint Sandbox existente ativado. Uma atualização de metadata em assinatura fictícia cancelada gerou evento real para verificar a entrega, sem reativação ou cobrança.
+- A chamada pública sem assinatura ao alias /api/subscription/webhooks/stripe retornou 401, em vez de chegar à validação de assinatura. Rotas genéricas /api com requireAuth interceptavam esse alias antes de billingRoutes.
+- Correção: encaminhar somente POST /api/subscription/webhooks/stripe ao handler próprio antes dos guards genéricos. Demais rotas continuam autenticadas. O alias /api/billing permanece igual; a verificação da assinatura e o corpo raw permanecem obrigatórios.
+- Regressão ampliada inicia o servidor real com e sem configuração Stripe. Em ambos os aliases, evento sem configuração retorna 503; evento sem assinatura com configuração retorna 400; evento com assinatura HMAC válida e corpo UTF-8 chega ao handler, retorna 200 e persiste como ignored quando não pertence a nenhuma empresa. Consulta da assinatura sem login continua 401.
+- Resultado local: 129 testes aprovados, zero falhas/ignorados, incluindo SQL descartável. A entrega pública após esta correção ainda deve ser comprovada no deploy de teste.
+- Nenhuma alteração em main, webhook live, assinaturas reais, planos ou cortesias de clientes.
+
+### Validação Sandbox em 13/11/2026: cobrança, recusa e nova contratação
+
+- Na empresa fictícia de QA, Checkout concluído e eventos reais entregues ao webhook de desenvolvimento. Fatura inicial de cortesia de R$ 0 validada separadamente da cobrança fictícia de R$ 149.
+- Encerramento antecipado do trial apenas na assinatura fictícia gerou fatura paga de R$ 149. Uma segunda fatura, forçada por alteração da âncora de cobrança, foi recusada (`past_due`, R$ 0 recebido) e recuperada com cartão de teste válido. Esses cenários não equivalem à passagem de um ciclo natural com Test Clock.
+- Cancelamento agendado preservou a assinatura ativa. Cancelamento imediato preservou a cortesia no aplicativo, mas revelou bloqueio permanente à nova contratação pelo identificador da assinatura encerrada.
+- Correção: consultar a assinatura vinculada; permitir nova contratação somente se encerrada e com customer/empresa verificados. Manter bloqueio para ativa, pendente ou inadimplente. Substituir o vínculo encerrado somente ao persistir um novo Checkout; reutilizar sessão aberta em repetição ou resposta perdida. Não alterar a data da cortesia. Eventos tardios da assinatura antiga não podem substituir a assinatura nova.
+- Casos automatizados cobrem as duas situações encerradas, concorrência/reuso, falha intermediária, vínculo divergente e evento antigo após a nova contratação.
+- Produção não alterada nesta validação. Pendências antes da aprovação integral: ciclo natural/relógio de teste, revisão dos eventos de risco (estorno, contestação e alerta de fraude), vínculos legados verificáveis e configuração/validação controlada do ambiente real. Segredos pertencem à configuração protegida da plataforma; não ao repositório ou documentação.
+
+### Etapa seguinte: revisão de estornos, contestações e alertas de fraude
+
+O webhook agora reconhece `charge.refunded`, `charge.dispute.created` e `radar.early_fraud_warning.created`. A relação é resolvida por Charge → Invoice → Subscription, usando a versão 2025-02-24.acacia do SDK instalado. A associação exige customer consistente nas três entidades e vínculo único com a empresa; metadata do evento de risco não seleciona empresa. Antes de atualizar o SDK/API, revalidar essa resolução, pois Basil migrou o vínculo para InvoicePayments.
+
+Cada evento gera um registro `billing_payment_review` no histórico de auditoria já acessível à gestão e uma pendência persistida com cobrança, fatura, assinatura, valores em centavos e link para conferência no Stripe. `amount_refunded_cents` é o total acumulado informado na cobrança, não um lançamento a somar. Recebimentos históricos, assinatura atual e cortesia não são alterados por sinais de risco. A análise humana decide eventual providência no Stripe; o aplicativo não faz estorno, cancelamento ou bloqueio automático.
+
+Endpoints de gestão (somente Master autenticado):
+- GET `/api/subscription/stripe/risk-reviews`: pendências.
+- POST `/api/subscription/stripe/risk-reviews/:eventId/resolve`, JSON `{ "reason": "Justificativa da análise" }`: encerra apenas a revisão e registra responsável/data. Não movimenta dinheiro ou altera acesso.
+- `/api/subscription/status` acrescenta `payment_review_required`; a interface existente permanece compatível.
+
+Verificação local: 150 testes aprovados, incluindo isolamento entre empresas, cobrança sem assinatura, evento antigo após nova contratação, entrega simultânea repetida, recusa de acesso não Master, revisão com justificativa e rollback/reentrega em PostgreSQL simulado por PGlite.
+
+Limites desta etapa: a conexão Stripe disponibiliza criação do Test Clock, mas a busca de operações não disponibilizou avançar o relógio. Não considerar o teste anterior de alteração de âncora uma renovação natural. Permanecem pendentes a simulação temporal e a ativação/validação controlada do ambiente real. Configuração tributária deve ser conferida conforme as operações da empresa; esta correção não ativa Stripe Tax nem muda impostos. Chaves reais devem ficar na configuração protegida da plataforma, preferindo chave restrita com permissões mínimas.
+
+
+### Candidato para revisão de produção (ainda em rascunho)
+
+Pacote recomposto sobre main `42304c5b6480428dc73104fe9e9eb93559a5ae81`, preservando o financeiro e a sessão de 30 dias. Não inclui catálogo, portfólio ou origens adicionais de preview da branch dev. O servidor recebe apenas a antecipação da rota assinada do webhook. O conjunto de 150 testes passou sobre essa base de produção.
+
+Teste externo Sandbox: estorno fictício parcial de R$ 10 concluído na cobrança `ch_3UbTEc07cTYAJL7T0Kodyp8m`; evento `evt_3UbTEc07cTYAJL7T0tMjJrto` com `pending_webhooks=0`. Isso comprova a entrega; o registro de revisão e suas garantias de persistência foram verificados separadamente nos testes automatizados. Os dez eventos necessários estão habilitados no endpoint de desenvolvimento.
+
+Conferência de produção: backend ainda no commit financeiro acima; webhook real `we_1U0t4Q0mQhGFYwYVRhm6Z3qD` desativado e configurado para cinco eventos, API `2026-07-29.dahlia`. Nenhuma configuração real foi alterada. Antes de ativá-lo, é necessário publicar o candidato aprovado, conferir chaves/preços/segredo de assinatura no ambiente protegido e habilitar os dez eventos do pacote. Não copiar segredo do Sandbox para produção. Vínculos legados exigem prova verificável; não associar clientes por email nem reativar assinaturas canceladas. A simulação temporal de renovação permanece pendente.
+
+A conclusão administrativa de uma revisão também ocorre fora da transação global: a mesma ordem de locks usada pelos webhooks evita bloqueio mútuo durante entregas simultâneas. O teste de concorrência cobre essa situação.

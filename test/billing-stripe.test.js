@@ -13,16 +13,18 @@ const { issueToken } = require('../src/lib/auth')
 const day = 86400000
 function company(extra = {}) { return { id:'co_test', name:'Fictícia', owner_email:'fixture@example.invalid', plan_code:'gestao', billing_mode:'courtesy', access_status:'courtesy_active', financial_status:'active', courtesy_until:new Date(Date.now()+60*day).toISOString(), ...extra } }
 async function fixture(t, extra = {}, options = {}) {
-  let state = { companies:[company(extra)], users:[{id:'u_test',company_id:'co_test',email:'fixture@example.invalid',is_active:true}], companyUsers:[], billingConfig:options.billingConfig || {}, billingLeads:[], webhookEvents:[], auditLogs:[] }
-  const calls = { sessions:[], customers:[], lists:[] }
+  let state = { companies:[company(extra)], users:[{id:'u_test',company_id:'co_test',email:'fixture@example.invalid',is_active:true,...(options.master ? {is_master:true} : {})}], companyUsers:[], billingConfig:options.billingConfig || {}, billingLeads:[], webhookEvents:[], auditLogs:[] }
+  const calls = { sessions:[], customers:[], lists:[], retrieves:[] }
   const stripeDelay = () => options.stripeDelayMs ? new Promise(r=>setTimeout(r,options.stripeDelayMs)) : Promise.resolve()
   const subscriptions = new Map()
   const sessions = new Map()
   const invoices = new Map()
+  const charges = new Map()
   const store = { readStore:()=>structuredClone(state), writeStore:v=>{ state=structuredClone(v) }, findCompanyById:(s,id)=>s.companies.find(c=>c.id===id), upsertAudit:(s,v)=>s.auditLogs.push(v), nowIso:()=>new Date().toISOString(), planPreset:()=>({code:'gestao',name:'Gestão',monthly_price_cents:14900,seats_limit:2}) }
   const fake = {
+    charges:{retrieve:async id=>{await stripeDelay();if(options.chargeError)throw Error('simulated charge timeout');if(!charges.has(id))throw Error('missing fixture charge '+id);return structuredClone(charges.get(id))}},
     customers:{ list:async()=>{await stripeDelay();return {data:options.customers || [],has_more:false}}, create:async(p,o)=>{ await stripeDelay(); calls.customers.push({p,o}); return {id:'cus_fixture'} } },
-    subscriptions:{ list:async p=>{ await stripeDelay(); calls.lists.push(p); return options.list ? options.list(p) : {data:[...subscriptions.values()].filter(s=>s.customer===p.customer),has_more:false} }, retrieve:async id=>{ await stripeDelay(); if(options.retrieveError) throw Error('simulated timeout'); if(!subscriptions.has(id)) throw Error('missing fixture subscription '+id); return structuredClone(subscriptions.get(id)) } },
+    subscriptions:{ list:async p=>{ await stripeDelay(); calls.lists.push(p); return options.list ? options.list(p) : {data:[...subscriptions.values()].filter(s=>s.customer===p.customer),has_more:false} }, retrieve:async id=>{ calls.retrieves.push(id); await stripeDelay(); if(options.retrieveError) throw Error('simulated timeout'); if(!subscriptions.has(id)) throw Error('missing fixture subscription '+id); return structuredClone(subscriptions.get(id)) } },
     invoices:{retrieve:async id=>structuredClone(invoices.get(id))},
     checkout:{ sessions:{ create:async(p,o)=>{ await stripeDelay(); calls.sessions.push({p,o}); await new Promise(r=>setImmediate(r)); const s={id:'cs_fixture_'+calls.sessions.length,url:'https://checkout.example.invalid/'+calls.sessions.length,status:'open',mode:'subscription',customer:p.customer,metadata:p.metadata,expires_at:Math.floor(Date.now()/1000)+86400}; sessions.set(s.id,s); if(options.checkoutTimeoutOnce){options.checkoutTimeoutOnce=false;throw Error('simulated lost Stripe response')} return structuredClone(s) }, retrieve:async id=>{ await stripeDelay(); if(!sessions.has(id)) throw Error('missing fixture session '+id); return structuredClone(sessions.get(id)) },list:async p=>{await stripeDelay();return {data:[...sessions.values()].filter(s=>s.customer===p.customer&&s.status==='open'),has_more:false}} } },
     webhooks:{constructEvent:(...args)=>Stripe.webhooks.constructEvent(...args)}
@@ -87,16 +89,58 @@ async function fixture(t, extra = {}, options = {}) {
   t.after(()=>{server.close(); if(oldStore)require.cache[storePath]=oldStore; else delete require.cache[storePath]})
   let token=issueToken(state.users[0])
   async function request(path,body, signed=true){ const raw=JSON.stringify(body); const headers={ 'content-type':'application/json',authorization:'Bearer '+token }; if(path.endsWith('webhooks/stripe')) headers['stripe-signature']=signed?Stripe.webhooks.generateTestHeaderString({payload:raw,secret:process.env.STRIPE_WEBHOOK_SECRET}):'invalid'; const res=await fetch('http://127.0.0.1:'+server.address().port+path,{method:body?'POST':'GET',headers,body:body?raw:undefined}); return {status:res.status,body:await res.json()} }
-  return { calls,subscriptions,sessions,invoices,refreshSession:()=>{token=issueToken(state.users[0])},flush:async()=>options.atomic&&store._pg.flushNow(),get persisted(){return state},get state(){return options.atomic?store.readStore():state},get company(){return (options.atomic?store.readStore():state).companies[0]}, request, checkout:()=>request('/api/billing/stripe/create-checkout',{}), webhook:(type,obj,id='evt_'+Math.random())=>request('/api/billing/webhooks/stripe',{id,type,data:{object:obj}}), complete:(id,sub)=>{sessions.set(id,{id,mode:'subscription',status:'complete',payment_status:'paid',metadata:{company_id:'co_test'},customer:sub.customer,subscription:sub.id})} }
+  return { calls,subscriptions,sessions,invoices,charges,refreshSession:()=>{token=issueToken(state.users[0])},flush:async()=>options.atomic&&store._pg.flushNow(),get persisted(){return state},get state(){return options.atomic?store.readStore():state},get company(){return (options.atomic?store.readStore():state).companies[0]}, request, checkout:()=>request('/api/billing/stripe/create-checkout',{}), webhook:(type,obj,id='evt_'+Math.random())=>request('/api/billing/webhooks/stripe',{id,type,data:{object:obj}}), complete:(id,sub)=>{sessions.set(id,{id,mode:'subscription',status:'complete',payment_status:'paid',metadata:{company_id:'co_test'},customer:sub.customer,subscription:sub.id})} }
 }
 function sub(extra={}) { return {id:'sub_current',object:'subscription',customer:'cus_fixture',status:'active',metadata:{company_id:'co_test'},current_period_end:Math.floor(Date.now()/1000)+30*86400,...extra} }
+for(const status of ['canceled','incomplete_expired'])test('verified '+status+' subscription permits a new contract and preserves courtesy',async t=>{
+  const f=await fixture(t,{stripe_customer_id:'cus_fixture',stripe_subscription_id:'sub_current',stripe_checkout_session_id:'cs_old'}, {atomic:true})
+  const old=sub({status});f.subscriptions.set(old.id,old);f.complete('cs_old',old)
+  const courtesy=f.company.courtesy_until
+  const r=await f.checkout();assert.equal(r.status,200)
+  assert.equal(f.persisted.companies[0].stripe_subscription_id,'')
+  assert.equal(f.persisted.companies[0].stripe_checkout_session_id,r.body.session_id)
+  assert.equal(f.company.courtesy_until,courtesy)
+  assert.match(f.calls.sessions[0].o.idempotencyKey,/:cs_old:/)
+  assert.equal((await f.checkout()).body.session_id,r.body.session_id)
+  assert.equal(f.calls.sessions.length,1)
+  await f.webhook('customer.subscription.deleted',old)
+  assert.equal(f.company.stripe_subscription_id,'')
+  const renewed=sub({id:'sub_renewed'});f.subscriptions.set(renewed.id,renewed)
+  f.complete(r.body.session_id,renewed)
+  await f.webhook('checkout.session.completed',f.sessions.get(r.body.session_id))
+  assert.equal(f.company.stripe_subscription_id,renewed.id)
+  await f.webhook('customer.subscription.deleted',old)
+  assert.equal(f.company.stripe_subscription_id,renewed.id)
+  assert.equal(f.company.financial_status,'active')
+  assert.equal((await f.checkout()).status,409)
+})
+for(const extra of [{customer:'cus_other'},{metadata:{company_id:'co_other'}},{metadata:{}}])test('unverified ended subscription cannot release its link '+JSON.stringify(extra),async t=>{
+  const f=await fixture(t,{stripe_customer_id:'cus_fixture',stripe_subscription_id:'sub_current'})
+  f.subscriptions.set('sub_current',sub({status:'canceled',...extra}))
+  assert.equal((await f.checkout()).body.error,'customer_link_required')
+  assert.equal(f.company.stripe_subscription_id,'sub_current');assert.equal(f.calls.sessions.length,0)
+})
+test('new contract timeout preserves ended identifiers and retry recovers the open checkout',async t=>{
+  const f=await fixture(t,{stripe_customer_id:'cus_fixture',stripe_subscription_id:'sub_current',stripe_checkout_session_id:'cs_old'}, {checkoutTimeoutOnce:true})
+  const old=sub({status:'canceled'});f.subscriptions.set(old.id,old);f.complete('cs_old',old)
+  assert.equal((await f.checkout()).status,500)
+  assert.equal(f.company.stripe_subscription_id,old.id);assert.equal(f.company.stripe_checkout_session_id,'cs_old')
+  assert.equal((await f.checkout()).status,200)
+  assert.equal(f.company.stripe_subscription_id,'');assert.equal(f.calls.sessions.length,1)
+})
+test('completed checkout for another subscription cannot authorize a new contract',async t=>{
+  const f=await fixture(t,{stripe_customer_id:'cus_fixture',stripe_subscription_id:'sub_current',stripe_checkout_session_id:'cs_old'})
+  f.subscriptions.set('sub_current',sub({status:'canceled'}));f.complete('cs_old',sub({id:'sub_other'}))
+  assert.equal((await f.checkout()).body.error,'checkout_already_completed')
+  assert.equal(f.company.stripe_subscription_id,'sub_current');assert.equal(f.calls.sessions.length,0)
+})
 const checkoutPath='/api/billing/stripe/confirm-checkout'
 test('public billing reports the effective 60-day courtesy even with legacy 30-day config',async t=>{const f=await fixture(t,{}, {billingConfig:{trial_days:30}});const r=await f.request('/api/billing/public');assert.equal(r.status,200);assert.equal(r.body.trial_days,60)})
 test('repeated checkout reuses one open session',async t=>{const f=await fixture(t);const a=await f.checkout(),b=await f.checkout();assert.equal(a.status,200);assert.equal(b.body.session_id,a.body.session_id);assert.equal(f.calls.sessions.length,1)})
 test('concurrent checkout creates only one session',async t=>{const f=await fixture(t);const r=await Promise.all(Array.from({length:8},()=>f.checkout()));assert.equal(new Set(r.map(x=>x.body.session_id)).size,1);assert.equal(f.calls.sessions.length,1)})
 test('creates and persists an explicit Stripe customer',async t=>{const f=await fixture(t);await f.checkout();assert.equal(f.company.stripe_customer_id,'cus_fixture');assert.equal(f.calls.sessions[0].p.customer,'cus_fixture');assert.ok(f.calls.customers[0].o.idempotencyKey)})
 test('existing customer reused without email creation',async t=>{const f=await fixture(t,{stripe_customer_id:'cus_fixture'});await f.checkout();assert.equal(f.calls.sessions[0].p.customer,'cus_fixture');assert.equal(f.calls.customers.length,0);assert.equal(f.calls.sessions[0].p.customer_email,undefined)})
-test('active linked subscription blocks new checkout',async t=>{const f=await fixture(t,{stripe_subscription_id:'sub_current'});assert.equal((await f.checkout()).status,409);assert.equal(f.calls.sessions.length,0)})
+test('active linked subscription blocks new checkout',async t=>{const f=await fixture(t,{stripe_subscription_id:'sub_current'});f.subscriptions.set('sub_current',sub());assert.equal((await f.checkout()).status,409);assert.equal(f.calls.sessions.length,0)})
 for(const status of ['active','trialing','past_due','unpaid','incomplete','paused'])test('existing '+status+' subscription prevents duplicate',async t=>{const f=await fixture(t,{stripe_customer_id:'cus_fixture'});f.subscriptions.set('sub_current',sub({status}));assert.equal((await f.checkout()).status,409)})
 test('subscription pagination checks later pages',async t=>{const f=await fixture(t,{stripe_customer_id:'cus_fixture'},{list:p=>p.starting_after?{data:[sub()],has_more:false}:{data:[sub({id:'sub_old',status:'canceled'})],has_more:true}});assert.equal((await f.checkout()).status,409)})
 test('full courtesy end preserved exactly',async t=>{const f=await fixture(t);const until=f.company.courtesy_until;await f.checkout();assert.equal(f.calls.sessions[0].p.subscription_data.trial_end,Math.ceil(Date.parse(until)/1000));assert.equal(f.company.courtesy_until,until)})
@@ -374,4 +418,92 @@ test('previously ignored legacy event can reconcile after explicit verified link
   assert.equal(f.state.webhookEvents[0].status,'processed')
   assert.equal(f.state.auditLogs.filter(a=>a.action==='billing_webhook').length,1)
   assert.equal((await f.webhook('invoice.paid',invoice,'evt_legacy_replay')).body.duplicate,true)
+})
+
+function seedRisk(f, overrides={}){
+  f.subscriptions.set('sub_current',sub())
+  f.invoices.set('in_risk',{id:'in_risk',object:'invoice',customer:'cus_fixture',subscription:'sub_current',status:'paid',...overrides.invoice})
+  f.charges.set('ch_risk',{id:'ch_risk',object:'charge',customer:'cus_fixture',invoice:'in_risk',currency:'brl',amount:14900,amount_refunded:4900,...overrides.charge})
+}
+const riskTypes=['charge.refunded','charge.dispute.created','radar.early_fraud_warning.created']
+function riskObject(type){return type==='charge.refunded'?{id:'ch_risk',object:'charge'}:{id:'risk_fixture',charge:{id:'ch_risk'},amount:14900,metadata:{company_id:'co_other'}}}
+for(const type of riskTypes)test(type+' resolves ownership from charge and invoice and records one review without changing access',async t=>{
+  const f=await fixture(t,{stripe_customer_id:'cus_fixture',stripe_subscription_id:'sub_current',last_payment_at:'2026-01-01T00:00:00.000Z'})
+  seedRisk(f);const before=structuredClone(f.company)
+  assert.equal((await f.webhook(type,riskObject(type),'evt_risk')).status,200)
+  assert.deepEqual(f.company,before)
+  assert.equal(f.state.webhookEvents[0].status,'review_required')
+  assert.equal(f.state.webhookEvents[0].risk.invoice_id,'in_risk')
+  assert.equal(f.state.webhookEvents[0].risk.amount_refunded_cents,4900)
+  assert.equal(f.state.auditLogs[0].action,'billing_payment_review')
+  assert.equal((await f.request('/api/billing/status')).body.subscription.payment_review_required,true)
+  assert.equal((await f.webhook(type,riskObject(type),'evt_risk')).body.duplicate,true)
+  assert.equal(f.state.auditLogs.length,1)
+  assert.equal((await f.request('/api/billing/stripe/risk-reviews')).status,403)
+  assert.equal((await f.request('/api/billing/stripe/risk-reviews/evt_risk/resolve',{reason:'Revisão concluída.'})).status,403)
+})
+test('risk event for an old verified subscription does not replace the new subscription',async t=>{
+  const f=await fixture(t,{stripe_customer_id:'cus_fixture',stripe_subscription_id:'sub_new'})
+  seedRisk(f);f.subscriptions.set('sub_current',sub({status:'canceled'}))
+  await f.webhook('charge.refunded',riskObject('charge.refunded'))
+  assert.equal(f.state.webhookEvents[0].status,'review_required')
+  assert.equal(f.company.stripe_subscription_id,'sub_new')
+})
+for(const overrides of [{charge:{invoice:null}},{charge:{customer:'cus_other'}},{invoice:{customer:'cus_other'}},{invoice:{subscription:null}}])test('risk event cannot guess ownership when graph is missing or conflicting '+JSON.stringify(overrides),async t=>{
+  const f=await fixture(t,{stripe_customer_id:'cus_fixture',stripe_subscription_id:'sub_current'})
+  seedRisk(f,overrides);await f.webhook('charge.refunded',{id:'ch_risk',metadata:{company_id:'co_test'}})
+  assert.equal(f.state.webhookEvents[0].status,'ignored');assert.equal(f.state.auditLogs.length,0)
+})
+test('risk event cannot use foreign subscription metadata to select an unrelated company',async t=>{
+  const f=await fixture(t,{stripe_customer_id:'cus_fixture',stripe_subscription_id:'sub_current'});seedRisk(f)
+  f.subscriptions.set('sub_current',sub({metadata:{company_id:'co_other'}}))
+  await f.webhook('charge.refunded',riskObject('charge.refunded'))
+  assert.equal(f.state.webhookEvents[0].status,'ignored');assert.equal(f.state.auditLogs.length,0)
+})
+test('risk Stripe API failure remains retryable without recording a review',async t=>{
+  const f=await fixture(t,{stripe_customer_id:'cus_fixture',stripe_subscription_id:'sub_current'},{chargeError:true});seedRisk(f)
+  assert.equal((await f.webhook('charge.refunded',riskObject('charge.refunded'))).status,500)
+  assert.equal(f.state.webhookEvents.length,0);assert.equal(f.state.auditLogs.length,0)
+})
+test('concurrent risk deliveries persist one review and one audit',async t=>{
+  const f=await fixture(t,{stripe_customer_id:'cus_fixture',stripe_subscription_id:'sub_current'},{stripeDelayMs:10});seedRisk(f)
+  const r=await Promise.all(Array.from({length:5},()=>f.webhook('charge.refunded',riskObject('charge.refunded'),'evt_risk')))
+  assert.ok(r.every(x=>x.status===200));assert.equal(f.state.webhookEvents.length,1);assert.equal(f.state.auditLogs.length,1)
+})
+test('Master can list and close a review with an auditable reason, never a payment or cancellation',async t=>{
+  const f=await fixture(t,{stripe_customer_id:'cus_fixture',stripe_subscription_id:'sub_current'},{master:true});seedRisk(f)
+  await f.webhook('charge.refunded',riskObject('charge.refunded'),'evt_risk')
+  const before=structuredClone(f.company)
+  const list=await f.request('/api/billing/stripe/risk-reviews');assert.equal(list.status,200);assert.equal(list.body.items.length,1)
+  assert.equal((await f.request('/api/billing/stripe/risk-reviews/evt_risk/resolve',{reason:'ok'})).status,400)
+  assert.equal((await f.request('/api/billing/stripe/risk-reviews/evt_risk/resolve',{reason:'Estorno conferido no Stripe.'})).status,200)
+  assert.equal(f.state.webhookEvents[0].status,'reviewed');assert.equal(f.state.webhookEvents[0].reviewed_by,'u_test')
+  assert.equal((await f.request('/api/billing/stripe/risk-reviews')).body.items.length,0)
+  assert.equal((await f.request('/api/billing/status')).body.subscription.payment_review_required,false)
+  assert.deepEqual(f.company,before)
+  assert.equal((await f.webhook('charge.refunded',riskObject('charge.refunded'),'evt_risk')).body.duplicate,true)
+  assert.equal(f.state.webhookEvents[0].status,'reviewed')
+  assert.equal(f.state.auditLogs.length,2)
+})
+if(process.env.STRIPE_SQL_TEST==='1')test('SQL risk commit failure retries exactly once and keeps access and courtesy intact',async t=>{
+  const f=await fixture(t,{stripe_customer_id:'cus_fixture',stripe_subscription_id:'sub_current'},{atomic:true,sql:true,failCommitOnce:true});seedRisk(f)
+  const before=structuredClone(f.company)
+  assert.equal((await f.webhook('charge.refunded',riskObject('charge.refunded'),'evt_risk')).status,503)
+  assert.equal((await f.webhook('charge.refunded',riskObject('charge.refunded'),'evt_risk')).status,200)
+  assert.equal(f.persisted.webhookEvents.length,1);assert.equal(f.persisted.webhookEvents[0].status,'review_required')
+  assert.equal(f.persisted.auditLogs.length,1);assert.deepEqual(f.persisted.companies[0],before)
+})
+
+test('risk review does not deadlock behind a concurrent lifecycle webhook and PostgreSQL transaction',async t=>{
+  const f=await fixture(t,{stripe_customer_id:'cus_fixture',stripe_subscription_id:'sub_current'},{atomic:true,master:true,stripeDelayMs:100});seedRisk(f)
+  await f.webhook('charge.refunded',riskObject('charge.refunded'),'evt_risk')
+  const reads=f.calls.retrieves.length
+  const webhook=f.webhook('customer.subscription.updated',sub(),'evt_subscription_update')
+  while(f.calls.retrieves.length===reads)await new Promise(r=>setTimeout(r,2))
+  const resolve=f.request('/api/billing/stripe/risk-reviews/evt_risk/resolve',{reason:'Conferência administrativa concluída.'})
+  const mutation=f.request('/api/test-mutation',{})
+  const [a,b,c]=await Promise.all([webhook,resolve,mutation])
+  assert.equal(a.status,200);assert.equal(b.status,200);assert.equal(c.status,200)
+  assert.equal(f.persisted.webhookEvents.find(e=>e.id==='evt_risk').status,'reviewed')
+  assert.equal(f.persisted.latency_probe,1)
 })

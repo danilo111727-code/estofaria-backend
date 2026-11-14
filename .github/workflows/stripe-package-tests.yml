@@ -1,8 +1,8 @@
 name: Stripe package - offline validation
 on:
   push:
-    branches: [correcao-stripe-segura-teste-20261105]
-    paths: [src/routes/billing.js, src/middleware/auth.js, src/lib/atomic-store.js, test/**, .github/workflows/stripe-package-tests.yml]
+    branches: [correcao-stripe-segura-teste-20261105, dev]
+    paths: [server.js, src/routes/billing.js, src/middleware/auth.js, src/lib/atomic-store.js, test/**, .github/workflows/stripe-package-tests.yml]
   workflow_dispatch:
 permissions:
   contents: read
