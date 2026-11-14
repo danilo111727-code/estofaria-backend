@@ -33,6 +33,7 @@ function getBearerToken(req){
 }
 
 function isSubscriptionExempt(req){
+  if(['/api/billing','/api/subscription'].includes(req.baseUrl)) return true
   const path = req.path || ''
   return SUBSCRIPTION_EXEMPT_PATHS.some(p => path.startsWith(p))
 }

@@ -143,6 +143,11 @@ app.use('/api/auth', authRoutes)
 app.use('/api/saas', auditV2Routes)
 app.use('/api/saas', companyNameRoutes)
 app.use('/api/saas', saasRoutes)
+// Stripe authenticates webhook requests by signature, before generic /api login guards.
+app.use('/api/subscription', (req, res, next) => {
+  if (req.method === 'POST' && req.path === '/webhooks/stripe') return billingRoutes(req, res, next)
+  next()
+})
 app.use('/api/billing', billingRoutes)
 app.use('/api', legacyApiPermissions)
 app.use('/api', require('./src/routes/trash'))
