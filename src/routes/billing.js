@@ -1,13 +1,131 @@
 const express = require('express')
 const { v4: uuidv4 } = require('uuid')
-const { readStore, writeStore, findCompanyById, upsertAudit, nowIso, planPreset } = require('../lib/store')
+const storeLib = require('../lib/store')
+const { readStore, writeStore, findCompanyById, upsertAudit, nowIso, planPreset } = storeLib
 const { requireAuth, optionalAuth, requireMaster, requirePermission } = require('../middleware/auth')
 const { hasMasterAccess } = require('../lib/policies')
 
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY
-const stripe = stripeSecretKey ? require('stripe')(stripeSecretKey) : null
+const stripe = stripeSecretKey ? require('stripe')(stripeSecretKey, { timeout:5000, maxNetworkRetries:0 }) : null
+const COURTESY_DAYS = 60
 
 const router = express.Router()
+
+// Serialize operations for one company in this process. Stripe idempotency keys
+// also protect retries after a timeout/restart; this store remains single-writer.
+const billingQueues = new Map()
+async function withCompanyLock(id, operation){
+  const previous = billingQueues.get(id) || Promise.resolve()
+  const current = previous.catch(() => {}).then(operation)
+  billingQueues.set(id, current)
+  try { return await current } finally {
+    if(billingQueues.get(id) === current) billingQueues.delete(id)
+  }
+}
+function stripeId(value){ return typeof value === 'string' ? value : String(value?.id || '') }
+function subscriptionId(obj){
+  return stripeId(obj.subscription || obj.parent?.subscription_details?.subscription
+    || (obj.object === 'subscription' ? obj.id : ''))
+}
+const riskEventTypes = new Set(['charge.refunded','charge.dispute.created','radar.early_fraud_warning.created'])
+async function recordPaymentRisk(event){
+  const obj = event.data?.object || {}
+  const chargeId = event.type === 'charge.refunded' ? stripeId(obj.id) : stripeId(obj.charge)
+  if(!chargeId) return false
+  // Resolve ownership through Stripe resources, never through a risk event's metadata.
+  // Retrieve using this SDK's API version, including the legacy charge.invoice link.
+  const charge = await stripe.charges.retrieve(chargeId)
+  const invoiceId = stripeId(charge.invoice)
+  if(!invoiceId) return false // One-off charges have no subscription entitlement.
+  const invoice = await stripe.invoices.retrieve(invoiceId)
+  const subId = subscriptionId(invoice)
+  if(!subId) return false
+  const subscription = await stripe.subscriptions.retrieve(subId)
+  const customerId = stripeId(subscription.customer)
+  if(!customerId || stripeId(charge.customer) !== customerId || stripeId(invoice.customer) !== customerId) return false
+  const initial = readStore()
+  const linked = initial.companies.filter(c => c.stripe_subscription_id === subId)
+  const candidates = linked.length ? linked : initial.companies.filter(c => c.stripe_customer_id === customerId
+    && String(subscription.metadata?.company_id || '') === String(c.id))
+  if(candidates.length !== 1) return false
+  const companyId = candidates[0].id
+  return withCompanyLock(String(companyId), async () => {
+    const latest = readStore()
+    const company = findCompanyById(latest, companyId)
+    if(!company || company.stripe_customer_id !== customerId
+      || (subscription.metadata?.company_id && String(subscription.metadata.company_id) !== String(company.id))) return false
+    if(latest.webhookEvents.some(e => e.id === event.id && e.status !== 'ignored')) return true
+    const risk = {company_id:company.id,subscription_id:subId,invoice_id:invoiceId,charge_id:chargeId,
+      customer_id:customerId,currency:charge.currency,amount_cents:charge.amount,
+      amount_refunded_cents:charge.amount_refunded || 0,
+      disputed_amount_cents:event.type === 'charge.dispute.created' ? obj.amount : undefined,
+      object_id:obj.id,reason:obj.reason || '',stripe_status:obj.status || '',
+      action:'manual_review',dashboard_url:`https://dashboard.stripe.com/${event.livemode ? '' : 'test/'}payments/${chargeId}`}
+    const label = event.type === 'charge.refunded' ? 'Estorno' : event.type === 'charge.dispute.created' ? 'Contestação' : 'Alerta de fraude'
+    upsertAudit(latest,{company_id:company.id,action:'billing_payment_review',
+      message:`${label} Stripe: revisar pagamento ${chargeId} da assinatura ${subId}.`,
+      actor_name:'stripe-webhook',actor_role:'system',reason:event.type,
+      request_json:risk,source:'billing-webhook'})
+    latest.webhookEvents = latest.webhookEvents.filter(e => e.id !== event.id)
+    latest.webhookEvents.push({id:event.id,type:event.type,created_at:nowIso(),payload:event,
+      company_id:company.id,risk,status:'review_required'})
+    // A risk signal is a review request, not authorization to refund, cancel or remove a courtesy.
+    writeStore(latest)
+    await flushStore('webhook_persistence_error')
+    return true
+  })
+}
+function courtesyActive(company){
+  if(!company || company.billing_mode !== 'courtesy' || company.access_status !== 'courtesy_active') return false
+  return !company.courtesy_until || Date.parse(company.courtesy_until) > Date.now()
+}
+function updateSubscription(company, subscription){
+  company.stripe_customer_id = stripeId(subscription.customer)
+  company.stripe_subscription_id = subscription.id
+  company.financial_status = subscription.status
+  if(!courtesyActive(company)){
+    company.billing_mode = 'stripe'
+    const status = subscription.status
+    if(['active','trialing'].includes(status)) company.access_status = 'active'
+    else if(status === 'past_due') company.access_status = Date.parse(company.manual_grace_until) > Date.now() ? 'manual_grace' : 'active'
+    else company.access_status = 'blocked'
+  }
+  const periodEnd = subscription.current_period_end || subscription.items?.data?.[0]?.current_period_end
+  const next = subscription.status === 'trialing' ? subscription.trial_end : periodEnd
+  company.next_charge_at = next ? new Date(Number(next) * 1000).toISOString() : ''
+  company.trial_ends_at = subscription.trial_end ? new Date(Number(subscription.trial_end) * 1000).toISOString() : ''
+  company.updated_at = nowIso()
+}
+async function listAll(method, params){
+  const result = []
+  let after
+  do {
+    const page = await method({ ...params, limit:100, ...(after ? {starting_after:after} : {}) })
+    result.push(...page.data)
+    if(!page.has_more) break
+    if(!page.data.length) throw new Error('Stripe pagination returned an empty page')
+    after = page.data[page.data.length - 1].id
+  } while(true)
+  return result
+}
+async function flushStore(code = 'store_persistence_error'){
+  try {
+    if(storeLib._pg && typeof storeLib._pg.flushNow === 'function') await storeLib._pg.flushNow()
+  } catch(error) {
+    error.code = error.code || code
+    throw error
+  }
+}
+async function saveCompanyFields(id, fields){
+  // Never write a snapshot obtained before awaiting a Stripe API request.
+  const latest = readStore()
+  const company = findCompanyById(latest, id)
+  if(!company) throw new Error('Company no longer exists')
+  Object.assign(company, fields)
+  writeStore(latest)
+  await flushStore('checkout_persistence_error')
+  return company
+}
 
 function normalizeText(value, max = 160){
   return String(value || '').replace(/\s+/g, ' ').trim().slice(0, max)
@@ -42,8 +160,9 @@ function expireCourtesyIfNeeded(store, company){
 
   const before = JSON.parse(JSON.stringify(company))
   company.billing_mode = 'stripe'
-  company.financial_status = 'pending_payment'
-  company.access_status = 'pending_payment'
+  const linkedAndValid = Boolean(company.stripe_subscription_id && ['active', 'trialing'].includes(String(company.financial_status || '').toLowerCase()))
+  company.financial_status = linkedAndValid ? company.financial_status : 'pending_payment'
+  company.access_status = linkedAndValid ? 'active' : 'pending_payment'
   company.professional_courtesy_enabled = false
   company.courtesy_expired_at = nowIso()
   company.updated_at = nowIso()
@@ -87,7 +206,7 @@ function buildSubscriptionPayload(company, store, req){
       subscription: {
         status: cfg.enabled === false ? 'inactive' : 'trialing',
         payment_provider: cfg.payment_provider || 'stripe',
-        trial_days: Number(cfg.trial_days || 30),
+        trial_days: COURTESY_DAYS,
         checkout_url: cfg.payment_link || '',
         payment_link: cfg.payment_link || '',
         customer_portal_available: false,
@@ -103,6 +222,7 @@ function buildSubscriptionPayload(company, store, req){
       status: company.financial_status || 'inactive',
       financial_status: company.financial_status || 'inactive',
       access_status: company.access_status || 'inactive',
+      payment_review_required: store.webhookEvents.some(e => e.company_id === company.id && e.status === 'review_required'),
       professional_courtesy_enabled: professionalCourtesyActive(company),
       professional_available: professionalSubscriptionActive(company) || professionalCourtesyActive(company),
       payment_provider: cfg.payment_provider || company.billing_mode || 'stripe',
@@ -110,7 +230,7 @@ function buildSubscriptionPayload(company, store, req){
       grace_until: company.manual_grace_until || '',
       courtesy_started_at: company.courtesy_started_at || '',
       courtesy_until: company.courtesy_until || '',
-      trial_days: Number(cfg.trial_days || 30),
+      trial_days: COURTESY_DAYS,
       checkout_url: cfg.payment_link || `${appBaseUrl(req)}/checkout-simulado?company=${encodeURIComponent(company.id)}`,
       payment_link: cfg.payment_link || `${appBaseUrl(req)}/checkout-simulado?company=${encodeURIComponent(company.id)}`,
       customer_portal_available: Boolean(company.stripe_customer_id || company.stripe_subscription_id || company.billing_mode === 'stripe'),
@@ -136,7 +256,7 @@ function buildLeadPayload(lead, checkoutUrl, company, cfg){
     lead,
     subscription: {
       status: company?.financial_status || 'trialing',
-      trial_days: Number(cfg.trial_days || 30),
+      trial_days: COURTESY_DAYS,
       payment_provider: cfg.payment_provider || 'stripe',
       checkout_url: checkoutUrl,
       payment_link: checkoutUrl,
@@ -190,7 +310,7 @@ function handleCheckout(req, res){
     company.plan_name = payload.plan_name || plan.name
     company.monthly_price_cents = plan.monthly_price_cents
     company.seats_limit = plan.seats_limit
-    company.billing_mode = 'stripe'
+    if(!courtesyActive(company)) company.billing_mode = 'stripe'
     // access_status e financial_status só são atualizados pelo webhook Stripe,
     // nunca pelo simples preenchimento do formulário de checkout.
 
@@ -218,7 +338,7 @@ function handleCheckout(req, res){
 
 router.get('/public', (req, res) => {
   const store = readStore()
-  res.json(store.billingConfig)
+  res.json({ ...(store.billingConfig || {}), trial_days:COURTESY_DAYS })
 })
 
 router.get('/config', requireAuth, requireMaster, requirePermission('billing.read'), (req, res) => {
@@ -255,7 +375,7 @@ router.get('/', requireAuth, (req, res) => {
   res.json(buildSubscriptionPayload(company, store, req))
 })
 
-router.get('/subscription', requireAuth, (req, res) => {
+router.get(['/subscription','/status'], requireAuth, (req, res) => {
   const store = readStore()
   const company = getCompanyFromSession(store, req)
   expireCourtesyIfNeeded(store, company)
@@ -275,39 +395,97 @@ router.post('/customer-portal', requireAuth, (req, res) => {
 
 router.post('/stripe/create-checkout', requireAuth, async (req, res) => {
   if(!stripe) return res.status(503).json({ error:'stripe_not_configured', message:'Stripe não configurado.' })
-  const store = readStore()
-  const company = getCompanyFromSession(store, req)
-  if(!company) return res.status(404).json({ error:'company_not_found', message:'Empresa não encontrada.' })
-  // Resolve o Price ID por plano: env var específica > env var genérica > billingConfig map > billingConfig single
-  const planCode = (company.plan_code || store.billingConfig?.default_plan_code || 'gestao').toLowerCase()
-  const priceId = process.env[`STRIPE_PRICE_ID_${planCode.toUpperCase()}`]
-    || process.env.STRIPE_PRICE_ID
-    || (store.billingConfig?.stripe_prices || {})[planCode]
-    || store.billingConfig?.stripe_price_id
-  if(!priceId) return res.status(503).json({ error:'price_not_configured', message:'Plano não configurado.' })
-  const frontendUrl = process.env.FRONTEND_URL || 'https://estofaria-digital.pages.dev'
+  const initial = getCompanyFromSession(readStore(), req)
+  if(!initial) return res.status(404).json({ error:'company_not_found', message:'Empresa não encontrada.' })
   try {
-    const trialDays = Number(store.billingConfig?.trial_days || 60)
-    const session = await stripe.checkout.sessions.create({
-      mode: 'subscription',
-      payment_method_types: ['card'],
-      payment_method_collection: 'always',
-      line_items: [{ price: priceId, quantity: 1 }],
-      subscription_data: {
-        trial_period_days: trialDays,
-        trial_settings: {
-          end_behavior: { missing_payment_method: 'cancel' }
+    return await withCompanyLock(String(initial.id), async () => {
+      const store = readStore()
+      let company = findCompanyById(store, initial.id)
+      if(!company) return res.status(404).json({ error:'company_not_found' })
+      let endedSubscriptionId
+      if(company.stripe_subscription_id){
+        const linked = await stripe.subscriptions.retrieve(company.stripe_subscription_id)
+        if(!['canceled','incomplete_expired'].includes(linked.status)){
+          return res.status(409).json({ error:'subscription_already_linked', message:'Consulte a assinatura existente antes de contratar novamente.' })
         }
-      },
-      metadata: { company_id: String(company.id) },
-      customer_email: company.owner_email || req.user?.email || undefined,
-      success_url: `${frontendUrl}/stripe-retorno/?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${frontendUrl}/stripe-retorno/?cancelado=1`,
-      locale: 'pt-BR'
+        if(!stripeId(company.stripe_customer_id) || stripeId(linked.customer) !== stripeId(company.stripe_customer_id)
+          || String(linked.metadata?.company_id || '') !== String(company.id)){
+          return res.status(409).json({error:'customer_link_required',message:'O suporte deve verificar o vínculo da assinatura encerrada antes de uma nova contratação.'})
+        }
+        endedSubscriptionId = linked.id
+      }
+      const planCode = (company.plan_code || store.billingConfig?.default_plan_code || 'gestao').toLowerCase()
+      const priceId = process.env[`STRIPE_PRICE_ID_${planCode.toUpperCase()}`] || process.env.STRIPE_PRICE_ID
+        || (store.billingConfig?.stripe_prices || {})[planCode] || store.billingConfig?.stripe_price_id
+      if(!priceId) return res.status(503).json({ error:'price_not_configured' })
+      const courtesyEnd = Date.parse(String(company.courtesy_until || ''))
+      const trialEnd = Number.isFinite(courtesyEnd) && courtesyEnd > Date.now() ? Math.ceil(courtesyEnd / 1000) : null
+      // Checkout requires at least 48 hours. Never discard the remaining courtesy
+      // or extend the agreed date to work around that Stripe restriction.
+      if(trialEnd && trialEnd - Date.now()/1000 < 172860){
+        return res.status(409).json({ error:'courtesy_ending', retry_at:company.courtesy_until,
+          message:'Sua cortesia continua ativa. Contrate ao encerrar o período para evitar cobrança antecipada.' })
+      }
+      let customerId = stripeId(company.stripe_customer_id)
+      if(!customerId && company.owner_email){
+        // Email is only a lookup hint, never proof of company ownership.
+        const candidates = await listAll(p => stripe.customers.list(p), {email:company.owner_email})
+        const owned = candidates.filter(c => String(c.metadata?.company_id || '') === String(company.id))
+        if(owned.length === 1){
+          customerId = owned[0].id
+          company = await saveCompanyFields(company.id, {stripe_customer_id:customerId})
+        } else if(candidates.length){
+          return res.status(409).json({error:'customer_link_required',message:'Cadastro Stripe anterior encontrado. O suporte deve verificar o vínculo antes de uma nova contratação.'})
+        }
+      }
+      if(!customerId){
+        const customer = await stripe.customers.create({ email:company.owner_email || undefined,
+          metadata:{company_id:String(company.id)} }, {idempotencyKey:`company-customer-v1:${company.id}`})
+        customerId = customer.id
+        company = await saveCompanyFields(company.id, {stripe_customer_id:customerId})
+      }
+      const subscriptions = await listAll(p => stripe.subscriptions.list(p), {customer:customerId,status:'all'})
+      if(subscriptions.some(sub => !['canceled','incomplete_expired'].includes(sub.status))){
+        return res.status(409).json({ error:'existing_stripe_subscription', message:'Já existe assinatura neste cadastro Stripe. Contate o suporte para vinculá-la.' })
+      }
+      let previousSession
+      if(company.stripe_checkout_session_id){
+        previousSession = await stripe.checkout.sessions.retrieve(company.stripe_checkout_session_id)
+        if(previousSession.status === 'complete' && (!endedSubscriptionId || stripeId(previousSession.subscription) !== endedSubscriptionId)){
+          return res.status(409).json({error:'checkout_already_completed'})
+        }
+        if(previousSession.status === 'open'){
+          if(endedSubscriptionId) await saveCompanyFields(company.id, {stripe_subscription_id:''})
+          return res.json({url:previousSession.url,session_id:previousSession.id})
+        }
+      }
+      const openSessions = await listAll(p => stripe.checkout.sessions.list(p), {customer:customerId,status:'open'})
+      const open = openSessions.find(s => s.mode === 'subscription' && String(s.metadata?.company_id || '') === String(company.id))
+      if(open){
+        await saveCompanyFields(company.id, {stripe_checkout_session_id:open.id,...(endedSubscriptionId ? {stripe_subscription_id:''} : {})})
+        return res.json({url:open.url,session_id:open.id})
+      }
+      const frontendUrl = process.env.FRONTEND_URL || 'https://estofaria-digital.pages.dev'
+      const params = {
+        mode:'subscription', payment_method_collection:'always',
+        customer:customerId, line_items:[{price:priceId,quantity:1}],
+        subscription_data:{metadata:{company_id:String(company.id)}, ...(trialEnd ? {
+          trial_end:trialEnd, trial_settings:{end_behavior:{missing_payment_method:'cancel'}}
+        } : {})},
+        metadata:{company_id:String(company.id)},
+        success_url:`${frontendUrl}/stripe-retorno/?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url:`${frontendUrl}/stripe-retorno/?cancelado=1`, locale:'pt-BR'
+      }
+      const generation = previousSession?.id || endedSubscriptionId || 'initial'
+      const session = await stripe.checkout.sessions.create(params, {
+        idempotencyKey:`company-checkout-v2:${company.id}:${generation}:${priceId}:${trialEnd || 'no-trial'}`
+      })
+      // Release the ended link only after a replacement Checkout exists and is persisted.
+      await saveCompanyFields(company.id, {stripe_checkout_session_id:session.id,...(endedSubscriptionId ? {stripe_subscription_id:''} : {})})
+      return res.json({url:session.url,session_id:session.id})
     })
-    res.json({ url: session.url, session_id: session.id })
   } catch(err) {
-    res.status(500).json({ error:'stripe_error', message: err.message })
+    return res.status(err.code === 'checkout_persistence_error' ? 503 : 500).json({error:err.code || 'stripe_error',message:err.message})
   }
 })
 
@@ -332,26 +510,31 @@ router.post('/stripe/confirm-checkout', requireAuth, async (req, res) => {
       return res.status(409).json({ error:'checkout_not_complete', message:'O checkout ainda não foi concluído na Stripe.' })
     }
 
-    let subscription = session.subscription || null
-    if(typeof subscription === 'string') subscription = await stripe.subscriptions.retrieve(subscription)
+    const subscription = session.subscription ? await stripe.subscriptions.retrieve(stripeId(session.subscription)) : null
     const subscriptionId = String(subscription?.id || session.subscription || '')
     const subscriptionStatus = String(subscription?.status || '').toLowerCase()
     if(!subscriptionId || !['trialing','active'].includes(subscriptionStatus)){
       return res.status(409).json({ error:'subscription_not_active', message:'A assinatura ainda não está ativa ou em período grátis na Stripe.' })
     }
 
-    const customerId = String(session.customer || '')
-    if(customerId) company.stripe_customer_id = customerId
-    company.stripe_subscription_id = subscriptionId
-    company.financial_status = subscriptionStatus
-    company.access_status = 'active'
-    company.billing_mode = 'stripe'
-    if(subscription?.trial_end) company.trial_ends_at = new Date(Number(subscription.trial_end) * 1000).toISOString()
-    if(subscription?.current_period_end) company.next_charge_at = new Date(Number(subscription.current_period_end) * 1000).toISOString()
-    else if(subscription?.trial_end) company.next_charge_at = new Date(Number(subscription.trial_end) * 1000).toISOString()
-    company.updated_at = nowIso()
+    if(subscriptionStatus === 'active' && session.payment_status !== 'paid'){
+      return res.status(409).json({error:'checkout_payment_pending',message:'Aguarde a confirmação do pagamento pela Stripe.'})
+    }
+    const customerId = stripeId(session.customer)
+    const latestStore = readStore()
+    const latestCompany = findCompanyById(latestStore, company.id)
+    if(!latestCompany) return res.status(404).json({error:'company_not_found'})
+    if(latestCompany.stripe_subscription_id && latestCompany.stripe_subscription_id !== subscriptionId){
+      return res.status(409).json({error:'subscription_mismatch'})
+    }
+    if(!customerId || customerId !== stripeId(subscription.customer)
+      || (latestCompany.stripe_customer_id && latestCompany.stripe_customer_id !== customerId)
+      || (subscription.metadata?.company_id && String(subscription.metadata.company_id) !== String(company.id))){
+      return res.status(403).json({error:'customer_company_mismatch'})
+    }
+    updateSubscription(latestCompany, subscription)
 
-    upsertAudit(store, {
+    upsertAudit(latestStore, {
       company_id: company.id,
       action: 'checkout_confirmed',
       message: `Checkout Stripe ${session.id} confirmado por retorno seguro.`,
@@ -361,101 +544,139 @@ router.post('/stripe/confirm-checkout', requireAuth, async (req, res) => {
       actor_role: req.user?.role || 'owner',
       reason: 'stripe_checkout_return',
       request_json: { session_id: session.id },
-      after_json: JSON.parse(JSON.stringify(company)),
+      after_json: JSON.parse(JSON.stringify(latestCompany)),
       source: 'stripe-return',
       ip_address: req.ip,
       user_agent: req.headers['user-agent'] || ''
     })
 
-    writeStore(store)
+    writeStore(latestStore)
+    await flushStore('checkout_persistence_error')
     return res.json({
       ok: true,
       confirmed: true,
-      subscription: buildSubscriptionPayload(company, store, req).subscription
+      subscription: buildSubscriptionPayload(latestCompany, latestStore, req).subscription
     })
   } catch(err) {
     const code = err.code || 'stripe_confirm_error'
-    return res.status(500).json({ error: code, message: err.message })
+    return res.status(code === 'checkout_persistence_error' ? 503 : 500).json({ error: code, message: err.message })
   }
 })
 
-router.post('/webhooks/stripe', express.raw({ type: 'application/json' }), (req, res) => {
-  const store = readStore()
-  let event
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
-  if(stripe && webhookSecret){
-    try {
-      event = stripe.webhooks.constructEvent(req.body, req.headers['stripe-signature'], webhookSecret)
-    } catch(err) {
-      return res.status(400).json({ error:'invalid_signature', message: err.message })
-    }
-  } else {
-    event = req.body || {}
-  }
-  const eventId = String(event.id || '')
-  if(!eventId) return res.status(400).json({ error:'invalid_event', message:'Evento sem id.' })
-  if(store.webhookEvents.some(item => String(item.id) === eventId)) return res.json({ ok:true, duplicate:true })
+router.get('/stripe/risk-reviews', requireAuth, requireMaster, requirePermission('saas.audit.read'), (req,res) => {
+  const items = readStore().webhookEvents.filter(e => e.status === 'review_required' && e.risk)
+    .map(e => ({event_id:e.id,type:e.type,created_at:e.created_at,...e.risk}))
+  res.json({items})
+})
 
-  const record = {
-    id: eventId,
-    type: String(event.type || 'unknown'),
-    created_at: nowIso(),
-    payload: event,
-    status: 'processed'
-  }
-  store.webhookEvents.push(record)
-
-  const obj = event.data?.object || {}
-  const companyId = obj.metadata?.company_id || event.company_id || ''
-  const company = companyId ? findCompanyById(store, companyId) : null
-  if(company){
-    const type = record.type
-    if(type === 'checkout.session.completed'){
-      const stripeCustomerId = obj.customer || ''
-      const stripeSubId = obj.subscription || ''
-      if(stripeCustomerId) company.stripe_customer_id = stripeCustomerId
-      if(stripeSubId) company.stripe_subscription_id = stripeSubId
-      company.financial_status = 'trialing'
-      company.access_status = 'active'
-    }
-    if(type === 'invoice.paid'){
-      company.financial_status = 'active'
-      company.access_status = 'active'
-      company.last_payment_at = nowIso()
-      company.manual_grace_until = ''
-    }
-    if(type === 'invoice.payment_failed'){
-      company.financial_status = 'past_due'
-      company.access_status = company.manual_grace_until ? 'manual_grace' : 'active'
-    }
-    if(type === 'customer.subscription.deleted'){
-      company.financial_status = 'canceled'
-      company.access_status = 'blocked'
-    }
-    if(type === 'customer.subscription.updated'){
-      const status = String(event.data?.object?.status || '').toLowerCase()
-      if(status) company.financial_status = status
-      if(['active','trialing'].includes(status)) company.access_status = 'active'
-      if(['past_due'].includes(status)) company.access_status = company.manual_grace_until ? 'manual_grace' : 'active'
-      if(['unpaid','canceled','incomplete_expired'].includes(status)) company.access_status = 'blocked'
-    }
-    company.updated_at = nowIso()
-    upsertAudit(store, {
-      company_id: company.id,
-      action: 'billing_webhook',
-      message: `Webhook ${record.type} processado no servidor.`,
-      actor_name: 'stripe-webhook',
-      actor_email: 'stripe@webhook',
-      actor_role: 'system',
-      reason: record.type,
-      request_json: event,
-      after_json: JSON.parse(JSON.stringify(company)),
-      source: 'billing-webhook'
+router.post('/stripe/risk-reviews/:eventId/resolve', requireAuth, requireMaster, requirePermission('saas.audit.read'), async (req,res) => {
+  const reason = normalizeText(req.body?.reason,1000)
+  if(reason.length < 10) return res.status(400).json({error:'review_reason_required'})
+  const entry = readStore().webhookEvents.find(e => e.id === req.params.eventId && e.risk)
+  if(!entry) return res.status(404).json({error:'review_not_found'})
+  try {
+    await withCompanyLock(String(entry.company_id), async () => {
+      const latest = readStore()
+      const current = latest.webhookEvents.find(e => e.id === entry.id)
+      if(current.status !== 'review_required') return
+      current.status = 'reviewed'
+      current.reviewed_at = nowIso()
+      current.reviewed_by = req.user.id
+      current.review_reason = reason
+      upsertAudit(latest,{company_id:entry.company_id,action:'billing_payment_reviewed',
+        message:`Revisão do evento Stripe ${entry.id} registrada.`,actor_user_id:req.user.id,
+        actor_role:req.user.role,reason,source:'billing-risk-review'})
+      writeStore(latest)
+      await flushStore('webhook_persistence_error')
     })
-  }
+    res.json({ok:true})
+  } catch(error){res.status(503).json({error:'review_persistence_error'})}
+})
 
-  writeStore(store)
-  res.json({ ok:true })
+router.post('/webhooks/stripe', express.raw({ type:'application/json' }), async (req, res) => {
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
+  if(!stripe || !webhookSecret) return res.status(503).json({error:'stripe_webhook_not_configured'})
+  let event
+  try { event = stripe.webhooks.constructEvent(req.body, req.headers['stripe-signature'], webhookSecret) }
+  catch(err){ return res.status(400).json({error:'invalid_signature',message:err.message}) }
+  if(!event.id) return res.status(400).json({error:'invalid_event'})
+  try {
+    const obj = event.data?.object || {}
+    const subId = subscriptionId(obj)
+    const customerId = stripeId(obj.customer)
+    const companyId = String(obj.metadata?.company_id || '')
+    const supported = ['checkout.session.completed','checkout.session.async_payment_succeeded',
+      'invoice.paid','invoice.payment_failed','customer.subscription.created',
+      'customer.subscription.updated','customer.subscription.deleted']
+    const initialStore = readStore()
+    if(initialStore.webhookEvents.some(e => e.id === event.id && e.status !== 'ignored')){
+      // A previous attempt may have updated the in-memory snapshot but failed
+      // its database commit. Flush before acknowledging a duplicate delivery.
+      await flushStore('webhook_persistence_error')
+      return res.json({ok:true,duplicate:true})
+    }
+    const bySub = initialStore.companies.filter(c => subId && c.stripe_subscription_id === subId)
+    const byMetadata = companyId ? findCompanyById(initialStore, companyId) : null
+    const company = bySub.length === 1 ? bySub[0] : (bySub.length === 0 ? byMetadata : null)
+    let processed = false
+    if(riskEventTypes.has(event.type)) processed = await recordPaymentRisk(event)
+    const unpaidCheckout = event.type.startsWith('checkout.session.')
+      && obj.payment_status !== 'paid' && obj.payment_status !== 'no_payment_required'
+    if(company && subId && supported.includes(event.type) && !unpaidCheckout){
+      await withCompanyLock(String(company.id), async () => {
+        let latest = readStore()
+        let target = findCompanyById(latest, company.id)
+        if(!target || (target.stripe_subscription_id && target.stripe_subscription_id !== subId)) return
+        if(companyId && companyId !== String(target.id)) return
+        if(customerId && target.stripe_customer_id && customerId !== target.stripe_customer_id) return
+        if(latest.webhookEvents.some(e => e.id === event.id && e.status !== 'ignored')) return
+        // Retrieve live state: Stripe does not guarantee event delivery order.
+        const subscription = await stripe.subscriptions.retrieve(subId)
+        const actualCustomer = stripeId(subscription.customer)
+        if(!actualCustomer || (customerId && customerId !== actualCustomer)
+          || (target.stripe_customer_id && target.stripe_customer_id !== actualCustomer)
+          || (subscription.metadata?.company_id && String(subscription.metadata.company_id) !== String(target.id))) return
+        if(!target.stripe_subscription_id){
+          // Never bind an old canceled subscription using just a customer ID.
+          if(!['active','trialing'].includes(subscription.status)
+            || String(subscription.metadata?.company_id || '') !== String(target.id)
+            || target.stripe_customer_id !== actualCustomer) return
+        }
+        latest = readStore()
+        target = findCompanyById(latest, company.id)
+        if(!target || (target.stripe_subscription_id && target.stripe_subscription_id !== subId)) return
+        updateSubscription(target, subscription)
+        // A paid zero-value trial invoice is not a cash receipt. Reconcile
+        // access above, but only update payment history for positive amounts.
+        if(event.type === 'invoice.paid' && Number(obj.amount_paid) > 0){
+          target.last_payment_at = nowIso()
+          target.manual_grace_until = ''
+        }
+        upsertAudit(latest, {company_id:target.id,action:'billing_webhook',
+          message:`Webhook ${event.type} reconciliado com a assinatura Stripe atual.`,
+          actor_name:'stripe-webhook',actor_role:'system',reason:event.type,
+          request_json:event,after_json:JSON.parse(JSON.stringify(target)),source:'billing-webhook'})
+        // Record success together with the mutation. API failures remain retryable.
+        // A legacy event may have arrived before its company linkage was
+        // verified. Reprocess ignored deliveries after linkage, then dedupe
+        // normally; never keep both ignored and processed copies of one ID.
+        latest.webhookEvents = latest.webhookEvents.filter(e => e.id !== event.id)
+        latest.webhookEvents.push({id:event.id,type:event.type,created_at:nowIso(),payload:event,status:'processed'})
+        writeStore(latest)
+        await flushStore('webhook_persistence_error')
+        processed = true
+      })
+    }
+    if(!processed){
+      const latest = readStore()
+      if(!latest.webhookEvents.some(e => e.id === event.id)){
+        latest.webhookEvents.push({id:event.id,type:event.type,created_at:nowIso(),payload:event,status:'ignored'})
+        writeStore(latest)
+        await flushStore('webhook_persistence_error')
+      }
+    }
+    return res.json({ok:true})
+  } catch(err){ return res.status(err.code === 'webhook_persistence_error' ? 503 : 500).json({error:'stripe_webhook_retry',message:err.message}) }
 })
 
 module.exports = router
