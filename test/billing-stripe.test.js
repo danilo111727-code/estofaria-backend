@@ -14,7 +14,7 @@ const day = 86400000
 function company(extra = {}) { return { id:'co_test', name:'Fictícia', owner_email:'fixture@example.invalid', plan_code:'gestao', billing_mode:'courtesy', access_status:'courtesy_active', financial_status:'active', courtesy_until:new Date(Date.now()+60*day).toISOString(), ...extra } }
 async function fixture(t, extra = {}, options = {}) {
   let state = { companies:[company(extra)], users:[{id:'u_test',company_id:'co_test',email:'fixture@example.invalid',is_active:true,...(options.master ? {is_master:true} : {})}], companyUsers:[], billingConfig:options.billingConfig || {}, billingLeads:[], webhookEvents:[], auditLogs:[] }
-  const calls = { sessions:[], customers:[], lists:[] }
+  const calls = { sessions:[], customers:[], lists:[], retrieves:[] }
   const stripeDelay = () => options.stripeDelayMs ? new Promise(r=>setTimeout(r,options.stripeDelayMs)) : Promise.resolve()
   const subscriptions = new Map()
   const sessions = new Map()
@@ -24,7 +24,7 @@ async function fixture(t, extra = {}, options = {}) {
   const fake = {
     charges:{retrieve:async id=>{await stripeDelay();if(options.chargeError)throw Error('simulated charge timeout');if(!charges.has(id))throw Error('missing fixture charge '+id);return structuredClone(charges.get(id))}},
     customers:{ list:async()=>{await stripeDelay();return {data:options.customers || [],has_more:false}}, create:async(p,o)=>{ await stripeDelay(); calls.customers.push({p,o}); return {id:'cus_fixture'} } },
-    subscriptions:{ list:async p=>{ await stripeDelay(); calls.lists.push(p); return options.list ? options.list(p) : {data:[...subscriptions.values()].filter(s=>s.customer===p.customer),has_more:false} }, retrieve:async id=>{ await stripeDelay(); if(options.retrieveError) throw Error('simulated timeout'); if(!subscriptions.has(id)) throw Error('missing fixture subscription '+id); return structuredClone(subscriptions.get(id)) } },
+    subscriptions:{ list:async p=>{ await stripeDelay(); calls.lists.push(p); return options.list ? options.list(p) : {data:[...subscriptions.values()].filter(s=>s.customer===p.customer),has_more:false} }, retrieve:async id=>{ calls.retrieves.push(id); await stripeDelay(); if(options.retrieveError) throw Error('simulated timeout'); if(!subscriptions.has(id)) throw Error('missing fixture subscription '+id); return structuredClone(subscriptions.get(id)) } },
     invoices:{retrieve:async id=>structuredClone(invoices.get(id))},
     checkout:{ sessions:{ create:async(p,o)=>{ await stripeDelay(); calls.sessions.push({p,o}); await new Promise(r=>setImmediate(r)); const s={id:'cs_fixture_'+calls.sessions.length,url:'https://checkout.example.invalid/'+calls.sessions.length,status:'open',mode:'subscription',customer:p.customer,metadata:p.metadata,expires_at:Math.floor(Date.now()/1000)+86400}; sessions.set(s.id,s); if(options.checkoutTimeoutOnce){options.checkoutTimeoutOnce=false;throw Error('simulated lost Stripe response')} return structuredClone(s) }, retrieve:async id=>{ await stripeDelay(); if(!sessions.has(id)) throw Error('missing fixture session '+id); return structuredClone(sessions.get(id)) },list:async p=>{await stripeDelay();return {data:[...sessions.values()].filter(s=>s.customer===p.customer&&s.status==='open'),has_more:false}} } },
     webhooks:{constructEvent:(...args)=>Stripe.webhooks.constructEvent(...args)}
@@ -492,4 +492,18 @@ if(process.env.STRIPE_SQL_TEST==='1')test('SQL risk commit failure retries exact
   assert.equal((await f.webhook('charge.refunded',riskObject('charge.refunded'),'evt_risk')).status,200)
   assert.equal(f.persisted.webhookEvents.length,1);assert.equal(f.persisted.webhookEvents[0].status,'review_required')
   assert.equal(f.persisted.auditLogs.length,1);assert.deepEqual(f.persisted.companies[0],before)
+})
+
+test('risk review does not deadlock behind a concurrent lifecycle webhook and PostgreSQL transaction',async t=>{
+  const f=await fixture(t,{stripe_customer_id:'cus_fixture',stripe_subscription_id:'sub_current'},{atomic:true,master:true,stripeDelayMs:100});seedRisk(f)
+  await f.webhook('charge.refunded',riskObject('charge.refunded'),'evt_risk')
+  const reads=f.calls.retrieves.length
+  const webhook=f.webhook('customer.subscription.updated',sub(),'evt_subscription_update')
+  while(f.calls.retrieves.length===reads)await new Promise(r=>setTimeout(r,2))
+  const resolve=f.request('/api/billing/stripe/risk-reviews/evt_risk/resolve',{reason:'Conferência administrativa concluída.'})
+  const mutation=f.request('/api/test-mutation',{})
+  const [a,b,c]=await Promise.all([webhook,resolve,mutation])
+  assert.equal(a.status,200);assert.equal(b.status,200);assert.equal(c.status,200)
+  assert.equal(f.persisted.webhookEvents.find(e=>e.id==='evt_risk').status,'reviewed')
+  assert.equal(f.persisted.latency_probe,1)
 })

@@ -207,6 +207,17 @@ Endpoints de gestão (somente Master autenticado):
 - POST `/api/subscription/stripe/risk-reviews/:eventId/resolve`, JSON `{ "reason": "Justificativa da análise" }`: encerra apenas a revisão e registra responsável/data. Não movimenta dinheiro ou altera acesso.
 - `/api/subscription/status` acrescenta `payment_review_required`; a interface existente permanece compatível.
 
-Verificação local: 149 testes aprovados, incluindo isolamento entre empresas, cobrança sem assinatura, evento antigo após nova contratação, entrega simultânea repetida, recusa de acesso não Master, revisão com justificativa e rollback/reentrega em PostgreSQL simulado por PGlite.
+Verificação local: 150 testes aprovados, incluindo isolamento entre empresas, cobrança sem assinatura, evento antigo após nova contratação, entrega simultânea repetida, recusa de acesso não Master, revisão com justificativa e rollback/reentrega em PostgreSQL simulado por PGlite.
 
 Limites desta etapa: a conexão Stripe disponibiliza criação do Test Clock, mas a busca de operações não disponibilizou avançar o relógio. Não considerar o teste anterior de alteração de âncora uma renovação natural. Permanecem pendentes a simulação temporal e a ativação/validação controlada do ambiente real. Configuração tributária deve ser conferida conforme as operações da empresa; esta correção não ativa Stripe Tax nem muda impostos. Chaves reais devem ficar na configuração protegida da plataforma, preferindo chave restrita com permissões mínimas.
+
+
+### Candidato para revisão de produção (ainda em rascunho)
+
+Pacote recomposto sobre main `42304c5b6480428dc73104fe9e9eb93559a5ae81`, preservando o financeiro e a sessão de 30 dias. Não inclui catálogo, portfólio ou origens adicionais de preview da branch dev. O servidor recebe apenas a antecipação da rota assinada do webhook. O conjunto de 150 testes passou sobre essa base de produção.
+
+Teste externo Sandbox: estorno fictício parcial de R$ 10 concluído na cobrança `ch_3UbTEc07cTYAJL7T0Kodyp8m`; evento `evt_3UbTEc07cTYAJL7T0tMjJrto` com `pending_webhooks=0`. Isso comprova a entrega; o registro de revisão e suas garantias de persistência foram verificados separadamente nos testes automatizados. Os dez eventos necessários estão habilitados no endpoint de desenvolvimento.
+
+Conferência de produção: backend ainda no commit financeiro acima; webhook real `we_1U0t4Q0mQhGFYwYVRhm6Z3qD` desativado e configurado para cinco eventos, API `2026-07-29.dahlia`. Nenhuma configuração real foi alterada. Antes de ativá-lo, é necessário publicar o candidato aprovado, conferir chaves/preços/segredo de assinatura no ambiente protegido e habilitar os dez eventos do pacote. Não copiar segredo do Sandbox para produção. Vínculos legados exigem prova verificável; não associar clientes por email nem reativar assinaturas canceladas. A simulação temporal de renovação permanece pendente.
+
+A conclusão administrativa de uma revisão também ocorre fora da transação global: a mesma ordem de locks usada pelos webhooks evita bloqueio mútuo durante entregas simultâneas. O teste de concorrência cobre essa situação.
