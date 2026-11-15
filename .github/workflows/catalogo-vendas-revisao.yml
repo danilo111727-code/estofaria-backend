@@ -17,4 +17,4 @@ jobs:
       - run: npm install --ignore-scripts --no-audit --no-fund
       - run: npm install --prefix "$RUNNER_TEMP/catalog-db" --no-save @electric-sql/pglite@0.3.14
       - name: Validar rotas e persistência sem banco real
-        run: NODE_PATH="$RUNNER_TEMP/catalog-db/node_modules" node --test test/ready-models.test.js test/portfolio-routes.test.cjs
+        run: NODE_PATH="$RUNNER_TEMP/catalog-db/node_modules" node --test test/ready-models.test.js test/portfolio-routes.test.cjs test/company-revenue-cleanup.test.js

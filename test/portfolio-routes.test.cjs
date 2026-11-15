@@ -73,6 +73,30 @@ test('despublicar desativa link e impede visitas públicas',async()=>{
 })
 after(()=>srv.close())
 
+test('link público usa produção por padrão e permite configuração do ambiente',async()=>{
+ const previous=process.env.PUBLIC_FRONTEND_URL
+ try{
+  delete process.env.PUBLIC_FRONTEND_URL
+  let result=await request('GET','/api/v2/portfolio')
+  assert.equal(result.body.url,'https://estofariadigital.com.br/vitrine/?loja='+record.slug)
+  process.env.PUBLIC_FRONTEND_URL='https://estofaria-frontend.pages.dev/'
+  result=await request('GET','/api/v2/portfolio')
+  assert.equal(result.body.url,'https://estofaria-frontend.pages.dev/vitrine/?loja='+record.slug)
+ }finally{if(previous===undefined)delete process.env.PUBLIC_FRONTEND_URL;else process.env.PUBLIC_FRONTEND_URL=previous}
+})
+
+test('publicação aceita modelos próprios visíveis e rejeita catálogo vazio',async()=>{
+ const previous={...record}
+ try{
+  record={...record,published:false,custom_ids:[],ready_ids:[],direct_models:[{id:'direct-1',visible:true}]}
+  let result=await request('POST','/api/v2/portfolio/publish',{published:true,revision:record.revision})
+  assert.equal(result.status,200)
+  record={...record,published:false,direct_models:[{id:'direct-1',visible:false}]}
+  result=await request('POST','/api/v2/portfolio/publish',{published:true,revision:record.revision})
+  assert.equal(result.status,400)
+ }finally{record=previous}
+})
+
 test('foto de capa: adiciona, recupera, publica e exclui sem perder identidade',async()=>{
  const bytes=Buffer.from('fake-image-for-route-test').toString('base64');
  let result=await request('POST','/api/v2/portfolio/cover/upload',{image_base64:bytes,content_type:'image/jpeg'});
