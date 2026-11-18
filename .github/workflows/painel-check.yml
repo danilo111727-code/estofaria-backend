@@ -1,7 +1,7 @@
 name: Painel check
 on:
   push:
-    branches: [fix/painel-teste-20261021, dev]
+    branches: [fix/painel-producao-20261021, main]
   workflow_dispatch:
 permissions:
   contents: read

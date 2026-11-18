@@ -167,4 +167,3 @@ function requirePermission(permission){
 }
 
 module.exports = { requireAuth, optionalAuth, requireMaster, requirePermission }
-

@@ -1,4 +1,4 @@
-# Clientes cadastrados — teste
+# Clientes cadastrados
 
 Rotas em `/api/v2/customers`: busca/paginação (50 por página), cadastro, edição, exclusão lógica, histórico de compras.
 
@@ -13,7 +13,7 @@ Rotas em `/api/v2/customers`: busca/paginação (50 por página), cadastro, edi�
 - Excluir/recuperar um pedido na Lixeira remove/restaura seu vínculo e sua data de compra.
 - Pedidos antigos sem `customer_id` não são associados por aproximação ou nome. Não há importação automática de contatos históricos.
 
-O startup cria apenas duas tabelas novas e índices, sem reescrever os pedidos. Publicar primeiro o backend `dev` e depois o frontend `teste-oficial`. Produção permanece manual.
+O startup cria apenas duas tabelas novas e índices, sem reescrever os pedidos. Na promoção, publicar primeiro o backend `main` e depois o frontend `main`. Validado previamente em `dev` e `teste-oficial`.
 
 Validação específica: disponibilize `@electric-sql/pglite` e `express` no NODE_PATH e execute `node --test test/customers.test.js`.
 

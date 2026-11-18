@@ -429,4 +429,3 @@ async function listReminderOrders(companyId){
 
 module.exports = { getSummary, listDashboardOrders, listReminderOrders, activeOrders, billableOrders, revenueCents,
   rowToOrder,extractQuoteRef,reconcileHistoricalAgenda }
-

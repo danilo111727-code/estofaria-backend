@@ -2,7 +2,7 @@ name: Validar contas fixas (PostgreSQL isolado)
 on:
   push:
     branches:
-      - fix/financeiro-pacote2-teste-20261020
+      - prepare/financeiro-pacote2-producao-20261020
   workflow_dispatch:
 jobs:
   fixed-recurrence:

@@ -680,4 +680,3 @@ router.post('/webhooks/stripe', express.raw({ type:'application/json' }), async 
 })
 
 module.exports = router
-

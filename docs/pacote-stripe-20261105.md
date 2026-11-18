@@ -221,3 +221,15 @@ Teste externo Sandbox: estorno fictício parcial de R$ 10 concluído na cobranç
 Conferência de produção: backend ainda no commit financeiro acima; webhook real `we_1U0t4Q0mQhGFYwYVRhm6Z3qD` desativado e configurado para cinco eventos, API `2026-07-29.dahlia`. Nenhuma configuração real foi alterada. Antes de ativá-lo, é necessário publicar o candidato aprovado, conferir chaves/preços/segredo de assinatura no ambiente protegido e habilitar os dez eventos do pacote. Não copiar segredo do Sandbox para produção. Vínculos legados exigem prova verificável; não associar clientes por email nem reativar assinaturas canceladas. A simulação temporal de renovação permanece pendente.
 
 A conclusão administrativa de uma revisão também ocorre fora da transação global: a mesma ordem de locks usada pelos webhooks evita bloqueio mútuo durante entregas simultâneas. O teste de concorrência cobre essa situação.
+
+### Renovação temporal executada em 14/11/2026
+
+Após a confirmação do usuário de cobrar apenas o valor do plano, foi criada somente no Sandbox a assinatura fictícia `sub_1UbggQ07cTYAJL7T6BVvOGqU`, Gestão R$149/mês, impostos automáticos desativados, no cliente `cus_VZZO168UPZO7Ru` e relógio `clock_1UYQEL07cTYAJL7Tvhwira8h`. A fatura inicial `in_1UbggQ07cTYAJL7TW5uo0xHb` foi paga em R$149.
+
+O usuário avançou o relógio para 06/12/2026. Consulta posterior confirmou assinatura ativa, ciclo de 05/12/2026 a 05/01/2027 e fatura `in_1Ubh1V07cTYAJL7TExAuczE1` paga em R$149, `billing_reason=subscription_cycle`, `livemode=false`. Assim, a renovação temporal na Stripe foi validada, separadamente do teste anterior por alteração da âncora.
+
+O fixture reduzido `test/fixtures/stripe-clock-renewal-20261114.json` preserva os campos relevantes dos recursos retornados sem credenciais. Dois testes com PostgreSQL/PGlite repetem esse evento no handler, validando acesso, cortesia, próxima data, recebimento positivo e deduplicação. Conjunto completo: 152 testes aprovados sobre a base de produção.
+
+Limite da validação externa: evento `evt_1Ubh1g07cTYAJL7TasCvbJSS` ainda retornou `pending_webhooks=1` na última consulta. O serviço dev está em plano free, uma instância, não suspenso; após demora inicial voltou a responder health HTTP200. É necessário concluir o reenvio/entrega do evento antes de fechar essa parte. A conexão não disponibiliza reenvio de evento; pode ser feito pelo painel Stripe. A empresa `co_test` é uma referência de fixture, sem comprovação de vínculo com empresa real no dev. Os testes de SQL comprovam o processamento do payload em fixture, não comprovam processamento desse evento na conta real do aplicativo.
+
+O pacote continua em rascunho. Aprovação integral ainda depende da conferência protegida das credenciais reais e do webhook após a publicação aprovada, com preservação dos vínculos legados e das cortesias.

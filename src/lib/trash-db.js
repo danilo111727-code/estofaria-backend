@@ -298,4 +298,3 @@ async function importRecovery(client,companyId,bundle){
   return {ok:true,imported}
 }
 module.exports={CATEGORIES,ensureSchema,archive,archiveQuote,deleteRow,hideHistory,captureStoreDeletes,captureCatalogDeletes,list,restore,transaction,purgeExpired,startCleanup,deleteCompany,importRecovery,objectKeys}
-

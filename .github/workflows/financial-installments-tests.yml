@@ -2,7 +2,7 @@ name: Validar parcelamentos (PostgreSQL isolado)
 on:
   push:
     branches:
-      - fix/financeiro-pacote3-teste-20261020
+      - prepare/financeiro-pacote3-producao-20261020
   workflow_dispatch:
 jobs:
   installments:

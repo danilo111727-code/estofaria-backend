@@ -11,7 +11,7 @@ const respond=fn=>async(req,res,next)=>{try{await fn(req,res)}catch(e){if(e.stat
 const companyId=req=>String(req.user?.company_id||'').trim()
 const allowed=req=>hasMasterAccess(req.user)||hasPermission(req.user,'catalogo')||hasPermission(req.user,'precificacao')
 const safeIds=ids=>Array.isArray(ids)?[...new Set(ids.map(x=>String(x)).filter(x=>x.length>0&&x.length<=128))].slice(0,200):[]
-const publicUrl=slug=>'https://estofaria-frontend.pages.dev/vitrine/?loja='+encodeURIComponent(slug)
+const publicUrl=slug=>String(process.env.PUBLIC_FRONTEND_URL||'https://estofariadigital.com.br').replace(/\/$/,'')+'/vitrine/?loja='+encodeURIComponent(slug)
 const coverUrl=async row=>{
  if(!row.cover_image_key||!r2.isConfigured())return null
  try{return await r2.presignGetUrl(row.cover_image_key,3600)}catch(e){console.warn('[portfolio-public] capa indisponível:',e.message);return null}
@@ -117,7 +117,7 @@ router.post('/portfolio/publish',respond(async(req,res)=>{
  if(!Number.isInteger(revision)||revision<1||typeof published!=='boolean')throw error(400,'Solicitação inválida.')
  const before=await db.get(companyId(req))
  if(!before)throw error(404,'Configure sua vitrine antes de publicar.')
- if(published&&(!before.name.trim()||!before.whatsapp||!(before.custom_ids.length+before.ready_ids.length)))throw error(400,'Informe nome, WhatsApp e selecione ao menos um produto.')
+ if(published&&(!before.name.trim()||!before.whatsapp||!(before.custom_ids.length+before.ready_ids.length+(before.direct_models||[]).filter(m=>m.visible!==false).length)))throw error(400,'Informe nome, WhatsApp e selecione ao menos um produto.')
  const row=await db.publish(companyId(req),published,revision)
  if(!row)throw error(409,'A vitrine foi alterada. Atualize a página.')
  res.json(await details(row))

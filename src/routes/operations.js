@@ -60,33 +60,6 @@ function getCompanyContext(req, store){
   return null
 }
 
-
-// Materiais de Cortinas ficam separados dos materiais legados de Estofaria.
-const CURTAIN_MATERIALS = [
-  ['Blackout alto custo','metro'], ['Blackout baixo custo','metro'],
-  ['Blackout médio custo','metro'], ['Tecido alto custo','metro'],
-  ['Tecido baixo custo','metro'], ['Tecido médio custo','metro'],
-  ['Trilho suíço','metro'], ['Trilho wave','metro'],
-  ['Varão duplo','metro'], ['Varão simples','metro'],
-  ['Abraçadeira','unidade'], ['Argola','unidade'],
-  ['Bandô','metro'], ['Instalação','unidade'],
-  ['Motorização','unidade'], ['Suporte para varão','unidade']
-]
-function isCurtainCompany(company){ return company && company.modalidade === 'cortinas' }
-function isVisibleMaterial(row, company){
-  return isCurtainCompany(company) ? row.modalidade === 'cortinas' : row.modalidade !== 'cortinas'
-}
-function seedCurtainMaterials(store, company){
-  if(!isCurtainCompany(company)) return false
-  if(store.materials.some(m => String(m.company_id) === String(company.id) && m.modalidade === 'cortinas')) return false
-  CURTAIN_MATERIALS.forEach(([name, unit]) => store.materials.push({
-    id: nextId(store, 'materials'), company_id: company.id,
-    modalidade: 'cortinas', name, unit, price_cents: 0,
-    created_at: nowIso(), updated_at: nowIso()
-  }))
-  return true
-}
-
 function seedCompanyData(store, companyId){
   ensureCollections(store)
   const cid = String(companyId)
@@ -459,11 +432,10 @@ router.get('/materials', (req, res) => {
   const store = ensureCollections(readStore())
   const company = getCompanyContext(req, store)
   if(!company) return res.status(404).json({ error:'company_not_found', message:'Empresa não encontrada.' })
-  if(isCurtainCompany(company)) seedCurtainMaterials(store, company)
-  else seedCompanyData(store, company.id)
+  seedCompanyData(store, company.id)
   writeStore(store)
   const rows = store.materials
-    .filter(item => String(item.company_id) === String(company.id) && isVisibleMaterial(item, company))
+    .filter(item => String(item.company_id) === String(company.id))
     .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR'))
   return res.json(rows)
 })
@@ -476,7 +448,7 @@ router.post('/materials', (req, res) => {
   const unit = text(req.body?.unit, 'unidade').toLowerCase()
   const price_cents = Math.max(0, Math.round(num(req.body?.price_cents, 0)))
   if(!name) return res.status(400).json({ error:'invalid_request', message:'Informe o nome do material.' })
-  const row = { id: nextId(store, 'materials'), company_id: company.id, ...(isCurtainCompany(company) ? { modalidade:'cortinas' } : {}), name, unit, price_cents, created_at: nowIso(), updated_at: nowIso() }
+  const row = { id: nextId(store, 'materials'), company_id: company.id, name, unit, price_cents, created_at: nowIso(), updated_at: nowIso() }
   store.materials.push(row)
   audit(store, req, company.id, 'material.create', `Material criado: ${name}`)
   writeStore(store)
@@ -486,7 +458,7 @@ router.post('/materials', (req, res) => {
 router.put('/materials/:id', (req, res) => {
   const store = ensureCollections(readStore())
   const company = getCompanyContext(req, store)
-  const row = store.materials.find(item => String(item.company_id) === String(company?.id) && String(item.id) === String(req.params.id) && isVisibleMaterial(item, company))
+  const row = store.materials.find(item => String(item.company_id) === String(company?.id) && String(item.id) === String(req.params.id))
   if(!row) return res.status(404).json({ error:'not_found', message:'Material não encontrado.' })
   const name = text(req.body?.name || row.name)
   const unit = text(req.body?.unit || row.unit, 'unidade').toLowerCase()
@@ -502,7 +474,7 @@ router.patch('/materials/:id', (req, res) => {
     const company = getCompanyContext(req, store)
     if(!company) return res.status(404).json({ error:'company_not_found', message:'Empresa não encontrada.' })
     const id = Number(req.params.id)
-    const idx = store.materials.findIndex(item => item.id === id && String(item.company_id) === String(company.id) && isVisibleMaterial(item, company))
+    const idx = store.materials.findIndex(item => item.id === id && String(item.company_id) === String(company.id))
     if(idx === -1) return res.status(404).json({ error:'not_found', message:'Material não encontrado.' })
     const { name, unit, price_cents } = req.body
     if(name !== undefined) store.materials[idx].name = text(name)
@@ -518,7 +490,7 @@ router.patch('/materials/:id', (req, res) => {
   const store = ensureCollections(readStore())
   const company = getCompanyContext(req, store)
   const before = store.materials.length
-  store.materials = store.materials.filter(item => !(String(item.company_id) === String(company?.id) && String(item.id) === String(req.params.id) && isVisibleMaterial(item, company)))
+  store.materials = store.materials.filter(item => !(String(item.company_id) === String(company?.id) && String(item.id) === String(req.params.id)))
   if(store.materials.length === before) return res.status(404).json({ error:'not_found', message:'Material não encontrado.' })
   audit(store, req, company.id, 'material.delete', `Material removido: ${req.params.id}`)
   writeStore(store)

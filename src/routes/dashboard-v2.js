@@ -69,4 +69,3 @@ for(const method of ['patch','delete'])router[method]('/dashboard/revenue-histor
 })
 module.exports = router
 
-

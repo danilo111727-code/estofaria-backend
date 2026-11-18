@@ -1,0 +1,59 @@
+{
+  "observed_at": "2026-11-14",
+  "description": "Sandbox Test Clock subscription_cycle after advancing to 2026-12-06 08:00 America/Bahia; reduced non-secret resource snapshots",
+  "event": {
+    "id": "evt_1Ubh1g07cTYAJL7TasCvbJSS",
+    "type": "invoice.paid",
+    "livemode": false
+  },
+  "subscription": {
+    "id": "sub_1UbggQ07cTYAJL7T6BVvOGqU",
+    "object": "subscription",
+    "customer": "cus_VZZO168UPZO7Ru",
+    "status": "active",
+    "livemode": false,
+    "metadata": {
+      "company_id": "co_test",
+      "purpose": "sandbox_clock_renewal",
+      "qa_package": "20261114_clock_renewal"
+    },
+    "test_clock": "clock_1UYQEL07cTYAJL7Tvhwira8h",
+    "items": {
+      "data": [
+        {
+          "id": "si_VcwZfwidnc68rN",
+          "current_period_start": 1796468400,
+          "current_period_end": 1799146800,
+          "price": {
+            "id": "price_1UQGxt07cTYAJL7Tp7m3stWQ",
+            "unit_amount": 14900,
+            "currency": "brl"
+          }
+        }
+      ]
+    }
+  },
+  "invoice": {
+    "id": "in_1Ubh1V07cTYAJL7TExAuczE1",
+    "object": "invoice",
+    "customer": "cus_VZZO168UPZO7Ru",
+    "status": "paid",
+    "amount_paid": 14900,
+    "amount_due": 14900,
+    "currency": "brl",
+    "livemode": false,
+    "billing_reason": "subscription_cycle",
+    "parent": {
+      "quote_details": null,
+      "subscription_details": {
+        "metadata": {
+          "company_id": "co_test",
+          "purpose": "sandbox_clock_renewal",
+          "qa_package": "20261114_clock_renewal"
+        },
+        "subscription": "sub_1UbggQ07cTYAJL7T6BVvOGqU"
+      },
+      "type": "subscription_details"
+    }
+  }
+}

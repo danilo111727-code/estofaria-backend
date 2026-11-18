@@ -24,32 +24,22 @@ async function ensureSchema() {
       name TEXT NOT NULL,
       description TEXT NOT NULL DEFAULT '',
       base_meters NUMERIC(10,2) NOT NULL DEFAULT 0,
-      base_height_meters NUMERIC(10,2) NOT NULL DEFAULT 0,
       spacing_cm INTEGER NOT NULL DEFAULT 10,
-      height_spacing_cm INTEGER NOT NULL DEFAULT 10,
       total_cost_cents BIGINT NOT NULL DEFAULT 0,
       target_profit_cents BIGINT NOT NULL DEFAULT 0,
       sale_price_cents BIGINT NOT NULL DEFAULT 0,
       value_per_spacing_cents BIGINT NOT NULL DEFAULT 0,
-      height_value_per_spacing_cents BIGINT NOT NULL DEFAULT 0,
       included_items JSONB NOT NULL DEFAULT '[]'::jsonb,
       active BOOLEAN NOT NULL DEFAULT TRUE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
-    ALTER TABLE app_models_v2
-      ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT '';
+    ALTER TABLE app_models_v2 ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT '';
     ALTER TABLE app_models_v2 ADD COLUMN IF NOT EXISTS display_depth_meters NUMERIC(10,2);
     ALTER TABLE app_models_v2 ADD COLUMN IF NOT EXISTS display_height_meters NUMERIC(10,2);
     ALTER TABLE app_models_v2
       ADD COLUMN IF NOT EXISTS included_items JSONB NOT NULL DEFAULT '[]'::jsonb;
-    ALTER TABLE app_models_v2
-      ADD COLUMN IF NOT EXISTS base_height_meters NUMERIC(10,2) NOT NULL DEFAULT 0;
-    ALTER TABLE app_models_v2
-      ADD COLUMN IF NOT EXISTS height_spacing_cm INTEGER NOT NULL DEFAULT 10;
-    ALTER TABLE app_models_v2
-      ADD COLUMN IF NOT EXISTS height_value_per_spacing_cents BIGINT NOT NULL DEFAULT 0;
 
     CREATE INDEX IF NOT EXISTS idx_app_models_v2_company_active
       ON app_models_v2 (company_id, active, updated_at DESC);
@@ -190,19 +180,16 @@ function normalizeDisplayDimension(value) {
 function normalizeModelInput(input = {}) {
   return {
     category: normalizeModelCategory(input.category),
-    displayDepthMeters:normalizeDisplayDimension(input.display_depth_meters),
-    displayHeightMeters:normalizeDisplayDimension(input.display_height_meters),
+    displayDepthMeters: normalizeDisplayDimension(input.display_depth_meters),
+    displayHeightMeters: normalizeDisplayDimension(input.display_height_meters),
     name: text(input.name || input.nome || input.modelo).trim().slice(0, 180),
     description: text(input.description ?? input.descricao_modelo ?? input.descricao ?? '').trim().slice(0, 2000),
     baseMeters: Math.max(0, number(input.base_meters ?? input.baseMeters ?? input.metragem_base ?? 0)),
-    baseHeightMeters: Math.max(0, number(input.base_height_meters ?? input.baseHeightMeters ?? input.altura_base ?? input.baseAltura ?? 0)),
     spacingCm: Math.max(1, Math.round(number(input.spacing_cm ?? input.spacingCm ?? input.espacamento_cm ?? input.espacamentoCm ?? 10, 10))),
-    heightSpacingCm: Math.max(1, Math.round(number(input.height_spacing_cm ?? input.heightSpacingCm ?? input.espacamento_altura_cm ?? input.espacamentoAlturaCm ?? 10, 10))),
     totalCostCents: Math.max(0, Math.round(number(input.total_cost_cents ?? input.totalCostCents ?? 0))),
     targetProfitCents: Math.max(0, Math.round(number(input.target_profit_cents ?? input.targetProfitCents ?? 0))),
     salePriceCents: Math.max(0, Math.round(number(input.sale_price_cents ?? input.salePriceCents ?? input.price_cents ?? 0))),
     valuePerSpacingCents: Math.max(0, Math.round(number(input.value_per_spacing_cents ?? input.valor_por_espacamento_cents ?? input.valorPorEspacamentoCents ?? 0))),
-    heightValuePerSpacingCents: Math.max(0, Math.round(number(input.height_value_per_spacing_cents ?? input.heightValuePerSpacingCents ?? input.valor_por_espacamento_altura_cents ?? input.valorPorEspacamentoAlturaCents ?? 0))),
     includedItems: normalizeIncludedItems(input.itens_incluidos ?? input.included_items ?? input.itensIncluidos),
     materials: Array.isArray(input.materials) ? input.materials : [],
     variationMode: normalizeVariationMode(input.variation_mode ?? input.variationMode),
@@ -258,19 +245,16 @@ function rowToModel(row) {
     legacy_id: row.legacy_id,
     name: row.name,
     category: text(row.category),
-    display_depth_meters:row.display_depth_meters == null ? null : number(row.display_depth_meters),
-    display_height_meters:row.display_height_meters == null ? null : number(row.display_height_meters),
+    display_depth_meters: row.display_depth_meters == null ? null : number(row.display_depth_meters),
+    display_height_meters: row.display_height_meters == null ? null : number(row.display_height_meters),
     descricao_modelo: row.description || '',
     description: row.description || '',
     base_meters: number(row.base_meters),
-    base_height_meters: number(row.base_height_meters),
     spacing_cm: number(row.spacing_cm, 10),
-    height_spacing_cm: number(row.height_spacing_cm, 10),
     total_cost_cents: number(row.total_cost_cents),
     target_profit_cents: number(row.target_profit_cents),
     sale_price_cents: number(row.sale_price_cents),
     valor_por_espacamento_cents: number(row.value_per_spacing_cents),
-    height_value_per_spacing_cents: number(row.height_value_per_spacing_cents),
     itens_incluidos: normalizeIncludedItems(row.included_items),
     included_items: normalizeIncludedItems(row.included_items),
     variation_mode: normalizeVariationMode(row.variation_mode),
@@ -383,24 +367,21 @@ async function createModel(companyId, input = {}) {
     await client.query('BEGIN')
     await client.query(`
       INSERT INTO app_models_v2 (
-        id, company_id, name, description, base_meters, base_height_meters, spacing_cm, height_spacing_cm,
+        id, company_id, name, description, base_meters, spacing_cm,
         total_cost_cents, target_profit_cents, sale_price_cents,
-        value_per_spacing_cents, height_value_per_spacing_cents, included_items, variation_mode, specific_variations, category, display_depth_meters, display_height_meters, active, created_at, updated_at
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15,$16::jsonb,$17,$18,$19,TRUE,NOW(),NOW())
+        value_per_spacing_cents, included_items, variation_mode, specific_variations, category, display_depth_meters, display_height_meters, active, created_at, updated_at
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13::jsonb,$14,$15,$16,TRUE,NOW(),NOW())
     `, [
       id,
       companyId,
       normalized.name,
       normalized.description,
       normalized.baseMeters,
-      normalized.baseHeightMeters,
       normalized.spacingCm,
-      normalized.heightSpacingCm,
       normalized.totalCostCents,
       normalized.targetProfitCents,
       normalized.salePriceCents,
       normalized.valuePerSpacingCents,
-      normalized.heightValuePerSpacingCents,
       JSON.stringify(normalized.includedItems),
       normalized.variationMode,
       JSON.stringify(normalized.specificVariations),
@@ -438,20 +419,17 @@ async function updateModel(companyId, modelId, input = {}) {
       SET name = $3,
           description = $4,
           base_meters = $5,
-          base_height_meters = $6,
-          spacing_cm = $7,
-          height_spacing_cm = $8,
-          total_cost_cents = $9,
-          target_profit_cents = $10,
-          sale_price_cents = $11,
-          value_per_spacing_cents = $12,
-          height_value_per_spacing_cents = $13,
-          included_items = $14::jsonb,
-          variation_mode = $15,
-          specific_variations = $16::jsonb,
-          category = $17,
-          display_depth_meters = $18,
-          display_height_meters = $19,
+          spacing_cm = $6,
+          total_cost_cents = $7,
+          target_profit_cents = $8,
+          sale_price_cents = $9,
+          value_per_spacing_cents = $10,
+          included_items = $11::jsonb,
+          variation_mode = $12,
+          specific_variations = $13::jsonb,
+          category = $14,
+          display_depth_meters = $15,
+          display_height_meters = $16,
           updated_at = NOW()
       WHERE company_id = $1 AND id = $2
       RETURNING id
@@ -461,14 +439,11 @@ async function updateModel(companyId, modelId, input = {}) {
       merged.name,
       merged.description,
       merged.baseMeters,
-      merged.baseHeightMeters,
       merged.spacingCm,
-      merged.heightSpacingCm,
       merged.totalCostCents,
       merged.targetProfitCents,
       merged.salePriceCents,
       merged.valuePerSpacingCents,
-      merged.heightValuePerSpacingCents,
       JSON.stringify(merged.includedItems),
       merged.variationMode,
       JSON.stringify(merged.specificVariations),
@@ -520,22 +495,19 @@ async function upsertMigratedModel(companyId, legacyId, input = {}) {
     await client.query('BEGIN')
     await client.query(`
       INSERT INTO app_models_v2 (
-        id, company_id, legacy_id, name, description, base_meters, base_height_meters, spacing_cm, height_spacing_cm,
+        id, company_id, legacy_id, name, description, base_meters, spacing_cm,
         total_cost_cents, target_profit_cents, sale_price_cents,
-        value_per_spacing_cents, height_value_per_spacing_cents, included_items, variation_mode, specific_variations, category, display_depth_meters, display_height_meters, active, created_at, updated_at
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,$16,$17::jsonb,$20,$21,$22,TRUE,$18,$19)
+        value_per_spacing_cents, included_items, variation_mode, specific_variations, category, display_depth_meters, display_height_meters, active, created_at, updated_at
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,$14::jsonb,$17,$18,$19,TRUE,$15,$16)
       ON CONFLICT (id) DO UPDATE SET
         name = EXCLUDED.name,
         description = EXCLUDED.description,
         base_meters = EXCLUDED.base_meters,
-        base_height_meters = EXCLUDED.base_height_meters,
         spacing_cm = EXCLUDED.spacing_cm,
-        height_spacing_cm = EXCLUDED.height_spacing_cm,
         total_cost_cents = EXCLUDED.total_cost_cents,
         target_profit_cents = EXCLUDED.target_profit_cents,
         sale_price_cents = EXCLUDED.sale_price_cents,
         value_per_spacing_cents = EXCLUDED.value_per_spacing_cents,
-        height_value_per_spacing_cents = EXCLUDED.height_value_per_spacing_cents,
         included_items = EXCLUDED.included_items,
         variation_mode = EXCLUDED.variation_mode,
         specific_variations = EXCLUDED.specific_variations,
@@ -551,14 +523,11 @@ async function upsertMigratedModel(companyId, legacyId, input = {}) {
       normalized.name,
       normalized.description,
       normalized.baseMeters,
-      normalized.baseHeightMeters,
       normalized.spacingCm,
-      normalized.heightSpacingCm,
       normalized.totalCostCents,
       normalized.targetProfitCents,
       normalized.salePriceCents,
       normalized.valuePerSpacingCents,
-      normalized.heightValuePerSpacingCents,
       JSON.stringify(normalized.includedItems),
       normalized.variationMode,
       JSON.stringify(normalized.specificVariations),

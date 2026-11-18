@@ -14,7 +14,7 @@ A recuperação pela lixeira repõe pedido, Agenda e saldos pendentes juntos. Id
 
 ## Escopo
 
-Somente backend e branch dev. Não requer migração, alteração de variável ou dependência de execução. Produção e saldos órfãos históricos permanecem sem alteração; correção dos dados antigos deve ser tratada separadamente após conferência.
+Pacote financeiro isolado para a branch main do backend; deploy manual pelo usuário. A etiqueta visual está no pacote correspondente do frontend. Não requer migração, alteração de variável ou dependência de execução. Produção e saldos órfãos históricos permanecem sem alteração; correção dos dados antigos deve ser tratada separadamente após conferência.
 
 ## Complemento: identificação do recebimento preservado
 

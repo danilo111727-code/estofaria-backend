@@ -52,12 +52,10 @@ const pdfConfigRoutes = require('./src/routes/pdf-config')
 const pdfConfigDb = require('./src/lib/pdf-config-db')
 
 function parseAllowedOrigins() {
-  const configured = String(process.env.CORS_ALLOWED_ORIGINS || '')
+  return String(process.env.CORS_ALLOWED_ORIGINS || '')
     .split(',')
     .map(item => item.trim())
     .filter(Boolean)
-  // Preview isolado: autorizar somente esta origem adicional, preservando a lista existente.
-  return [...new Set([...configured, 'https://estofaria-frontend.pages.dev', 'https://experimental-agenda-cards-20.estofaria-frontend.pages.dev', 'https://revisao-catalogo-vendas.estofaria-frontend.pages.dev'])]
 }
 
 const allowedOrigins = parseAllowedOrigins()
@@ -305,5 +303,3 @@ start().catch(err => {
   console.error('[server] Erro fatal na inicialização:', err)
   process.exit(1)
 })
-
-

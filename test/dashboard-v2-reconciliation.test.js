@@ -244,4 +244,3 @@ test('Pedido excluído do Vendedor não deixa o espelho da Agenda faturado',asyn
   await check(rows,{count:0,cents:0,active:0})
 })
 
-

@@ -45,12 +45,7 @@ function sanitizeUser(user){
     empresa: companyName || '',
     company_name: companyName || '',
     business_name: companyName || '',
-    modalidade: String(user.modalidade || (user.company && user.company.modalidade) || 'estofaria').toLowerCase() === 'cortinas' ? 'cortinas' : 'estofaria',
-    company: companyName ? {
-      ...(typeof user.company === 'object' ? user.company : {}),
-      name: companyName,
-      modalidade: String(user.modalidade || (user.company && user.company.modalidade) || 'estofaria').toLowerCase() === 'cortinas' ? 'cortinas' : 'estofaria'
-    } : (user.company || null),
+    company: companyName ? { ...(typeof user.company === 'object' ? user.company : {}), name: companyName } : (user.company || null),
     role: user.role || 'user',
     is_master: Boolean(user.is_master),
     is_superadmin: Boolean(user.is_superadmin),

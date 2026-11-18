@@ -187,6 +187,7 @@ async function verifyV2Clean(client, companyId){
     'app_model_personalization_v2',
     'app_models_v2',
     'app_ready_models_v1',
+    'app_portfolio_v1',
     'app_quote_model_items_v2',
     'app_quote_models_v2',
     'app_quotes_v2',
@@ -242,6 +243,10 @@ async function deletePgData(companyId, company, actor){
     for(const row of readyImages.rows) for(const image of Object.values(row.images || {})) if(image.object_key) imageKeys.push(image.object_key)
     const readyModels = await client.query('DELETE FROM app_ready_models_v1 WHERE company_id=$1', [companyId])
     v2Counts.ready_models = readyModels.rowCount || 0
+    const portfolioImages = await client.query('SELECT cover_image_key FROM app_portfolio_v1 WHERE company_id=$1', [companyId])
+    for(const row of portfolioImages.rows) if(row.cover_image_key) imageKeys.push(row.cover_image_key)
+    const portfolio = await client.query('DELETE FROM app_portfolio_v1 WHERE company_id=$1', [companyId])
+    v2Counts.portfolio = portfolio.rowCount || 0
 
     const revenueAdjustments = await revenueAdjustmentsDb.deleteForCompany(client,companyId)
     const personalizationModels = await client.query('DELETE FROM app_model_personalization_v2 WHERE company_id = $1', [companyId])
@@ -400,6 +405,3 @@ module.exports = router
 module.exports.deleteCompanyCompletely = deleteCompanyCompletely
 module.exports.cleanLegacyStore = cleanLegacyStore
 module.exports.assertLegacyClean = assertLegacyClean
-
-
-

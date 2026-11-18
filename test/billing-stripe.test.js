@@ -507,3 +507,25 @@ test('risk review does not deadlock behind a concurrent lifecycle webhook and Po
   assert.equal(f.persisted.webhookEvents.find(e=>e.id==='evt_risk').status,'reviewed')
   assert.equal(f.persisted.latency_probe,1)
 })
+
+if(process.env.STRIPE_SQL_TEST==='1'){
+  const renewal=require('./fixtures/stripe-clock-renewal-20261114.json')
+  for(const courtesy of [false,true])test('SQL actual Test Clock monthly renewal persists once and preserves courtesy='+courtesy,async t=>{
+    const f=await fixture(t,{stripe_customer_id:renewal.subscription.customer,stripe_subscription_id:renewal.subscription.id,
+      ...(courtesy?{}:{billing_mode:'stripe',access_status:'blocked',courtesy_until:''})},{atomic:true,sql:true})
+    const until=f.company.courtesy_until
+    f.subscriptions.set(renewal.subscription.id,renewal.subscription)
+    assert.equal(renewal.invoice.billing_reason,'subscription_cycle')
+    assert.equal(renewal.invoice.amount_paid,14900)
+    assert.equal((await f.webhook('invoice.paid',renewal.invoice,renewal.event.id)).status,200)
+    const saved=f.persisted.companies[0]
+    assert.equal(saved.financial_status,'active')
+    assert.equal(saved.access_status,courtesy?'courtesy_active':'active')
+    assert.equal(saved.courtesy_until,until)
+    assert.equal(saved.next_charge_at,new Date(renewal.subscription.items.data[0].current_period_end*1000).toISOString())
+    assert.ok(saved.last_payment_at)
+    assert.equal((await f.webhook('invoice.paid',renewal.invoice,renewal.event.id)).body.duplicate,true)
+    assert.equal(f.persisted.webhookEvents.length,1)
+    assert.equal(f.persisted.auditLogs.length,1)
+  })
+}

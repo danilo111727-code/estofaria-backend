@@ -4,7 +4,7 @@ const {test}=require('node:test')
 const assert=require('node:assert/strict')
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm')
 const {PGlite}=require('@electric-sql/pglite')
-const tables=['app_model_materials_v2','app_model_images_v2','app_model_personalization_v2','app_models_v2','app_quote_model_items_v2','app_quote_models_v2','app_quotes_v2','app_personalization_catalog_v2','app_agenda_orders_v2','app_agenda_blocos_v2','app_agenda_configs_v2','app_agenda_audit_v2','app_financial_entries_v2','app_financial_audit_v2','app_audit_logs_v2']
+const tables=['app_model_materials_v2','app_model_images_v2','app_model_personalization_v2','app_models_v2','app_ready_models_v1','app_portfolio_v1','app_customers_v1','app_customer_quotes_v1','app_quote_model_items_v2','app_quote_models_v2','app_quotes_v2','app_personalization_catalog_v2','app_agenda_orders_v2','app_agenda_blocos_v2','app_agenda_configs_v2','app_agenda_audit_v2','app_financial_entries_v2','app_financial_audit_v2','app_audit_logs_v2']
 function load(file,requires){const context={module:{exports:{}},console,Date,process:{env:{}},require:name=>name in requires?requires[name]:require(name)};vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../src',file),'utf8'),context);return context.module.exports}
 async function scenario(fail){
  const pg=new PGlite()
@@ -14,12 +14,14 @@ async function scenario(fail){
    ['app_model_materials_v2','app_models_v2','model_id'],
    ['app_model_images_v2','app_models_v2','model_id'],
    ['app_quote_models_v2','app_quotes_v2','quote_id'],
+   ['app_customer_quotes_v1','app_quotes_v2','quote_id'],
    ['app_quote_model_items_v2','app_quote_models_v2','quote_model_id']
   ])await pg.exec('ALTER TABLE '+child+' ADD COLUMN '+column+' text REFERENCES '+parent+'(id) ON DELETE CASCADE')
   let snapshot={companies:[{id:'remove',name:'Excluir'},{id:'keep',name:'Manter'}],users:[],companyUsers:[],auditLogs:[]}
   await pg.query("INSERT INTO kv_store(key,value) VALUES('main',$1)",[JSON.stringify(snapshot)])
   for(const table of tables)await pg.query('INSERT INTO '+table+'(id,company_id) VALUES($1,$2),($3,$4)',['a','remove','b','keep'])
-  for(const [table,column] of [['app_model_materials_v2','model_id'],['app_model_images_v2','model_id'],['app_quote_models_v2','quote_id'],['app_quote_model_items_v2','quote_model_id']])await pg.exec('UPDATE '+table+' SET '+column+'=id')
+  for(const [table,column] of [['app_model_materials_v2','model_id'],['app_model_images_v2','model_id'],['app_quote_models_v2','quote_id'],['app_customer_quotes_v1','quote_id'],['app_quote_model_items_v2','quote_model_id']])await pg.exec('UPDATE '+table+' SET '+column+'=id')
+  await pg.exec("ALTER TABLE app_ready_models_v1 ADD COLUMN images jsonb DEFAULT '{}'::jsonb; ALTER TABLE app_portfolio_v1 ADD COLUMN cover_image_key text DEFAULT '';")
   // No external storage interaction: these fixtures have no image objects.
   let transaction=false
   const client={release(){},async query(sql,params){
@@ -27,7 +29,7 @@ async function scenario(fail){
    if(fail&&sql.startsWith('DELETE FROM app_quotes_v2'))throw new Error('simulated_failure_after_adjustments')
    const result=await pg.query(sql,params)
    if(sql==='ROLLBACK'||sql==='COMMIT')transaction=false
-   return result
+   return {...result,rowCount:result.affectedRows??result.rowCount??0}
   }}
   const pool={connect:async()=>client,query:(...args)=>pg.query(...args)}
   const store={readStore:()=>structuredClone(snapshot),writeStore:value=>{snapshot=structuredClone(value)},_pg:{pool,flushNow:async()=>{}}}
@@ -49,6 +51,9 @@ async function scenario(fail){
   }else{
    const result=await route.deleteCompanyCompletely('remove',{id:'master'})
    assert.equal(result.v2_deleted.revenue_adjustments,1)
+   assert.equal(result.v2_deleted.ready_models,1)
+   assert.equal(result.v2_deleted.portfolio,1)
+   assert.equal((await pg.query("SELECT id FROM app_portfolio_v1 WHERE company_id='remove'")).rows.length,0)
    assert.equal((await pg.query("SELECT count(*)::int n FROM app_trash_v1 WHERE company_id='remove'")).rows[0].n,0)
    assert.equal((await adjustments.list('remove')).size,0)
    assert.equal(snapshot.companies.length,1)
@@ -62,4 +67,3 @@ async function scenario(fail){
 }
 test('exclusão completa da empresa remove ajustes e preserva outra empresa',()=>scenario(false))
 test('falha após limpar ajustes desfaz toda a exclusão da empresa',()=>scenario(true))
-
