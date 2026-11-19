@@ -52,10 +52,12 @@ const pdfConfigRoutes = require('./src/routes/pdf-config')
 const pdfConfigDb = require('./src/lib/pdf-config-db')
 
 function parseAllowedOrigins() {
-  return String(process.env.CORS_ALLOWED_ORIGINS || '')
+  const configured = String(process.env.CORS_ALLOWED_ORIGINS || '')
     .split(',')
     .map(item => item.trim())
     .filter(Boolean)
+  // Origem exata da revisão; mantém as demais origens configuradas.
+  return [...new Set([...configured, 'https://revisao-catalogo-vendas.estofaria-frontend.pages.dev'])]
 }
 
 const allowedOrigins = parseAllowedOrigins()
