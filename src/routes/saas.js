@@ -195,6 +195,7 @@ function cleanGlobalAlbum(input = {}, existing = null){
  if(fabrics.some(f=>!validImage(f.image_url)))throw Object.assign(new Error('URL de imagem inválida.'),{status:400})
  const cover_image=String(input.cover_image??existing?.cover_image??'')
  if(!validImage(cover_image))throw Object.assign(new Error('Capa inválida.'),{status:400})
+ if(input.active===true&&(!fabrics.length||fabrics.some(f=>!f.image_url)))throw Object.assign(new Error('Para publicar, adicione tecidos com fotografias.'),{status:400})
  return {id:String(existing?.id||'galb_'+crypto.randomUUID()),name,cover_image,fabrics,
   active:input.active===undefined?(existing?existing.active!==false:false):Boolean(input.active),
   created_at:existing?.created_at||nowIso(),updated_at:nowIso()}
@@ -439,7 +440,7 @@ router.get('/global-defaults/albums', requireAuth, requireMaster, requirePermiss
   return res.json({ items: globalDefaultsCollection(store, 'albums') })
 })
 
-router.post('/global-defaults/albums', requireAuth, requireMaster, requirePermission('saas.companies.write'), (req, res) => {
+router.post('/global-defaults/albums', requireAuth, requireMaster, requirePermission('saas.companies.write'), (req, res, next) => { try {
   const store = readStore()
   const items = globalDefaultsCollection(store, 'albums')
   const item = cleanGlobalAlbum(req.body || {})
@@ -448,9 +449,10 @@ router.post('/global-defaults/albums', requireAuth, requireMaster, requirePermis
   items.push(item)
   writeStore(store)
   return res.status(201).json({ ok:true, item })
+ }catch(err){if(err.status)return res.status(err.status).json({message:err.message});next(err)}
 })
 
-router.patch('/global-defaults/albums/:itemId', requireAuth, requireMaster, requirePermission('saas.companies.write'), (req, res) => {
+router.patch('/global-defaults/albums/:itemId', requireAuth, requireMaster, requirePermission('saas.companies.write'), (req, res, next) => { try {
   const store = readStore()
   const items = globalDefaultsCollection(store, 'albums')
   const index = findGlobalById(items, req.params.itemId)
@@ -461,6 +463,7 @@ router.patch('/global-defaults/albums/:itemId', requireAuth, requireMaster, requ
   items[index] = item
   writeStore(store)
   return res.json({ ok:true, item })
+ }catch(err){if(err.status)return res.status(err.status).json({message:err.message});next(err)}
 })
 
 router.delete('/global-defaults/albums/:itemId', requireAuth, requireMaster, requirePermission('saas.companies.write'), (req, res) => {
@@ -488,7 +491,7 @@ router.post('/global-defaults/albums/:itemId/apply', requireAuth, requireMaster,
         nome:item.name,
         custo:0,
         unidade:'metro',
-        itens:(item.fabrics || []).map(nome => ({ nome, codigo:'' }))
+        itens:(item.fabrics || []).map(f => ({ nome:typeof f==='string'?f:f.name, codigo:typeof f==='string'?'':(f.code||'') }))
       }])
       if(Number(result.added || 0) > 0) companiesUpdated += 1
       albumsAdded += Number(result.added || 0)
