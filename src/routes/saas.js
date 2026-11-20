@@ -1,6 +1,7 @@
 const express = require('express')
 const bcrypt = require('bcryptjs')
 const crypto = require('crypto')
+const r2 = require('../lib/r2-storage')
 const personalizationDb = require('../lib/personalization-v2-db')
 const { readStore, writeStore, materializeCompany, findCompanyById, upsertAudit, nowIso, planPreset } = require('../lib/store')
 const { requireAuth, requireMaster, requirePermission } = require('../middleware/auth')
@@ -190,10 +191,10 @@ function cleanGlobalAlbum(input = {}, existing = null){
    const v=typeof f==='string'?{name:f}:f||{}
    return {id:String(v.id||'fabric_'+i).slice(0,100),name:String(v.name||'').trim().slice(0,120),code:String(v.code||'').trim().slice(0,60),image_url:String(v.image_url||'').trim(),visible:v.visible!==false}
  }).filter(f=>f.name)
- if(fabrics.some(f=>f.image_url&&!/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(f.image_url)))throw Object.assign(new Error('Imagem de tecido inválida.'),{status:400})
- if(fabrics.some(f=>f.image_url.length>180000))throw Object.assign(new Error('Imagem maior que o limite permitido.'),{status:413})
+ const validImage=u=>!u||/^https:\/\/[^/]+\/api\/(?:saas|master)\/global-defaults\/images\/[a-f0-9-]{36}\.(?:jpg|png|webp)$/.test(u)
+ if(fabrics.some(f=>!validImage(f.image_url)))throw Object.assign(new Error('URL de imagem inválida.'),{status:400})
  const cover_image=String(input.cover_image??existing?.cover_image??'')
- if(cover_image&&(!/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(cover_image)||cover_image.length>180000))throw Object.assign(new Error('Capa inválida ou muito grande.'),{status:400})
+ if(!validImage(cover_image))throw Object.assign(new Error('Capa inválida.'),{status:400})
  return {id:String(existing?.id||'galb_'+crypto.randomUUID()),name,cover_image,fabrics,
   active:input.active===undefined?(existing?existing.active!==false:false):Boolean(input.active),
   created_at:existing?.created_at||nowIso(),updated_at:nowIso()}
@@ -406,6 +407,33 @@ router.post('/global-defaults/foams/:itemId/apply', requireAuth, requireMaster, 
   }catch(err){ next(err) }
 })
 
+// Imagens de álbuns são arquivos R2 com identificadores aleatórios; o banco guarda URLs, não base64.
+router.get('/global-defaults/images/:file', async(req,res,next)=>{
+ try{
+  const file=String(req.params.file||'')
+  if(!/^[a-f0-9-]{36}\.(?:jpg|png|webp)$/.test(file))return res.status(404).end()
+  if(!r2.isConfigured())return res.status(503).end()
+  const result=await r2.getObjectBuffer('global-fabric-albums/'+file)
+  res.set('Content-Type',result.contentType)
+  res.set('Cache-Control','public, max-age=3600')
+  res.send(result.body)
+ }catch(e){if(e.name==='NoSuchKey'||e.$metadata?.httpStatusCode===404)return res.status(404).end();next(e)}
+})
+router.post('/global-defaults/images',requireAuth,requireMaster,requirePermission('saas.companies.write'),async(req,res,next)=>{
+ try{
+  if(!r2.isConfigured())return res.status(503).json({message:'Armazenamento de fotos indisponível.'})
+  const type=String(req.body?.content_type||'')
+  if(!['image/jpeg','image/png','image/webp'].includes(type))return res.status(415).json({message:'Formato de foto inválido.'})
+  const encoded=String(req.body?.image_base64||'')
+  if(!encoded||encoded.length>800000||!/^[A-Za-z0-9+/]+={0,2}$/.test(encoded))return res.status(413).json({message:'Reduza a foto para até 600 KB.'})
+  const bytes=Buffer.from(encoded,'base64')
+  if(!bytes.length||bytes.length>600000)return res.status(413).json({message:'Foto acima do limite.'})
+  const ext=r2.extensionForContentType(type)
+  const file=crypto.randomUUID()+'.'+ext
+  await r2.putObject('global-fabric-albums/'+file,bytes,type)
+  res.status(201).json({image_url:req.protocol+'://'+req.get('host')+req.baseUrl+'/global-defaults/images/'+file})
+ }catch(e){next(e)}
+})
 router.get('/global-defaults/albums', requireAuth, requireMaster, requirePermission('saas.companies.read'), (req, res) => {
   const store = readStore()
   return res.json({ items: globalDefaultsCollection(store, 'albums') })
