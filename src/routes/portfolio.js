@@ -11,7 +11,7 @@ const respond=fn=>async(req,res,next)=>{try{await fn(req,res)}catch(e){if(e.stat
 const companyId=req=>String(req.user?.company_id||'').trim()
 const allowed=req=>hasMasterAccess(req.user)||hasPermission(req.user,'catalogo')||hasPermission(req.user,'precificacao')
 const safeIds=ids=>Array.isArray(ids)?[...new Set(ids.map(x=>String(x)).filter(x=>x.length>0&&x.length<=128))].slice(0,200):[]
-const publicUrl=slug=>'https://estofaria-frontend.pages.dev/vitrine/?loja='+encodeURIComponent(slug)
+const publicUrl=slug=>String(process.env.PUBLIC_FRONTEND_URL||'https://estofariadigital.com.br').replace(/\/$/,'')+'/vitrine/?loja='+encodeURIComponent(slug)
 const coverUrl=async row=>{
  if(!row.cover_image_key||!r2.isConfigured())return null
  try{return await r2.presignGetUrl(row.cover_image_key,3600)}catch(e){console.warn('[portfolio-public] capa indisponível:',e.message);return null}
@@ -38,7 +38,9 @@ router.get('/public/portfolio/:slug',respond(async(req,res)=>{
    if(!m)return null
    return {id:m.id,name:m.name,description:m.description||'',category:m.category||'',
      image_url:await imageUrl(m.images),sale_price_cents:row.show_prices?Number(m.sale_price_cents)||0:null,
-     base_meters:Number(m.base_meters)||0}
+     base_meters:Number(m.base_meters)||0,
+     display_depth_meters:m.display_depth_meters==null?null:Number(m.display_depth_meters),
+     display_height_meters:m.display_height_meters==null?null:Number(m.display_height_meters)}
  }))
  const ready=await Promise.all(readyIds.map(async id=>{
    const m=await readyDb.get(row.company_id,id)
@@ -46,11 +48,12 @@ router.get('/public/portfolio/:slug',respond(async(req,res)=>{
    return {id:m.id,name:m.name,description:m.description||'',quantity:Number(m.quantity),
      price_cents:row.show_prices?Number(m.price_cents):null,
      width_meters:m.width_meters==null?null:Number(m.width_meters),
+     depth_meters:m.depth_meters==null?null:Number(m.depth_meters),height_meters:m.height_meters==null?null:Number(m.height_meters),
      image_url:await imageUrl(m.images)}
  }))
  res.setHeader('Cache-Control','no-store')
  res.json({name:row.name,description:row.description,whatsapp:row.whatsapp,
-  cover_image:await coverUrl(row),show_prices:row.show_prices,custom:custom.filter(Boolean),ready:ready.filter(Boolean),direct_models:(Array.isArray(row.direct_models)?row.direct_models:[]).filter(m=>m.visible!==false).map(m=>({id:m.id,name:m.name,category:m.category,description:m.description,images:m.images,variants:row.show_prices?m.variants:(m.variants||[]).map(v=>({meters:v.meters}))})),fabric_albums:(Array.isArray(row.fabric_albums)?row.fabric_albums:[]).filter(a=>a.visible!==false).map(a=>({id:a.id,name:a.name,fabrics:(a.fabrics||[]).filter(t=>t.visible!==false).map(t=>({id:t.id,name:t.name,image_url:t.image_url}))}))})
+  cover_image:await coverUrl(row),show_prices:row.show_prices,custom:custom.filter(Boolean),ready:ready.filter(Boolean),direct_models:(Array.isArray(row.direct_models)?row.direct_models:[]).filter(m=>m.visible!==false).map(m=>({id:m.id,name:m.name,category:m.category,description:m.description,images:m.images,variants:row.show_prices?m.variants:(m.variants||[]).map(v=>({meters:v.meters}))})),fabric_albums:(Array.isArray(row.fabric_albums)?row.fabric_albums:[]).filter(a=>a.visible!==false).map(a=>({id:a.id,name:a.name,fabrics:(a.fabrics||[]).filter(t=>t.visible!==false).map(t=>({id:t.id,name:t.name,code:String(t.code||''),image_url:t.image_url}))}))})
 }))
 router.use('/portfolio',requireAuth,(req,res,next)=>{
  if(!allowed(req))return res.status(403).json({message:'Sem acesso às configurações do Portfólio.'})
@@ -79,8 +82,8 @@ router.put('/portfolio',respond(async(req,res)=>{
  if(safeDirect&&safeDirect.some(m=>!/^[-_a-zA-Z0-9]{1,100}$/.test(m.id)||!m.name||m.name.length>100||!m.category||m.category.length>100||m.description.length>1000||m.images.length>8||m.images.some(u=>u.length>400000||!/^https:\/\/|^data:image\/(jpeg|png|webp);base64,/.test(u))||m.variants.length>30||m.variants.some(v=>!Number.isFinite(v.meters)||v.meters<=0||!Number.isSafeInteger(v.price_cents)||v.price_cents<0)))throw error(400,'Confira os dados dos modelos.')
  const albums=body.fabric_albums===undefined?null:body.fabric_albums
  if(albums!==null&&(!Array.isArray(albums)||albums.length>50))throw error(400,'Álbuns de tecidos inválidos.')
- const safeAlbums=albums===null?null:albums.map(a=>({id:String(a?.id||''),name:String(a?.name||'').trim(),visible:a?.visible!==false,fabrics:Array.isArray(a?.fabrics)?a.fabrics.map(t=>({id:String(t?.id||''),name:String(t?.name||'').trim(),image_url:String(t?.image_url||''),visible:t?.visible!==false})):[]}))
- if(safeAlbums&&safeAlbums.some(a=>!/^[-_a-zA-Z0-9]{1,100}$/.test(a.id)||!a.name||a.name.length>100||a.fabrics.length>100||a.fabrics.some(t=>!/^[-_a-zA-Z0-9]{1,100}$/.test(t.id)||!t.name||t.name.length>100||!/^https:\/\/|^data:image\/(jpeg|png|webp);base64,/.test(t.image_url)||t.image_url.length>250000)))throw error(400,'Confira nomes e imagens dos álbuns.')
+ const safeAlbums=albums===null?null:albums.map(a=>({id:String(a?.id||''),name:String(a?.name||'').trim(),visible:a?.visible!==false,fabrics:Array.isArray(a?.fabrics)?a.fabrics.map(t=>({id:String(t?.id||''),name:String(t?.name||'').trim(),code:String(t?.code||'').trim(),image_url:String(t?.image_url||''),visible:t?.visible!==false})):[]}))
+ if(safeAlbums&&safeAlbums.some(a=>!/^[-_a-zA-Z0-9]{1,100}$/.test(a.id)||!a.name||a.name.length>100||a.fabrics.length>100||a.fabrics.some(t=>!/^[-_a-zA-Z0-9]{1,100}$/.test(t.id)||!t.name||t.name.length>100||t.code.length>60||!/^https:\/\/|^data:image\/(jpeg|png|webp);base64,/.test(t.image_url)||t.image_url.length>250000)))throw error(400,'Confira nomes e imagens dos álbuns.')
  // Impede gravar seleções de outra empresa.
  for(const id of customIds)if(!await modelDb.getModel(companyId(req),id))throw error(400,'Um modelo sob encomenda não está disponível.')
  for(const id of readyIds)if(!await readyDb.get(companyId(req),id))throw error(400,'Um produto à pronta entrega não está disponível.')
@@ -117,7 +120,7 @@ router.post('/portfolio/publish',respond(async(req,res)=>{
  if(!Number.isInteger(revision)||revision<1||typeof published!=='boolean')throw error(400,'Solicitação inválida.')
  const before=await db.get(companyId(req))
  if(!before)throw error(404,'Configure sua vitrine antes de publicar.')
- if(published&&(!before.name.trim()||!before.whatsapp||!(before.custom_ids.length+before.ready_ids.length)))throw error(400,'Informe nome, WhatsApp e selecione ao menos um produto.')
+ if(published&&(!before.name.trim()||!before.whatsapp||!(before.custom_ids.length+before.ready_ids.length+(before.direct_models||[]).filter(m=>m.visible!==false).length)))throw error(400,'Informe nome, WhatsApp e selecione ao menos um produto.')
  const row=await db.publish(companyId(req),published,revision)
  if(!row)throw error(409,'A vitrine foi alterada. Atualize a página.')
  res.json(await details(row))
