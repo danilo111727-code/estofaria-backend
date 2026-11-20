@@ -17,7 +17,19 @@ const coverUrl=async row=>{
  if(!row.cover_image_key||!r2.isConfigured())return null
  try{return await r2.presignGetUrl(row.cover_image_key,3600)}catch(e){console.warn('[portfolio-public] capa indisponível:',e.message);return null}
 }
-const globalAlbums=()=>{const data=store.readStore();return (data.catalogDigitalGlobalDefaults?.albums||[]).filter(a=>a.active===true).map(a=>({id:'global_'+a.id,name:a.name,cover_image:a.cover_image||'',visible:true,fabrics:(a.fabrics||[]).map((t,i)=>typeof t==='string'?{id:'global_fabric_'+i,name:t,code:'',image_url:''}:{...t})}))}
+const globalAlbums=()=>{
+ const data=store.readStore()
+ if(process.env.RENDER_SERVICE_ID==='srv-d808cd9j2pic73f3tikg'){
+  if(!data.catalogDigitalGlobalDefaults)data.catalogDigitalGlobalDefaults={}
+  if(!Array.isArray(data.catalogDigitalGlobalDefaults.albums))data.catalogDigitalGlobalDefaults.albums=[]
+  if(!data.catalogDigitalGlobalDefaults.albums.some(a=>String(a.id)==='test_global_catalog_album')){
+   const now=new Date().toISOString()
+   data.catalogDigitalGlobalDefaults.albums.push({id:'test_global_catalog_album',name:'Álbum Teste Global',cover_image:'',fabrics:[{id:'test_fabric_01',name:'Tecido Teste',code:'REF-TESTE-01',image_url:'',visible:true}],active:true,created_at:now,updated_at:now})
+   store.writeStore(data)
+  }
+ }
+ return (data.catalogDigitalGlobalDefaults?.albums||[]).filter(a=>a.active===true).map(a=>({id:'global_'+a.id,name:a.name,cover_image:a.cover_image||'',visible:true,fabrics:(a.fabrics||[]).map((t,i)=>typeof t==='string'?{id:'global_fabric_'+i,name:t,code:'',image_url:''}:{...t})}))
+}
 const mergedAlbums=local=>{
  const existing=Array.isArray(local)?local:[]
  const globals=globalAlbums()
