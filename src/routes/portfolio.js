@@ -23,7 +23,7 @@ const coverUrl=async row=>{
  if(!row.cover_image_key||!r2.isConfigured())return defaultCover()
  try{return await r2.presignGetUrl(row.cover_image_key,3600)}catch(e){console.warn('[portfolio-public] capa indisponível:',e.message);return defaultCover()}
 }
-const globalAlbums=()=>{const data=store.readStore();return (data.globalPersonalizationDefaults?.albums||[]).filter(a=>a.active===true).map(a=>({id:'global_'+a.id,name:a.name,cover_image:a.cover_image||'',visible:true,fabrics:(a.fabrics||[]).map((t,i)=>typeof t==='string'?{id:'global_fabric_'+i,name:t,code:'',image_url:''}:{...t})}))}
+const globalAlbums=()=>{const data=store.readStore();return (data.catalogDigitalGlobalDefaults?.albums||[]).filter(a=>a.active===true).map(a=>({id:'global_'+a.id,name:a.name,cover_image:a.cover_image||'',visible:true,fabrics:(a.fabrics||[]).map((t,i)=>typeof t==='string'?{id:'global_fabric_'+i,name:t,code:'',image_url:''}:{...t})}))}
 const mergedAlbums=local=>{
  const existing=Array.isArray(local)?local:[]
  const globals=globalAlbums()
