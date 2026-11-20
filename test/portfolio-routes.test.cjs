@@ -6,8 +6,8 @@ const http=require('node:http')
 const express=require('express')
 const originalLoad=Module._load
 let record={slug:'0123456789abcdef01234567',company_id:'company-a',name:'Atelier A',description:'Descrição',whatsapp:'5571999999999',show_prices:true,custom_ids:['m1'],ready_ids:['r1'],published:true,revision:1}
-const model={id:'m1',name:'Modelo 1',description:'Detalhes',category:'Retrátil',images:{thumb:{object_key:'secret-image'}},sale_price_cents:200000,base_meters:2.5,total_cost_cents:180000,materials:[{unit_price_cents:10000}]}
-const ready={id:'r1',name:'Pronta entrega',quantity:3,price_cents:150000,description:'Disponível',images:{thumb:{object_key:'secret-ready'}}}
+const model={id:'m1',name:'Modelo 1',description:'Detalhes',category:'Retrátil',display_depth_meters:.95,display_height_meters:.85,images:{thumb:{object_key:'secret-image'}},sale_price_cents:200000,base_meters:2.5,total_cost_cents:180000,materials:[{unit_price_cents:10000}]}
+const ready={id:'r1',name:'Pronta entrega',quantity:3,depth_meters:.95,height_meters:.85,price_cents:150000,description:'Disponível',images:{thumb:{object_key:'secret-ready'}}}
 const modules={
  '../middleware/auth':{requireAuth:(req,res,next)=>{req.user={company_id:req.headers['x-test-company']||'company-a',permissions:['catalogo']};next()}},
  '../lib/policies':{hasMasterAccess:()=>false,hasPermission:(user,p)=>user.permissions.includes(p)},
@@ -42,6 +42,10 @@ test('pública somente publicada, somente campos permitidos e estoque válido',a
  assert.equal(result.status,200)
  assert.equal(result.body.custom[0].name,'Modelo 1')
  assert.equal(result.body.ready[0].quantity,3)
+ assert.equal(result.body.custom[0].display_depth_meters,.95)
+ assert.equal(result.body.custom[0].display_height_meters,.85)
+ assert.equal(result.body.ready[0].depth_meters,.95)
+ assert.equal(result.body.ready[0].height_meters,.85)
  assert.equal(JSON.stringify(result.body).includes('total_cost_cents'),false)
  assert.equal(JSON.stringify(result.body).includes('object_key'),false)
  assert.equal(JSON.stringify(result.body).includes('materials'),false)
@@ -114,3 +118,14 @@ test('foto de capa: adiciona, recupera, publica e exclui sem perder identidade',
  result=await request('GET','/api/v2/portfolio');
  assert.equal(result.body.cover_image,null);
 })
+
+test('código do tecido persiste no álbum e chega ao link público',async()=>{
+ const before=await request('GET','/api/v2/portfolio');
+ const result=await request('PUT','/api/v2/portfolio',{...before.body,fabric_albums:[{id:'album-code',name:'Linho',fabrics:[{id:'fabric-code',name:'Bege',code:'REF-123',image_url:'https://images.local/bege.jpg'}]}]});
+ assert.equal(result.status,200);assert.equal(result.body.fabric_albums[0].fabrics[0].code,'REF-123');
+ record={...record,published:true};
+ const visible=await request('GET','/api/v2/public/portfolio/'+record.slug);
+ assert.equal(visible.body.fabric_albums[0].fabrics[0].code,'REF-123');
+ const invalid=await request('PUT','/api/v2/portfolio',{...result.body,fabric_albums:[{id:'album-code',name:'Linho',fabrics:[{id:'fabric-code',name:'Bege',code:'x'.repeat(61),image_url:'https://images.local/bege.jpg'}]}]});
+ assert.equal(invalid.status,400);
+});
