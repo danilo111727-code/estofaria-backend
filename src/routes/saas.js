@@ -185,6 +185,28 @@ function cleanGlobalItem(input = {}, existing = null, type = 'additional'){
 }
 
 function cleanGlobalAlbum(input = {}, existing = null){
+  const name = String(input.name ?? input.nome ?? existing?.name ?? existing?.nome ?? '').replace(/\s+/g, ' ').trim().slice(0, 180)
+  const rawFabrics = Array.isArray(input.fabrics) ? input.fabrics
+    : Array.isArray(input.itens) ? input.itens
+    : Array.isArray(existing?.fabrics) ? existing.fabrics
+    : []
+  const fabrics = rawFabrics
+    .map(item => typeof item === 'string' ? item : (item?.name ?? item?.nome ?? ''))
+    .map(value => String(value || '').replace(/\s+/g, ' ').trim().slice(0, 180))
+    .filter(Boolean)
+    .filter((value, index, arr) => arr.findIndex(other => other.toLowerCase() === value.toLowerCase()) === index)
+    .slice(0, 500)
+  return {
+    id: String(existing?.id || input.id || ('galb_' + crypto.randomUUID())),
+    name,
+    fabrics,
+    active: input.active === undefined ? (existing ? existing.active !== false : true) : Boolean(input.active),
+    created_at: existing?.created_at || nowIso(),
+    updated_at: nowIso()
+  }
+}
+
+function cleanCatalogGlobalAlbum(input = {}, existing = null){
  const name=String(input.name ?? existing?.name ?? '').trim().slice(0,180)
  const source=Array.isArray(input.fabrics)?input.fabrics:(existing?.fabrics||[])
  const fabrics=source.slice(0,100).map((f,i)=>{
@@ -201,6 +223,11 @@ function cleanGlobalAlbum(input = {}, existing = null){
   created_at:existing?.created_at||nowIso(),updated_at:nowIso()}
 }
 
+function catalogGlobalCollection(store){
+ if(!store.catalogDigitalGlobalDefaults)store.catalogDigitalGlobalDefaults={}
+ if(!Array.isArray(store.catalogDigitalGlobalDefaults.albums))store.catalogDigitalGlobalDefaults.albums=[]
+ return store.catalogDigitalGlobalDefaults.albums
+}
 function findGlobalById(items, itemId){
   return items.findIndex(item => String(item.id) === String(itemId))
 }
@@ -409,7 +436,7 @@ router.post('/global-defaults/foams/:itemId/apply', requireAuth, requireMaster, 
 })
 
 // Imagens de álbuns são arquivos R2 com identificadores aleatórios; o banco guarda URLs, não base64.
-router.get('/global-defaults/images/:file', async(req,res,next)=>{
+router.get('/catalog-global/images/:file', async(req,res,next)=>{
  try{
   const file=String(req.params.file||'')
   if(!/^[a-f0-9-]{36}\.(?:jpg|png|webp)$/.test(file))return res.status(404).end()
@@ -420,7 +447,7 @@ router.get('/global-defaults/images/:file', async(req,res,next)=>{
   res.send(result.body)
  }catch(e){if(e.name==='NoSuchKey'||e.$metadata?.httpStatusCode===404)return res.status(404).end();next(e)}
 })
-router.post('/global-defaults/images',requireAuth,requireMaster,requirePermission('saas.companies.write'),async(req,res,next)=>{
+router.post('/catalog-global/images',requireAuth,requireMaster,requirePermission('saas.companies.write'),async(req,res,next)=>{
  try{
   if(!r2.isConfigured())return res.status(503).json({message:'Armazenamento de fotos indisponível.'})
   const type=String(req.body?.content_type||'')
@@ -432,18 +459,18 @@ router.post('/global-defaults/images',requireAuth,requireMaster,requirePermissio
   const ext=r2.extensionForContentType(type)
   const file=crypto.randomUUID()+'.'+ext
   await r2.putObject('global-fabric-albums/'+file,bytes,type)
-  res.status(201).json({image_url:req.protocol+'://'+req.get('host')+req.baseUrl+'/global-defaults/images/'+file})
+  res.status(201).json({image_url:req.protocol+'://'+req.get('host')+req.baseUrl+'/catalog-global/images/'+file})
  }catch(e){next(e)}
 })
-router.get('/global-defaults/albums', requireAuth, requireMaster, requirePermission('saas.companies.read'), (req, res) => {
+router.get('/catalog-global/albums', requireAuth, requireMaster, requirePermission('saas.companies.read'), (req, res) => {
   const store = readStore()
-  return res.json({ items: globalDefaultsCollection(store, 'albums') })
+  return res.json({ items: catalogGlobalCollection(store) })
 })
 
-router.post('/global-defaults/albums', requireAuth, requireMaster, requirePermission('saas.companies.write'), (req, res, next) => { try {
+router.post('/catalog-global/albums', requireAuth, requireMaster, requirePermission('saas.companies.write'), (req, res, next) => { try {
   const store = readStore()
-  const items = globalDefaultsCollection(store, 'albums')
-  const item = cleanGlobalAlbum(req.body || {})
+  const items = catalogGlobalCollection(store)
+  const item = cleanCatalogGlobalAlbum(req.body || {})
   if(!item.name) return res.status(400).json({ error:'invalid_request', message:'Informe o nome do álbum.' })
   if(hasDuplicateGlobalName(items, item.name)) return res.status(409).json({ error:'duplicate_name', message:'Já existe um álbum global com esse nome.' })
   items.push(item)
@@ -452,7 +479,48 @@ router.post('/global-defaults/albums', requireAuth, requireMaster, requirePermis
  }catch(err){if(err.status)return res.status(err.status).json({message:err.message});next(err)}
 })
 
-router.patch('/global-defaults/albums/:itemId', requireAuth, requireMaster, requirePermission('saas.companies.write'), (req, res, next) => { try {
+router.patch('/catalog-global/albums/:itemId', requireAuth, requireMaster, requirePermission('saas.companies.write'), (req, res, next) => { try {
+  const store = readStore()
+  const items = catalogGlobalCollection(store)
+  const index = findGlobalById(items, req.params.itemId)
+  if(index < 0) return res.status(404).json({ error:'not_found', message:'Álbum global não encontrado.' })
+  const item = cleanCatalogGlobalAlbum(req.body || {}, items[index])
+  if(!item.name) return res.status(400).json({ error:'invalid_request', message:'Informe o nome do álbum.' })
+  if(hasDuplicateGlobalName(items, item.name, index)) return res.status(409).json({ error:'duplicate_name', message:'Já existe um álbum global com esse nome.' })
+  items[index] = item
+  writeStore(store)
+  return res.json({ ok:true, item })
+ }catch(err){if(err.status)return res.status(err.status).json({message:err.message});next(err)}
+})
+
+router.delete('/catalog-global/albums/:itemId', requireAuth, requireMaster, requirePermission('saas.companies.write'), (req, res) => {
+  const store = readStore()
+  const items = catalogGlobalCollection(store)
+  const index = findGlobalById(items, req.params.itemId)
+  if(index < 0) return res.status(404).json({ error:'not_found', message:'Álbum global não encontrado.' })
+  const [removed] = items.splice(index, 1)
+  writeStore(store)
+  return res.json({ ok:true, removed })
+})
+
+
+router.get('/global-defaults/albums', requireAuth, requireMaster, requirePermission('saas.companies.read'), (req, res) => {
+  const store = readStore()
+  return res.json({ items: globalDefaultsCollection(store, 'albums') })
+})
+
+router.post('/global-defaults/albums', requireAuth, requireMaster, requirePermission('saas.companies.write'), (req, res) => {
+  const store = readStore()
+  const items = globalDefaultsCollection(store, 'albums')
+  const item = cleanGlobalAlbum(req.body || {})
+  if(!item.name) return res.status(400).json({ error:'invalid_request', message:'Informe o nome do álbum.' })
+  if(hasDuplicateGlobalName(items, item.name)) return res.status(409).json({ error:'duplicate_name', message:'Já existe um álbum global com esse nome.' })
+  items.push(item)
+  writeStore(store)
+  return res.status(201).json({ ok:true, item })
+})
+
+router.patch('/global-defaults/albums/:itemId', requireAuth, requireMaster, requirePermission('saas.companies.write'), (req, res) => {
   const store = readStore()
   const items = globalDefaultsCollection(store, 'albums')
   const index = findGlobalById(items, req.params.itemId)
@@ -463,7 +531,6 @@ router.patch('/global-defaults/albums/:itemId', requireAuth, requireMaster, requ
   items[index] = item
   writeStore(store)
   return res.json({ ok:true, item })
- }catch(err){if(err.status)return res.status(err.status).json({message:err.message});next(err)}
 })
 
 router.delete('/global-defaults/albums/:itemId', requireAuth, requireMaster, requirePermission('saas.companies.write'), (req, res) => {
