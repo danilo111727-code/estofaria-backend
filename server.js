@@ -152,6 +152,8 @@ app.use('/api/subscription', (req, res, next) => {
   next()
 })
 app.use('/api/billing', billingRoutes)
+// Public portfolio must be registered before generic authenticated /api routers.
+// Its admin endpoints retain their own requireAuth middleware.
 app.use('/api/v2', require('./src/routes/portfolio'))
 app.use('/api', legacyApiPermissions)
 app.use('/api', require('./src/routes/trash'))
@@ -301,4 +303,3 @@ start().catch(err => {
   console.error('[server] Erro fatal na inicialização:', err)
   process.exit(1)
 })
-

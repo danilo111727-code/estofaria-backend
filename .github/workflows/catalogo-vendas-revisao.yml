@@ -1,0 +1,20 @@
+name: Revisão dependências Catálogo e Vendas
+on:
+  push:
+    branches: [revisao/catalogo-vendas-base-producao-20261115]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --ignore-scripts --no-audit --no-fund
+      - run: npm install --prefix "$RUNNER_TEMP/catalog-db" --no-save @electric-sql/pglite@0.3.14
+      - name: Validar rotas e persistência sem banco real
+        run: NODE_PATH="$RUNNER_TEMP/catalog-db/node_modules" node --test test/ready-models.test.js test/portfolio-routes.test.cjs test/company-revenue-cleanup.test.js
