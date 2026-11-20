@@ -184,25 +184,19 @@ function cleanGlobalItem(input = {}, existing = null, type = 'additional'){
 }
 
 function cleanGlobalAlbum(input = {}, existing = null){
-  const name = String(input.name ?? input.nome ?? existing?.name ?? existing?.nome ?? '').replace(/\s+/g, ' ').trim().slice(0, 180)
-  const rawFabrics = Array.isArray(input.fabrics) ? input.fabrics
-    : Array.isArray(input.itens) ? input.itens
-    : Array.isArray(existing?.fabrics) ? existing.fabrics
-    : []
-  const fabrics = rawFabrics
-    .map(item => typeof item === 'string' ? item : (item?.name ?? item?.nome ?? ''))
-    .map(value => String(value || '').replace(/\s+/g, ' ').trim().slice(0, 180))
-    .filter(Boolean)
-    .filter((value, index, arr) => arr.findIndex(other => other.toLowerCase() === value.toLowerCase()) === index)
-    .slice(0, 500)
-  return {
-    id: String(existing?.id || input.id || ('galb_' + crypto.randomUUID())),
-    name,
-    fabrics,
-    active: input.active === undefined ? (existing ? existing.active !== false : true) : Boolean(input.active),
-    created_at: existing?.created_at || nowIso(),
-    updated_at: nowIso()
-  }
+ const name=String(input.name ?? existing?.name ?? '').trim().slice(0,180)
+ const source=Array.isArray(input.fabrics)?input.fabrics:(existing?.fabrics||[])
+ const fabrics=source.slice(0,100).map((f,i)=>{
+   const v=typeof f==='string'?{name:f}:f||{}
+   return {id:String(v.id||'fabric_'+i).slice(0,100),name:String(v.name||'').trim().slice(0,120),code:String(v.code||'').trim().slice(0,60),image_url:String(v.image_url||'').trim(),visible:v.visible!==false}
+ }).filter(f=>f.name)
+ if(fabrics.some(f=>f.image_url&&!/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(f.image_url)))throw Object.assign(new Error('Imagem de tecido inválida.'),{status:400})
+ if(fabrics.some(f=>f.image_url.length>180000))throw Object.assign(new Error('Imagem maior que o limite permitido.'),{status:413})
+ const cover_image=String(input.cover_image??existing?.cover_image??'')
+ if(cover_image&&(!/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(cover_image)||cover_image.length>180000))throw Object.assign(new Error('Capa inválida ou muito grande.'),{status:400})
+ return {id:String(existing?.id||'galb_'+crypto.randomUUID()),name,cover_image,fabrics,
+  active:input.active===undefined?(existing?existing.active!==false:false):Boolean(input.active),
+  created_at:existing?.created_at||nowIso(),updated_at:nowIso()}
 }
 
 function findGlobalById(items, itemId){
