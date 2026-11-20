@@ -3,6 +3,7 @@ const router=require('express').Router()
 const {requireAuth}=require('../middleware/auth')
 const {hasMasterAccess,hasPermission}=require('../lib/policies')
 const db=require('../lib/portfolio-db')
+const store=require('../lib/store')
 const modelDb=require('../lib/models-v2-db')
 const readyDb=require('../lib/ready-models-db')
 const r2=require('../lib/r2-storage')
@@ -16,9 +17,25 @@ const coverUrl=async row=>{
  if(!row.cover_image_key||!r2.isConfigured())return null
  try{return await r2.presignGetUrl(row.cover_image_key,3600)}catch(e){console.warn('[portfolio-public] capa indisponível:',e.message);return null}
 }
+const globalAlbums=()=>{const data=store.readStore();return (data.catalogDigitalGlobalDefaults?.albums||[]).filter(a=>a.active===true).map(a=>({id:'global_'+a.id,name:a.name,cover_image:a.cover_image||'',visible:true,fabrics:(a.fabrics||[]).map((t,i)=>typeof t==='string'?{id:'global_fabric_'+i,name:t,code:'',image_url:''}:{...t})}))}
+const mergedAlbums=local=>{
+ const existing=Array.isArray(local)?local:[]
+ const globals=globalAlbums()
+ const byId=new Map(existing.map(a=>[String(a.id),a]))
+ const globalIds=new Set(globals.map(a=>a.id))
+ const merged=existing.filter(a=>!globalIds.has(String(a.id)))
+ for(const g of globals){
+  const override=byId.get(g.id)
+  merged.push(override?{...g,visible:override.visible!==false,fabrics:g.fabrics.map(t=>{
+   const localT=(override.fabrics||[]).find(x=>String(x.id)===String(t.id))
+   return localT?{...t,visible:localT.visible!==false}:t
+  })}:g)
+ }
+ return merged
+}
 const details=async row=>({
  slug:row.slug,url:publicUrl(row.slug),name:row.name,description:row.description,whatsapp:row.whatsapp,cover_image:await coverUrl(row),
- show_prices:row.show_prices,custom_ids:row.custom_ids,ready_ids:row.ready_ids,fabric_albums:row.fabric_albums||[],direct_models:row.direct_models||[],
+ show_prices:row.show_prices,custom_ids:row.custom_ids,ready_ids:row.ready_ids,fabric_albums:mergedAlbums(row.fabric_albums),direct_models:row.direct_models||[],
  published:row.published,revision:row.revision
 })
 const imageUrl=async images=>{
@@ -50,7 +67,7 @@ router.get('/public/portfolio/:slug',respond(async(req,res)=>{
  }))
  res.setHeader('Cache-Control','no-store')
  res.json({name:row.name,description:row.description,whatsapp:row.whatsapp,
-  cover_image:await coverUrl(row),show_prices:row.show_prices,custom:custom.filter(Boolean),ready:ready.filter(Boolean),direct_models:(Array.isArray(row.direct_models)?row.direct_models:[]).filter(m=>m.visible!==false).map(m=>({id:m.id,name:m.name,category:m.category,description:m.description,images:m.images,variants:row.show_prices?m.variants:(m.variants||[]).map(v=>({meters:v.meters}))})),fabric_albums:(Array.isArray(row.fabric_albums)?row.fabric_albums:[]).filter(a=>a.visible!==false).map(a=>({id:a.id,name:a.name,fabrics:(a.fabrics||[]).filter(t=>t.visible!==false).map(t=>({id:t.id,name:t.name,image_url:t.image_url}))}))})
+  cover_image:await coverUrl(row),show_prices:row.show_prices,custom:custom.filter(Boolean),ready:ready.filter(Boolean),direct_models:(Array.isArray(row.direct_models)?row.direct_models:[]).filter(m=>m.visible!==false).map(m=>({id:m.id,name:m.name,category:m.category,description:m.description,images:m.images,variants:row.show_prices?m.variants:(m.variants||[]).map(v=>({meters:v.meters}))})),fabric_albums:mergedAlbums(row.fabric_albums).filter(a=>a.visible!==false).map(a=>({id:a.id,name:a.name,fabrics:(a.fabrics||[]).filter(t=>t.visible!==false).map(t=>({id:t.id,name:t.name,code:String(t.code||''),image_url:t.image_url}))}))})
 }))
 router.use('/portfolio',requireAuth,(req,res,next)=>{
  if(!allowed(req))return res.status(403).json({message:'Sem acesso às configurações do Portfólio.'})
