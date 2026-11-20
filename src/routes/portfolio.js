@@ -28,8 +28,15 @@ const mergedAlbums=local=>{
  const existing=Array.isArray(local)?local:[]
  const globals=globalAlbums()
  const byId=new Map(existing.map(a=>[String(a.id),a]))
- const merged=existing.filter(a=>!String(a.id).startsWith('global_'))
- for(const g of globals){const override=byId.get(g.id);merged.push(override?{...g,visible:override.visible!==false,fabrics:g.fabrics.map(t=>{const localT=(override.fabrics||[]).find(x=>x.id===t.id);return localT?{...t,visible:localT.visible!==false}:t})}:g)}
+ const globalIds=new Set(globals.map(a=>a.id))
+ const merged=existing.filter(a=>!globalIds.has(String(a.id)))
+ for(const g of globals){
+  const override=byId.get(g.id)
+  merged.push(override?{...g,visible:override.visible!==false,fabrics:g.fabrics.map(t=>{
+   const localT=(override.fabrics||[]).find(x=>String(x.id)===String(t.id))
+   return localT?{...t,visible:localT.visible!==false}:t
+  })}:g)
+ }
  return merged
 }
 const details=async row=>({
@@ -97,7 +104,7 @@ router.put('/portfolio',respond(async(req,res)=>{
  const safeDirect=direct===null?null:direct.map(m=>({id:String(m?.id||''),name:String(m?.name||'').trim(),category:String(m?.category||'').trim(),description:String(m?.description||''),visible:m?.visible!==false,images:Array.isArray(m?.images)?m.images.map(String):[],variants:Array.isArray(m?.variants)?m.variants.map(v=>({meters:Number(v.meters),price_cents:Number(v.price_cents)})):[]}))
  if(safeDirect&&safeDirect.some(m=>!/^[-_a-zA-Z0-9]{1,100}$/.test(m.id)||!m.name||m.name.length>100||!m.category||m.category.length>100||m.description.length>1000||m.images.length>8||m.images.some(u=>u.length>400000||!/^https:\/\/|^data:image\/(jpeg|png|webp);base64,/.test(u))||m.variants.length>30||m.variants.some(v=>!Number.isFinite(v.meters)||v.meters<=0||!Number.isSafeInteger(v.price_cents)||v.price_cents<0)))throw error(400,'Confira os dados dos modelos.')
  const albums=body.fabric_albums===undefined?null:body.fabric_albums
- if(albums!==null&&(!Array.isArray(albums)||albums.length>50))throw error(400,'Álbuns de tecidos inválidos.')
+ if(albums!==null&&(!Array.isArray(albums)||albums.length>150))throw error(400,'Álbuns de tecidos inválidos.')
  const safeAlbums=albums===null?null:albums.map(a=>({id:String(a?.id||''),name:String(a?.name||'').trim(),visible:a?.visible!==false,fabrics:Array.isArray(a?.fabrics)?a.fabrics.map(t=>({id:String(t?.id||''),name:String(t?.name||'').trim(),code:String(t?.code||'').trim(),image_url:String(t?.image_url||''),visible:t?.visible!==false})):[]}))
  if(safeAlbums&&safeAlbums.some(a=>!/^[-_a-zA-Z0-9]{1,100}$/.test(a.id)||!a.name||a.name.length>100||a.fabrics.length>100||a.fabrics.some(t=>!/^[-_a-zA-Z0-9]{1,100}$/.test(t.id)||!t.name||t.name.length>100||t.code.length>60||!/^https:\/\/|^data:image\/(jpeg|png|webp);base64,/.test(t.image_url)||t.image_url.length>250000)))throw error(400,'Confira nomes e imagens dos álbuns.')
  // Impede gravar seleções de outra empresa.
@@ -106,7 +113,7 @@ router.put('/portfolio',respond(async(req,res)=>{
  const current=await db.get(companyId(req))
  // An album removed by one company becomes a persistent, company-only hidden override.
  const globals=globalAlbums()
- const nextAlbums=safeAlbums===null?(current?.fabric_albums||[]):safeAlbums
+ const nextAlbums=safeAlbums===null?(current?.fabric_albums||[]):safeAlbums.filter(a=>!String(a.id).startsWith('global_')||globals.some(g=>g.id===a.id))
  if(safeAlbums!==null)for(const globalAlbum of globals){
    if(!nextAlbums.some(a=>a.id===globalAlbum.id))nextAlbums.push({...globalAlbum,visible:false})
  }
