@@ -229,25 +229,6 @@ function catalogGlobalCollection(store){
  return store.catalogDigitalGlobalDefaults.albums
 }
 
-function seedCatalogGlobalTestAlbumDevOnly(){
-  // ALBUM_TESTE_GLOBAL_DEV_ONLY: seed temporário exclusivamente para o serviço Render de teste.
-  if(process.env.RENDER_SERVICE_ID !== 'srv-d808cd9j2pic73f3tikg') return
-  const store = readStore()
-  const items = catalogGlobalCollection(store)
-  if(items.some(item => String(item.id) === 'test_global_catalog_album')) return
-  items.push({
-    id:'test_global_catalog_album',
-    name:'Álbum Teste Global',
-    cover_image:'',
-    fabrics:[{id:'test_fabric_01',name:'Tecido Teste',code:'REF-TESTE-01',image_url:'',visible:true}],
-    active:true,
-    created_at:nowIso(),
-    updated_at:nowIso()
-  })
-  writeStore(store)
-}
-seedCatalogGlobalTestAlbumDevOnly()
-
 function findGlobalById(items, itemId){
   return items.findIndex(item => String(item.id) === String(itemId))
 }
