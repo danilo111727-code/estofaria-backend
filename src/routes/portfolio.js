@@ -3,6 +3,7 @@ const router=require('express').Router()
 const {requireAuth}=require('../middleware/auth')
 const {hasMasterAccess,hasPermission}=require('../lib/policies')
 const db=require('../lib/portfolio-db')
+const store=require('../lib/store')
 const modelDb=require('../lib/models-v2-db')
 const readyDb=require('../lib/ready-models-db')
 const r2=require('../lib/r2-storage')
@@ -12,12 +13,18 @@ const companyId=req=>String(req.user?.company_id||'').trim()
 const allowed=req=>hasMasterAccess(req.user)||hasPermission(req.user,'catalogo')||hasPermission(req.user,'precificacao')
 const safeIds=ids=>Array.isArray(ids)?[...new Set(ids.map(x=>String(x)).filter(x=>x.length>0&&x.length<=128))].slice(0,200):[]
 const publicUrl=slug=>String(process.env.PUBLIC_FRONTEND_URL||'https://estofariadigital.com.br').replace(/\/$/,'')+'/vitrine/?loja='+encodeURIComponent(slug)
+const defaultCover=()=>String(process.env.PUBLIC_FRONTEND_URL||'https://estofariadigital.com.br').replace(/\/$/,'')+'/assets/catalogo-capa-global.png'
+const companyName=row=>{
+ if(String(row.name||'').trim()&&String(row.name).trim()!=='Minha estofaria')return String(row.name).trim()
+ const data=store._pg?.readAuthStore?store._pg.readAuthStore():store.readStore()
+ return String((data.companies||[]).find(c=>String(c.id)===String(row.company_id))?.name||'Minha estofaria').trim()
+}
 const coverUrl=async row=>{
- if(!row.cover_image_key||!r2.isConfigured())return null
- try{return await r2.presignGetUrl(row.cover_image_key,3600)}catch(e){console.warn('[portfolio-public] capa indisponível:',e.message);return null}
+ if(!row.cover_image_key||!r2.isConfigured())return defaultCover()
+ try{return await r2.presignGetUrl(row.cover_image_key,3600)}catch(e){console.warn('[portfolio-public] capa indisponível:',e.message);return defaultCover()}
 }
 const details=async row=>({
- slug:row.slug,url:publicUrl(row.slug),name:row.name,description:row.description,whatsapp:row.whatsapp,cover_image:await coverUrl(row),
+ slug:row.slug,url:publicUrl(row.slug),name:companyName(row),description:row.description,whatsapp:row.whatsapp,cover_image:await coverUrl(row),
  show_prices:row.show_prices,custom_ids:row.custom_ids,ready_ids:row.ready_ids,fabric_albums:row.fabric_albums||[],direct_models:row.direct_models||[],
  published:row.published,revision:row.revision
 })
@@ -52,7 +59,7 @@ router.get('/public/portfolio/:slug',respond(async(req,res)=>{
      image_url:await imageUrl(m.images)}
  }))
  res.setHeader('Cache-Control','no-store')
- res.json({name:row.name,description:row.description,whatsapp:row.whatsapp,
+ res.json({name:companyName(row),description:row.description,whatsapp:row.whatsapp,
   cover_image:await coverUrl(row),show_prices:row.show_prices,custom:custom.filter(Boolean),ready:ready.filter(Boolean),direct_models:(Array.isArray(row.direct_models)?row.direct_models:[]).filter(m=>m.visible!==false).map(m=>({id:m.id,name:m.name,category:m.category,description:m.description,images:m.images,variants:row.show_prices?m.variants:(m.variants||[]).map(v=>({meters:v.meters}))})),fabric_albums:(Array.isArray(row.fabric_albums)?row.fabric_albums:[]).filter(a=>a.visible!==false).map(a=>({id:a.id,name:a.name,fabrics:(a.fabrics||[]).filter(t=>t.visible!==false).map(t=>({id:t.id,name:t.name,code:String(t.code||''),image_url:t.image_url}))}))})
 }))
 router.use('/portfolio',requireAuth,(req,res,next)=>{

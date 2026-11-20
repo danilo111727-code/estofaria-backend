@@ -9,6 +9,7 @@ let record={slug:'0123456789abcdef01234567',company_id:'company-a',name:'Atelier
 const model={id:'m1',name:'Modelo 1',description:'Detalhes',category:'Retrátil',display_depth_meters:.95,display_height_meters:.85,images:{thumb:{object_key:'secret-image'}},sale_price_cents:200000,base_meters:2.5,total_cost_cents:180000,materials:[{unit_price_cents:10000}]}
 const ready={id:'r1',name:'Pronta entrega',quantity:3,depth_meters:.95,height_meters:.85,price_cents:150000,description:'Disponível',images:{thumb:{object_key:'secret-ready'}}}
 const modules={
+ '../lib/store':{readStore:()=>({companies:[{id:'company-a',name:'Empresa cadastrada A'},{id:'company-b',name:'Outra empresa B'}]})},
  '../middleware/auth':{requireAuth:(req,res,next)=>{req.user={company_id:req.headers['x-test-company']||'company-a',permissions:['catalogo']};next()}},
  '../lib/policies':{hasMasterAccess:()=>false,hasPermission:(user,p)=>user.permissions.includes(p)},
  '../lib/portfolio-db':{
@@ -113,10 +114,10 @@ test('foto de capa: adiciona, recupera, publica e exclui sem perder identidade',
  assert.equal(result.body.cover_image!==null,true);
  result=await request('DELETE','/api/v2/portfolio/cover');
  assert.equal(result.status,200);
- assert.equal(result.body.cover_image,null);
+ assert.match(result.body.cover_image,/\/assets\/catalogo-capa-global\.png$/);
  assert.equal(result.body.name,name);
  result=await request('GET','/api/v2/portfolio');
- assert.equal(result.body.cover_image,null);
+ assert.match(result.body.cover_image,/\/assets\/catalogo-capa-global\.png$/);
 })
 
 test('código do tecido persiste no álbum e chega ao link público',async()=>{
@@ -129,3 +130,23 @@ test('código do tecido persiste no álbum e chega ao link público',async()=>{
  const invalid=await request('PUT','/api/v2/portfolio',{...result.body,fabric_albums:[{id:'album-code',name:'Linho',fabrics:[{id:'fabric-code',name:'Bege',code:'x'.repeat(61),image_url:'https://images.local/bege.jpg'}]}]});
  assert.equal(invalid.status,400);
 });
+
+test('nome automático e capa global são iguais na prévia e no público, preservando personalizações',async()=>{
+ const saved={...record}
+ try{
+  record={...record,name:'',cover_image_key:'',published:true}
+  let admin=await request('GET','/api/v2/portfolio')
+  let client=await request('GET','/api/v2/public/portfolio/'+record.slug)
+  assert.equal(admin.body.name,'Empresa cadastrada A')
+  assert.equal(client.body.name,admin.body.name)
+  assert.match(admin.body.cover_image,/\/assets\/catalogo-capa-global\.png$/)
+  assert.equal(client.body.cover_image,admin.body.cover_image)
+  record.name='Minha estofaria'
+  assert.equal((await request('GET','/api/v2/portfolio')).body.name,'Empresa cadastrada A')
+  record.name='Minha marca personalizada';record.cover_image_key='custom-cover'
+  admin=await request('GET','/api/v2/portfolio');client=await request('GET','/api/v2/public/portfolio/'+record.slug)
+  assert.equal(admin.body.name,'Minha marca personalizada')
+  assert.equal(client.body.name,admin.body.name)
+  assert.equal(client.body.cover_image,'https://images.example.test/custom-cover')
+ }finally{record=saved}
+})
