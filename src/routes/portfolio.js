@@ -106,7 +106,7 @@ router.put('/portfolio',respond(async(req,res)=>{
  const albums=body.fabric_albums===undefined?null:body.fabric_albums
  if(albums!==null&&(!Array.isArray(albums)||albums.length>150))throw error(400,'Álbuns de tecidos inválidos.')
  const safeAlbums=albums===null?null:albums.map(a=>({id:String(a?.id||''),name:String(a?.name||'').trim(),visible:a?.visible!==false,fabrics:Array.isArray(a?.fabrics)?a.fabrics.map(t=>({id:String(t?.id||''),name:String(t?.name||'').trim(),code:String(t?.code||'').trim(),image_url:String(t?.image_url||''),visible:t?.visible!==false})):[]}))
- if(safeAlbums&&safeAlbums.some(a=>!/^[-_a-zA-Z0-9]{1,100}$/.test(a.id)||!a.name||a.name.length>100||a.fabrics.length>100||a.fabrics.some(t=>!/^[-_a-zA-Z0-9]{1,100}$/.test(t.id)||!t.name||t.name.length>100||t.code.length>60||!/^https:\/\/|^data:image\/(jpeg|png|webp);base64,/.test(t.image_url)||t.image_url.length>250000)))throw error(400,'Confira nomes e imagens dos álbuns.')
+ if(safeAlbums&&safeAlbums.some(a=>!/^[-_a-zA-Z0-9]{1,100}$/.test(a.id)||!a.name||a.name.length>100||a.fabrics.length>100||a.fabrics.some(t=>!/^[-_a-zA-Z0-9]{1,100}$/.test(t.id)||!t.name||t.name.length>100||t.code.length>60||!(t.image_url===''||/^https:\/\//.test(t.image_url)||/^data:image\/(jpeg|png|webp);base64,/.test(t.image_url))||t.image_url.length>250000)))throw error(400,'Confira nomes e imagens dos álbuns.')
  // Impede gravar seleções de outra empresa.
  for(const id of customIds)if(!await modelDb.getModel(companyId(req),id))throw error(400,'Um modelo sob encomenda não está disponível.')
  for(const id of readyIds)if(!await readyDb.get(companyId(req),id))throw error(400,'Um produto à pronta entrega não está disponível.')
