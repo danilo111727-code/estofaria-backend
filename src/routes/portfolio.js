@@ -23,9 +23,18 @@ const coverUrl=async row=>{
  if(!row.cover_image_key||!r2.isConfigured())return defaultCover()
  try{return await r2.presignGetUrl(row.cover_image_key,3600)}catch(e){console.warn('[portfolio-public] capa indisponível:',e.message);return defaultCover()}
 }
+const globalAlbums=()=>{const data=store.readStore();return (data.globalPersonalizationDefaults?.albums||[]).filter(a=>a.active===true).map(a=>({id:'global_'+a.id,name:a.name,cover_image:a.cover_image||'',visible:true,fabrics:(a.fabrics||[]).map((t,i)=>typeof t==='string'?{id:'global_fabric_'+i,name:t,code:'',image_url:''}:{...t})}))}
+const mergedAlbums=local=>{
+ const existing=Array.isArray(local)?local:[]
+ const globals=globalAlbums()
+ const byId=new Map(existing.map(a=>[String(a.id),a]))
+ const merged=existing.filter(a=>!String(a.id).startsWith('global_'))
+ for(const g of globals){const override=byId.get(g.id);merged.push(override?{...g,visible:override.visible!==false,fabrics:g.fabrics.map(t=>{const localT=(override.fabrics||[]).find(x=>x.id===t.id);return localT?{...t,visible:localT.visible!==false}:t})}:g)}
+ return merged
+}
 const details=async row=>({
  slug:row.slug,url:publicUrl(row.slug),name:companyName(row),description:row.description,whatsapp:row.whatsapp,cover_image:await coverUrl(row),
- show_prices:row.show_prices,custom_ids:row.custom_ids,ready_ids:row.ready_ids,fabric_albums:row.fabric_albums||[],direct_models:row.direct_models||[],
+ show_prices:row.show_prices,custom_ids:row.custom_ids,ready_ids:row.ready_ids,fabric_albums:mergedAlbums(row.fabric_albums),direct_models:row.direct_models||[],
  published:row.published,revision:row.revision
 })
 const imageUrl=async images=>{
@@ -60,7 +69,7 @@ router.get('/public/portfolio/:slug',respond(async(req,res)=>{
  }))
  res.setHeader('Cache-Control','no-store')
  res.json({name:companyName(row),description:row.description,whatsapp:row.whatsapp,
-  cover_image:await coverUrl(row),show_prices:row.show_prices,custom:custom.filter(Boolean),ready:ready.filter(Boolean),direct_models:(Array.isArray(row.direct_models)?row.direct_models:[]).filter(m=>m.visible!==false).map(m=>({id:m.id,name:m.name,category:m.category,description:m.description,images:m.images,variants:row.show_prices?m.variants:(m.variants||[]).map(v=>({meters:v.meters}))})),fabric_albums:(Array.isArray(row.fabric_albums)?row.fabric_albums:[]).filter(a=>a.visible!==false).map(a=>({id:a.id,name:a.name,fabrics:(a.fabrics||[]).filter(t=>t.visible!==false).map(t=>({id:t.id,name:t.name,code:String(t.code||''),image_url:t.image_url}))}))})
+  cover_image:await coverUrl(row),show_prices:row.show_prices,custom:custom.filter(Boolean),ready:ready.filter(Boolean),direct_models:(Array.isArray(row.direct_models)?row.direct_models:[]).filter(m=>m.visible!==false).map(m=>({id:m.id,name:m.name,category:m.category,description:m.description,images:m.images,variants:row.show_prices?m.variants:(m.variants||[]).map(v=>({meters:v.meters}))})),fabric_albums:mergedAlbums(row.fabric_albums).filter(a=>a.visible!==false).map(a=>({id:a.id,name:a.name,fabrics:(a.fabrics||[]).filter(t=>t.visible!==false).map(t=>({id:t.id,name:t.name,code:String(t.code||''),image_url:t.image_url}))}))})
 }))
 router.use('/portfolio',requireAuth,(req,res,next)=>{
  if(!allowed(req))return res.status(403).json({message:'Sem acesso às configurações do Portfólio.'})
@@ -95,7 +104,13 @@ router.put('/portfolio',respond(async(req,res)=>{
  for(const id of customIds)if(!await modelDb.getModel(companyId(req),id))throw error(400,'Um modelo sob encomenda não está disponível.')
  for(const id of readyIds)if(!await readyDb.get(companyId(req),id))throw error(400,'Um produto à pronta entrega não está disponível.')
  const current=await db.get(companyId(req))
- const row=await db.update(companyId(req),{name,description,whatsapp,show_prices:body.show_prices,custom_ids:customIds,ready_ids:readyIds,fabric_albums:safeAlbums===null?(current?.fabric_albums||[]):safeAlbums,direct_models:safeDirect===null?(current?.direct_models||[]):safeDirect},revision)
+ // An album removed by one company becomes a persistent, company-only hidden override.
+ const globals=globalAlbums()
+ const nextAlbums=safeAlbums===null?(current?.fabric_albums||[]):safeAlbums
+ if(safeAlbums!==null)for(const globalAlbum of globals){
+   if(!nextAlbums.some(a=>a.id===globalAlbum.id))nextAlbums.push({...globalAlbum,visible:false})
+ }
+ const row=await db.update(companyId(req),{name,description,whatsapp,show_prices:body.show_prices,custom_ids:customIds,ready_ids:readyIds,fabric_albums:nextAlbums,direct_models:safeDirect===null?(current?.direct_models||[]):safeDirect},revision)
  if(!row)throw error(409,'A vitrine foi alterada em outra sessão. Reabra para continuar.')
  res.json(await details(row))
 }))
