@@ -213,7 +213,7 @@ function cleanCatalogGlobalAlbum(input = {}, existing = null){
    const v=typeof f==='string'?{name:f}:f||{}
    return {id:String(v.id||'fabric_'+i).slice(0,100),name:String(v.name||'').trim().slice(0,120),code:String(v.code||'').trim().slice(0,60),image_url:String(v.image_url||'').trim(),visible:v.visible!==false}
  }).filter(f=>f.name)
- const validImage=u=>!u||/^https:\/\/[^/]+\/api\/(?:saas|master)\/global-defaults\/images\/[a-f0-9-]{36}\.(?:jpg|png|webp)$/.test(u)
+ const validImage=u=>!u||/^https:\/\/[^/]+\/api\/(?:saas|master)\/catalog-global\/images\/[a-f0-9-]{36}\.(?:jpg|png|webp)$/.test(u)
  if(fabrics.some(f=>!validImage(f.image_url)))throw Object.assign(new Error('URL de imagem inválida.'),{status:400})
  const cover_image=String(input.cover_image??existing?.cover_image??'')
  if(!validImage(cover_image))throw Object.assign(new Error('Capa inválida.'),{status:400})
