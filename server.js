@@ -13,6 +13,8 @@ const materialRepricingAfterSave = require('./src/middleware/material-repricing-
 const teamManagementPermissions = require('./src/middleware/team-management-permissions')
 const registerWhatsapp = require('./src/middleware/register-whatsapp')
 const modelsV2Db = require('./src/lib/models-v2-db')
+const readyModelsDb = require('./src/lib/ready-models-db')
+const portfolioDb = require('./src/lib/portfolio-db')
 const quotesV2Db = require('./src/lib/quotes-v2-db')
 const personalizationV2Db = require('./src/lib/personalization-v2-db')
 const agendaV2Db = require('./src/lib/agenda-v2-db')
@@ -39,6 +41,7 @@ const billingRoutes = require('./src/routes/billing')
 const operationsRoutes = require('./src/routes/operations')
 const materialUnitsRoutes = require('./src/routes/material-units')
 const modelsV2Routes = require('./src/routes/models-v2')
+const readyModelsRoutes = require('./src/routes/ready-models')
 const modelsV2ImageUploadRoutes = require('./src/routes/models-v2-image-upload')
 const quotesV2Routes = require('./src/routes/quotes-v2')
 const personalizationV2Routes = require('./src/routes/personalization-v2')
@@ -99,7 +102,7 @@ app.use((req, res, next) => {
     }
     return next()
   }
-  if (/^\/api\/v2\/models\/[^/]+\/images\/(?:original|thumb)\/upload$/.test(req.path)) {
+  if (/^\/api\/v2\/models\/[^/]+\/images\/(?:original|thumb)\/upload$/.test(req.path) || (req.path === '/api/v2/portfolio/cover/upload' && /^image\/(?:jpeg|png|webp)(?:;|$)/i.test(String(req.headers['content-type'] || '')))) {
     return modelImageBinaryParser(req, res, next)
   }
   return jsonParser(req, res, next)
@@ -149,6 +152,9 @@ app.use('/api/subscription', (req, res, next) => {
   next()
 })
 app.use('/api/billing', billingRoutes)
+// Public portfolio must be registered before generic authenticated /api routers.
+// Its admin endpoints retain their own requireAuth middleware.
+app.use('/api/v2', require('./src/routes/portfolio'))
 app.use('/api', legacyApiPermissions)
 app.use('/api', require('./src/routes/trash'))
 app.use('/api', dashboardV2Routes)
@@ -159,6 +165,7 @@ app.use('/api', materialUnitsRoutes)
 app.use('/api/v2/models', normalizeModelsV2BaseMeters)
 app.use('/api/v2', modelsV2ImageUploadRoutes)
 app.use('/api/v2', modelsV2Routes)
+app.use('/api/v2', readyModelsRoutes)
 app.use('/api/v2', require('./src/routes/customers'))
 app.use('/api/v2', quotesV2Routes)
 app.use('/api/v2', personalizationV2Routes)
@@ -213,6 +220,8 @@ async function start() {
     await pg.init()
     await pg.bootstrapStore()
     await modelsV2Db.ensureSchema()
+    await readyModelsDb.ensureSchema()
+    await portfolioDb.ensureSchema()
     await quotesV2Db.ensureSchema()
     await require('./src/lib/customers-db').ensureSchema()
     await personalizationV2Db.ensureSchema()
@@ -294,4 +303,3 @@ start().catch(err => {
   console.error('[server] Erro fatal na inicialização:', err)
   process.exit(1)
 })
-
