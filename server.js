@@ -251,6 +251,27 @@ async function start() {
         { name: 'legacy-agenda-v2-v1', run: () => agendaV2Db.migrateLegacyAgenda(storeLib.readStore()) },
         { name: 'legacy-financial-v2-v1', run: () => financialV2Db.migrateLegacyFinancial(storeLib.readStore()) },
         {
+          // Somente no branch dev: comunicado de verificação solicitado pelo Master.
+          name: 'test-global-announcement-20261121-ui',
+          run: async () => {
+            const store = storeLib.readStore()
+            const id = 'test-announcement-20261121-ui'
+            const items = Array.isArray(store.globalAnnouncements) ? store.globalAnnouncements : []
+            if (items.some(item => item.id === id)) return { already_present:true }
+            items.unshift({
+              id,
+              title:'Teste da Central de comunicados',
+              message:'Este é um comunicado de teste para conferir o novo visual da notificação, o sino e o botão Entendi, fechar.',
+              published_at:new Date().toISOString(),
+              published_by:'master-test'
+            })
+            store.globalAnnouncements = items
+            storeLib.writeStore(store)
+            await pg.flushNow()
+            return { created:true, id }
+          }
+        },
+        {
           name: 'legacy-audit-v2-v1',
           run: async () => {
             const result = await auditV2Db.migrateLegacyAudit(storeLib.readStore())
