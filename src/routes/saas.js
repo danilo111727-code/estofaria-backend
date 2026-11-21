@@ -2,6 +2,7 @@ const express = require('express')
 const bcrypt = require('bcryptjs')
 const crypto = require('crypto')
 const personalizationDb = require('../lib/personalization-v2-db')
+const r2 = require('../lib/r2-storage')
 const { readStore, writeStore, materializeCompany, findCompanyById, upsertAudit, nowIso, planPreset } = require('../lib/store')
 const { requireAuth, requireMaster, requirePermission } = require('../middleware/auth')
 const { hasMasterAccess } = require('../lib/policies')
@@ -203,6 +204,29 @@ function cleanGlobalAlbum(input = {}, existing = null){
     created_at: existing?.created_at || nowIso(),
     updated_at: nowIso()
   }
+}
+
+function cleanCatalogGlobalAlbum(input = {}, existing = null){
+ const name=String(input.name ?? existing?.name ?? '').trim().slice(0,180)
+ const source=Array.isArray(input.fabrics)?input.fabrics:(existing?.fabrics||[])
+ const fabrics=source.slice(0,100).map((f,i)=>{
+   const v=typeof f==='string'?{name:f}:f||{}
+   return {id:String(v.id||'fabric_'+i).slice(0,100),name:String(v.name||'').trim().slice(0,120),code:String(v.code||'').trim().slice(0,60),image_url:String(v.image_url||'').trim(),visible:v.visible!==false}
+ }).filter(f=>f.name)
+ const validImage=u=>!u||/^https:\/\/[^/]+\/api\/(?:saas|master)\/catalog-global\/images\/[a-f0-9-]{36}\.(?:jpg|png|webp)$/.test(u)
+ if(fabrics.some(f=>!validImage(f.image_url)))throw Object.assign(new Error('URL de imagem inválida.'),{status:400})
+ const cover_image=String(input.cover_image??existing?.cover_image??'')
+ if(!validImage(cover_image))throw Object.assign(new Error('Capa inválida.'),{status:400})
+ if(input.active===true&&(!fabrics.length||fabrics.some(f=>!f.image_url)))throw Object.assign(new Error('Para publicar, adicione tecidos com fotografias.'),{status:400})
+ return {id:String(existing?.id||'galb_'+crypto.randomUUID()),name,cover_image,fabrics,
+  active:input.active===undefined?(existing?existing.active!==false:false):Boolean(input.active),
+  created_at:existing?.created_at||nowIso(),updated_at:nowIso()}
+}
+
+function catalogGlobalCollection(store){
+ if(!store.catalogDigitalGlobalDefaults)store.catalogDigitalGlobalDefaults={}
+ if(!Array.isArray(store.catalogDigitalGlobalDefaults.albums))store.catalogDigitalGlobalDefaults.albums=[]
+ return store.catalogDigitalGlobalDefaults.albums
 }
 
 function findGlobalById(items, itemId){
@@ -410,6 +434,59 @@ router.post('/global-defaults/foams/:itemId/apply', requireAuth, requireMaster, 
     }
     return res.json({ ok:true, companies_selected:companyIds.length, companies_updated:companiesUpdated, items_added:itemsAdded })
   }catch(err){ next(err) }
+})
+
+// Álbuns globais exclusivos do Catálogo Digital.
+router.get('/catalog-global/images/:file', async(req,res,next)=>{
+ try{
+  const file=String(req.params.file||'')
+  if(!/^[a-f0-9-]{36}\.(?:jpg|png|webp)$/.test(file))return res.status(404).end()
+  if(!r2.isConfigured())return res.status(503).end()
+  const result=await r2.getObjectBuffer('global-fabric-albums/'+file)
+  res.set('Content-Type',result.contentType)
+  res.set('Cache-Control','public, max-age=3600')
+  res.send(result.body)
+ }catch(e){if(e.name==='NoSuchKey'||e.$metadata?.httpStatusCode===404)return res.status(404).end();next(e)}
+})
+router.post('/catalog-global/images',requireAuth,requireMaster,requirePermission('saas.companies.write'),async(req,res,next)=>{
+ try{
+  if(!r2.isConfigured())return res.status(503).json({message:'Armazenamento de fotos indisponível.'})
+  const type=String(req.body?.content_type||'')
+  if(!['image/jpeg','image/png','image/webp'].includes(type))return res.status(415).json({message:'Formato de foto inválido.'})
+  const encoded=String(req.body?.image_base64||'')
+  if(!encoded||encoded.length>800000||!/^[A-Za-z0-9+/]+={0,2}$/.test(encoded))return res.status(413).json({message:'Reduza a foto para até 600 KB.'})
+  const bytes=Buffer.from(encoded,'base64')
+  if(!bytes.length||bytes.length>600000)return res.status(413).json({message:'Foto acima do limite.'})
+  const ext=r2.extensionForContentType(type)
+  const file=crypto.randomUUID()+'.'+ext
+  await r2.putObject('global-fabric-albums/'+file,bytes,type)
+  res.status(201).json({image_url:req.protocol+'://'+req.get('host')+req.baseUrl+'/catalog-global/images/'+file})
+ }catch(e){next(e)}
+})
+router.get('/catalog-global/albums', requireAuth, requireMaster, requirePermission('saas.companies.read'), (req, res) => {
+  const store = readStore()
+  return res.json({ items: catalogGlobalCollection(store) })
+})
+router.post('/catalog-global/albums', requireAuth, requireMaster, requirePermission('saas.companies.write'), (req, res, next) => { try {
+  const store = readStore(), items = catalogGlobalCollection(store), item = cleanCatalogGlobalAlbum(req.body || {})
+  if(!item.name) return res.status(400).json({ error:'invalid_request', message:'Informe o nome do álbum.' })
+  if(hasDuplicateGlobalName(items, item.name)) return res.status(409).json({ error:'duplicate_name', message:'Já existe um álbum global com esse nome.' })
+  items.push(item); writeStore(store); return res.status(201).json({ ok:true, item })
+ }catch(err){if(err.status)return res.status(err.status).json({message:err.message});next(err)}
+})
+router.patch('/catalog-global/albums/:itemId', requireAuth, requireMaster, requirePermission('saas.companies.write'), (req, res, next) => { try {
+  const store = readStore(), items = catalogGlobalCollection(store), index = findGlobalById(items, req.params.itemId)
+  if(index < 0) return res.status(404).json({ error:'not_found', message:'Álbum global não encontrado.' })
+  const item = cleanCatalogGlobalAlbum(req.body || {}, items[index])
+  if(!item.name) return res.status(400).json({ error:'invalid_request', message:'Informe o nome do álbum.' })
+  if(hasDuplicateGlobalName(items, item.name, index)) return res.status(409).json({ error:'duplicate_name', message:'Já existe um álbum global com esse nome.' })
+  items[index] = item; writeStore(store); return res.json({ ok:true, item })
+ }catch(err){if(err.status)return res.status(err.status).json({message:err.message});next(err)}
+})
+router.delete('/catalog-global/albums/:itemId', requireAuth, requireMaster, requirePermission('saas.companies.write'), (req, res) => {
+  const store = readStore(), items = catalogGlobalCollection(store), index = findGlobalById(items, req.params.itemId)
+  if(index < 0) return res.status(404).json({ error:'not_found', message:'Álbum global não encontrado.' })
+  const [removed] = items.splice(index, 1); writeStore(store); return res.json({ ok:true, removed })
 })
 
 router.get('/global-defaults/albums', requireAuth, requireMaster, requirePermission('saas.companies.read'), (req, res) => {
