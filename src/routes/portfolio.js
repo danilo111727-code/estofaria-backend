@@ -52,6 +52,40 @@ const imageUrl=async images=>{
  if(!key||!r2.isConfigured())return null
  try{return await r2.presignGetUrl(key,900)}catch(e){console.warn('[portfolio-public] imagem indisponível:',e.message);return null}
 }
+function publicSaleVariants(model){
+ const base=Number(model.base_meters??model.baseMeters);
+ const basePrice=Number(model.sale_price_cents);
+ if(!(base>0)||!(basePrice>0))return [];
+ const mode=String(model.variation_mode??model.variationMode??'automatic');
+ const specific=model.specific_variations??model.specificVariations;
+ const sources=[model.metragens,model.measurements,model.measurement_list,model.tabela_metragens,model.valores_por_metragem];
+ const values=[];
+ const add=(meters,price)=>{const m=Number(String(meters).replace(',','.'));const p=Number(price);if(m>0&&Number.isFinite(m)&&p>=0&&Number.isFinite(p)&&!values.some(v=>v.meters===m))values.push({meters:m,price_cents:Math.round(p)})};
+ if(mode==='specific'&&Array.isArray(specific)){
+  for(const v of specific){if(!v||typeof v!=='object')continue;add(v.measure_meters??v.measureMeters??v.meters??v.metragem??v.medida,v.price_cents??v.sale_price_cents??v.valor_cents??NaN)}
+ }
+ for(const src of sources){if(!src)continue;
+  if(Array.isArray(src)){for(const v of src){if(v&&typeof v==='object')add(v.measure_meters??v.measureMeters??v.meters??v.metragem??v.medida,v.price_cents??v.sale_price_cents??NaN)}}
+  else if(typeof src==='object'){for(const [meter,price] of Object.entries(src)){if(price&&typeof price==='object')add(meter,price.price_cents??price.sale_price_cents??NaN);else add(meter,price)}}
+ }
+ if(mode==='none')return [{meters:base,price_cents:basePrice}];
+ if(mode==='specific')return values.sort((a,b)=>a.meters-b.meters);
+ if(values.length)return values.sort((a,b)=>a.meters-b.meters);
+ const stepCm=Number(model.spacing_cm??model.spacingCm);
+ const stepValue=Number(model.valor_por_espacamento_cents??model.valorPorEspacamentoCents);
+ if(!(stepCm>0)||!Number.isFinite(stepValue))return [{meters:base,price_cents:basePrice}];
+ const min=Number(model.min_meters??model.minMeters??model.metragem_inicial??1);
+ const max=Number(model.max_meters??model.maxMeters??model.table_max_meters??model.metragem_final??10);
+ const step=stepCm/100;
+ if(!(min>0)||!(max>=min)||max-min>20||step<=0)return [{meters:base,price_cents:basePrice}];
+ const result=[];
+ for(let n=0;n<=Math.ceil((max-min)/step)&&n<400;n++){
+  const meters=Number((min+n*step).toFixed(2));if(meters>max+0.0001)break;
+  const ratio=Math.round(((meters-base)/step)*1e4)/1e4;
+  result.push({meters,price_cents:Math.max(0,Math.round(basePrice+Math.ceil(ratio)*stepValue))});
+ }
+ return result.length?result:[{meters:base,price_cents:basePrice}];
+}
 router.get('/public/portfolio/:slug',respond(async(req,res)=>{
  const slug=String(req.params.slug||'')
  if(!/^[a-f0-9]{24}$/.test(slug))throw error(404,'Vitrine não encontrada.')
@@ -65,6 +99,7 @@ router.get('/public/portfolio/:slug',respond(async(req,res)=>{
    return {id:m.id,name:m.name,description:m.description||'',category:m.category||'',
      image_url:await imageUrl(m.images),sale_price_cents:row.show_prices?Number(m.sale_price_cents)||0:null,
      base_meters:Number(m.base_meters)||0,
+     public_variants:publicSaleVariants(m).map(v=>({meters:v.meters,price_cents:row.show_prices?v.price_cents:null})),
      display_depth_meters:m.display_depth_meters==null?null:Number(m.display_depth_meters),
      display_height_meters:m.display_height_meters==null?null:Number(m.display_height_meters)}
  }))
