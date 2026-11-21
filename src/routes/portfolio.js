@@ -20,12 +20,13 @@ const coverUrl=async row=>{
 const globalAlbums=()=>{
  const data=store.readStore()
  if(process.env.RENDER_SERVICE_ID==='srv-d808cd9j2pic73f3tikg'){
-  if(!data.catalogDigitalGlobalDefaults)data.catalogDigitalGlobalDefaults={}
-  if(!Array.isArray(data.catalogDigitalGlobalDefaults.albums))data.catalogDigitalGlobalDefaults.albums=[]
-  if(!data.catalogDigitalGlobalDefaults.albums.some(a=>String(a.id)==='test_global_catalog_album')){
-   const now=new Date().toISOString()
-   data.catalogDigitalGlobalDefaults.albums.push({id:'test_global_catalog_album',name:'Álbum Teste Global',cover_image:'',fabrics:[{id:'test_fabric_01',name:'Tecido Teste',code:'REF-TESTE-01',image_url:'',visible:true}],active:true,created_at:now,updated_at:now})
-   store.writeStore(data)
+  const albums=data.catalogDigitalGlobalDefaults?.albums
+  if(Array.isArray(albums)){
+   const next=albums.filter(a=>String(a.id)!=='test_global_catalog_album')
+   if(next.length!==albums.length){
+    data.catalogDigitalGlobalDefaults.albums=next
+    store.writeStore(data)
+   }
   }
  }
  return (data.catalogDigitalGlobalDefaults?.albums||[]).filter(a=>a.active===true).map(a=>({id:'global_'+a.id,name:a.name,cover_image:a.cover_image||'',visible:true,fabrics:(a.fabrics||[]).map((t,i)=>typeof t==='string'?{id:'global_fabric_'+i,name:t,code:'',image_url:''}:{...t})}))
