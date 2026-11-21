@@ -722,10 +722,9 @@ router.post('/announcements',requireAuth,requireMaster,requirePermission('saas.c
 })
 router.get('/announcements/pending',requireAuth,(req,res)=>{
   res.set('Cache-Control','no-store')
-  res.json({items:hasMasterAccess(req.user)?[]:announcements.pending(readStore(),req.user.id)})
+  res.json({items:announcements.pending(readStore(),req.user.id)})
 })
 router.post('/announcements/:id/read',requireAuth,(req,res)=>{
-  if(hasMasterAccess(req.user))return res.status(403).json({message:'Acesso de empresa obrigatório.'})
   const store=readStore()
   if(!announcements.acknowledge(store,req.params.id,req.user.id))return res.status(404).json({message:'Comunicado não encontrado.'})
   writeStore(store);res.json({ok:true})
