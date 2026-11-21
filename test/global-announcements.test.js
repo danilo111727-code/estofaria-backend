@@ -1,0 +1,15 @@
+'use strict'
+const test=require('node:test'),assert=require('node:assert/strict')
+const a=require('../src/lib/global-announcements')
+test('publicação global, leitura individual persistida e novo comunicado',()=>{
+ const s={};const one=a.publish(s,{title:'Atualização',message:'Nova versão'},'master')
+ assert.equal(a.pending(s,'a').length,1);assert.equal(a.pending(s,'b').length,1)
+ assert.equal(a.acknowledge(s,one.id,'a'),true);a.acknowledge(s,one.id,'a')
+ assert.equal(s.globalAnnouncementReads.length,1);assert.equal(a.pending(s,'a').length,0)
+ assert.equal(a.pending(s,'b').length,1)
+ const two=a.publish(s,{title:'Novo',message:'Outra atualização'},'master')
+ assert.deepEqual(a.pending(s,'a').map(x=>x.id),[two.id])
+ assert.equal(a.pending(s,'new').length,2)
+ assert.equal(a.acknowledge(s,'missing','a'),false)
+})
+test('validação de campos',()=>{assert.throws(()=>a.publish({}, {title:'',message:'x'},'m'));assert.throws(()=>a.publish({}, {title:'x',message:'x'.repeat(3001)},'m'))})
