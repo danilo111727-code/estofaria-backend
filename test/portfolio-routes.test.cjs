@@ -150,3 +150,21 @@ test('nome automático e capa global são iguais na prévia e no público, prese
   assert.equal(client.body.cover_image,'https://images.example.test/custom-cover')
  }finally{record=saved}
 })
+
+test('metragens públicas preservam preços de venda sem expor custos e respeitam preços ocultos',async()=>{
+ const savedRecord={...record},savedModel={...model};
+ try{
+  record={...record,published:true,show_prices:true,custom_ids:['m1']};
+  Object.assign(model,{variation_mode:'automatic',spacing_cm:10,valor_por_espacamento_cents:10000,min_meters:2.5,max_meters:2.7});
+  let result=await request('GET','/api/v2/public/portfolio/'+record.slug);
+  assert.deepEqual(result.body.custom[0].public_variants,[{meters:2.5,price_cents:200000},{meters:2.6,price_cents:210000},{meters:2.7,price_cents:220000}]);
+  assert.equal(JSON.stringify(result.body).includes('total_cost_cents'),false);
+  assert.equal(JSON.stringify(result.body).includes('valor_por_espacamento_cents'),false);
+  record.show_prices=false;
+  result=await request('GET','/api/v2/public/portfolio/'+record.slug);
+  assert.deepEqual(result.body.custom[0].public_variants,[{meters:2.5,price_cents:null},{meters:2.6,price_cents:null},{meters:2.7,price_cents:null}]);
+  model.variation_mode='specific';model.specific_variations=[{meters:3,price_cents:270000},{meters:2,price_cents:190000}];record.show_prices=true;
+  result=await request('GET','/api/v2/public/portfolio/'+record.slug);
+  assert.deepEqual(result.body.custom[0].public_variants,[{meters:2,price_cents:190000},{meters:3,price_cents:270000}]);
+ }finally{record=savedRecord;for(const k of Object.keys(model))delete model[k];Object.assign(model,savedModel)}
+});
