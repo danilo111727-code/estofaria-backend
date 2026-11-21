@@ -709,4 +709,26 @@ router.delete('/companies/:companyId', requireAuth, requireMaster, requirePermis
   res.json({ ok: true, message: 'Empresa "' + (company.name || company.trade_name || companyId) + '" excluida com sucesso.' })
 })
 
+
+const announcements = require('../lib/global-announcements')
+router.get('/announcements',requireAuth,requireMaster,requirePermission('saas.companies.read'),(req,res)=>{
+  res.set('Cache-Control','no-store')
+  res.json({items:announcements.list(readStore())})
+})
+router.post('/announcements',requireAuth,requireMaster,requirePermission('saas.companies.write'),(req,res)=>{
+  const store=readStore()
+  try{const item=announcements.publish(store,req.body,req.user.id);writeStore(store);res.status(201).json({item})}
+  catch(err){if(err.status)return res.status(err.status).json({message:err.message});throw err}
+})
+router.get('/announcements/pending',requireAuth,(req,res)=>{
+  res.set('Cache-Control','no-store')
+  res.json({items:hasMasterAccess(req.user)?[]:announcements.pending(readStore(),req.user.id)})
+})
+router.post('/announcements/:id/read',requireAuth,(req,res)=>{
+  if(hasMasterAccess(req.user))return res.status(403).json({message:'Acesso de empresa obrigatório.'})
+  const store=readStore()
+  if(!announcements.acknowledge(store,req.params.id,req.user.id))return res.status(404).json({message:'Comunicado não encontrado.'})
+  writeStore(store);res.json({ok:true})
+})
+
 module.exports = router
