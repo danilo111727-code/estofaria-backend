@@ -163,7 +163,13 @@ test('metragens públicas preservam preços de venda sem expor custos e respeita
   record.show_prices=false;
   result=await request('GET','/api/v2/public/portfolio/'+record.slug);
   assert.deepEqual(result.body.custom[0].public_variants,[{meters:2.5,price_cents:null},{meters:2.6,price_cents:null},{meters:2.7,price_cents:null}]);
-  model.variation_mode='specific';model.specific_variations=[{meters:3,price_cents:270000},{meters:2,price_cents:190000}];record.show_prices=true;
+  record.show_prices=true;delete model.min_meters;delete model.max_meters;
+  result=await request('GET','/api/v2/public/portfolio/'+record.slug);
+  assert.equal(result.body.custom[0].public_variants.length,91);
+  assert.equal(result.body.custom[0].public_variants[0].meters,1);
+  assert.equal(result.body.custom[0].public_variants.at(-1).meters,10);
+  assert.equal(result.body.custom[0].public_variants.find(v=>v.meters===2.5).price_cents,200000);
+  model.variation_mode='specific';model.specific_variations=[{measure_meters:3,sale_price_cents:270000},{measure_meters:2,sale_price_cents:190000}];
   result=await request('GET','/api/v2/public/portfolio/'+record.slug);
   assert.deepEqual(result.body.custom[0].public_variants,[{meters:2,price_cents:190000},{meters:3,price_cents:270000}]);
  }finally{record=savedRecord;for(const k of Object.keys(model))delete model[k];Object.assign(model,savedModel)}

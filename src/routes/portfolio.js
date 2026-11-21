@@ -62,10 +62,10 @@ function publicSaleVariants(model){
  const values=[];
  const add=(meters,price)=>{const m=Number(String(meters).replace(',','.'));const p=Number(price);if(m>0&&Number.isFinite(m)&&p>=0&&Number.isFinite(p)&&!values.some(v=>v.meters===m))values.push({meters:m,price_cents:Math.round(p)})};
  if(mode==='specific'&&Array.isArray(specific)){
-  for(const v of specific){if(!v||typeof v!=='object')continue;add(v.meters??v.metragem??v.medida,v.price_cents??v.sale_price_cents??v.valor_cents??NaN)}
+  for(const v of specific){if(!v||typeof v!=='object')continue;add(v.measure_meters??v.measureMeters??v.meters??v.metragem??v.medida,v.price_cents??v.sale_price_cents??v.valor_cents??NaN)}
  }
  for(const src of sources){if(!src)continue;
-  if(Array.isArray(src)){for(const v of src){if(v&&typeof v==='object')add(v.meters??v.metragem??v.medida,v.price_cents??v.sale_price_cents??NaN)}}
+  if(Array.isArray(src)){for(const v of src){if(v&&typeof v==='object')add(v.measure_meters??v.measureMeters??v.meters??v.metragem??v.medida,v.price_cents??v.sale_price_cents??NaN)}}
   else if(typeof src==='object'){for(const [meter,price] of Object.entries(src)){if(price&&typeof price==='object')add(meter,price.price_cents??price.sale_price_cents??NaN);else add(meter,price)}}
  }
  if(mode==='none')return [{meters:base,price_cents:basePrice}];
@@ -74,8 +74,8 @@ function publicSaleVariants(model){
  const stepCm=Number(model.spacing_cm??model.spacingCm);
  const stepValue=Number(model.valor_por_espacamento_cents??model.valorPorEspacamentoCents);
  if(!(stepCm>0)||!Number.isFinite(stepValue))return [{meters:base,price_cents:basePrice}];
- const min=Number(model.min_meters??model.minMeters??model.metragem_inicial);
- const max=Number(model.max_meters??model.maxMeters??model.table_max_meters??model.metragem_final);
+ const min=Number(model.min_meters??model.minMeters??model.metragem_inicial??1);
+ const max=Number(model.max_meters??model.maxMeters??model.table_max_meters??model.metragem_final??10);
  const step=stepCm/100;
  if(!(min>0)||!(max>=min)||max-min>20||step<=0)return [{meters:base,price_cents:basePrice}];
  const result=[];
